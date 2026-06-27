@@ -554,6 +554,10 @@ function getFilteredMsds() {
     const mr = !fRc || (r.receipt_status||'received') === fRc;
     const msp = !fSpc || r.legal_special === 'Y';
     return mq && mc && mw && ms && mr && msp;
+  }).sort((a,b) => {
+    const conSort = a.contractor.localeCompare(b.contractor, 'ko');
+    if (conSort !== 0) return conSort;
+    return a.product_name.localeCompare(b.product_name, 'ko');
   });
 }
 
