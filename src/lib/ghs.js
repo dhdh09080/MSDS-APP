@@ -102,31 +102,43 @@ export const P_CODES = {
 export function decodeHCodes(str) {
   if (!str) return [];
   const results = [];
+  const seen = new Set();
   const combined = Object.keys(H_CODES).filter(k => k.includes('+')).sort((a,b) => b.length - a.length);
   let rem = str.replace(/\s/g,'');
   for (const key of combined) {
     if (new RegExp(key.replace(/\+/g,'\\+'), 'i').test(rem)) {
-      results.push({ code: key, text: H_CODES[key] });
+      const text = H_CODES[key];
+      if (!seen.has(text)) { results.push({ code: key, text }); seen.add(text); }
       rem = rem.replace(new RegExp(key.replace(/\+/g,'\\+'), 'gi'), '');
     }
   }
   const singles = rem.match(/H\d{3}/g) || [];
-  for (const c of singles) results.push({ code: c, text: H_CODES[c] || c });
+  for (const c of singles) {
+    const text = H_CODES[c];
+    if (!text) continue; // 사전에 없는 코드는 표시 안 함
+    if (!seen.has(text)) { results.push({ code: c, text }); seen.add(text); }
+  }
   return results;
 }
 
 export function decodePCodes(str) {
   if (!str) return [];
   const results = [];
+  const seen = new Set(); // 중복 제거
   const combined = Object.keys(P_CODES).filter(k => k.includes('+')).sort((a,b) => b.length - a.length);
   let rem = str.replace(/\s/g,'');
   for (const key of combined) {
     if (new RegExp(key.replace(/\+/g,'\\+'), 'i').test(rem)) {
-      results.push({ code: key, text: P_CODES[key] });
+      const text = P_CODES[key];
+      if (!seen.has(text)) { results.push({ code: key, text }); seen.add(text); }
       rem = rem.replace(new RegExp(key.replace(/\+/g,'\\+'), 'gi'), '');
     }
   }
   const singles = rem.match(/P\d{3}/g) || [];
-  for (const c of singles) results.push({ code: c, text: P_CODES[c] || c });
+  for (const c of singles) {
+    const text = P_CODES[c];
+    if (!text) continue; // 사전에 없는 코드는 표시 안 함
+    if (!seen.has(text)) { results.push({ code: c, text }); seen.add(text); }
+  }
   return results;
 }
