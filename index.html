@@ -2,274 +2,862 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MSDS 관리대장</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#2563EB">
+<title>안전보건 관리시스템</title>
 <link rel="stylesheet" href="/src/style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
-<!-- ═══════ 로그인 화면 ═══════ -->
-<div id="authScreen" class="auth-screen">
-  <div class="auth-card">
-    <div class="auth-logo">
-      <div class="auth-mark">SAFETY</div>
-      <div class="auth-title">MSDS 관리대장</div>
-      <div class="auth-sub">현장별 화학물질 안전관리 시스템</div>
-    </div>
-    <div class="auth-tabs">
-      <button class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">로그인</button>
-      <button class="auth-tab" id="tabSignup" onclick="switchAuthTab('signup')">회원가입</button>
-    </div>
-    <div class="auth-form">
-      <input type="email" id="authEmail" class="auth-input" placeholder="이메일">
-      <input type="password" id="authPassword" class="auth-input" placeholder="비밀번호 (6자 이상)">
-      <input type="text" id="authSite" class="auth-input" placeholder="현장명 (회원가입 시)" style="display:none">
-      <button class="auth-btn" id="authSubmit" onclick="handleAuth()">로그인</button>
-      <div class="auth-msg" id="authMsg"></div>
+<!-- 로딩 -->
+<div id="loadingScreen">
+  <div class="loading-logo">🛡️ 안전보건 관리</div>
+  <div class="spinner"></div>
+  <div class="loading-sub">잠시만 기다려주세요...</div>
+</div>
+
+<!-- 인증 화면 -->
+<div id="authScreen" style="display:none">
+  <div class="auth-screen">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="auth-badge">SAFETY MANAGER</div>
+        <div class="auth-title">안전보건 관리시스템</div>
+        <div class="auth-sub">MSDS · 작업환경측정 · 건강진단</div>
+      </div>
+
+      <div class="auth-tabs" id="authTabs">
+        <button class="auth-tab active" onclick="switchTab('login')">로그인</button>
+        <button class="auth-tab" onclick="switchTab('signup')">회원가입</button>
+      </div>
+
+      <!-- 로그인 -->
+      <div id="loginForm" class="auth-form">
+        <input type="email" id="loginEmail" class="auth-input" placeholder="이메일" autocomplete="email">
+        <input type="password" id="loginPassword" class="auth-input" placeholder="비밀번호" autocomplete="current-password">
+        <button class="auth-btn" onclick="handleLogin()" id="loginBtn">로그인</button>
+        <button class="auth-link" onclick="switchTab('forgot')">비밀번호를 잊으셨나요?</button>
+        <div class="auth-msg" id="loginMsg"></div>
+      </div>
+
+      <!-- 회원가입 -->
+      <div id="signupForm" class="auth-form" style="display:none">
+        <input type="text" id="signupName" class="auth-input" placeholder="이름" autocomplete="name">
+        <input type="email" id="signupEmail" class="auth-input" placeholder="이메일" autocomplete="email">
+        <input type="password" id="signupPassword" class="auth-input" placeholder="비밀번호 (6자 이상)" autocomplete="new-password">
+        <button class="auth-btn" onclick="handleSignup()" id="signupBtn">회원가입</button>
+        <div class="auth-msg" id="signupMsg"></div>
+      </div>
+
+      <!-- 비밀번호 찾기 -->
+      <div id="forgotForm" class="auth-form" style="display:none">
+        <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:8px;">가입하신 이메일을 입력하면<br>비밀번호 재설정 링크를 보내드립니다.</div>
+        <input type="email" id="forgotEmail" class="auth-input" placeholder="이메일">
+        <button class="auth-btn" onclick="handleForgot()" id="forgotBtn">재설정 링크 전송</button>
+        <button class="auth-link" onclick="switchTab('login')">← 로그인으로 돌아가기</button>
+        <div class="auth-msg" id="forgotMsg"></div>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ═══════ 메인 앱 ═══════ -->
-<div id="appScreen" class="app" style="display:none">
-  <div class="sidebar">
-    <div class="sidebar-logo">
-      <div class="logo-mark">Safety</div>
-      <div class="logo-title">MSDS<br>관리대장</div>
+<!-- 현장 선택 화면 -->
+<div id="workspaceScreen" style="display:none">
+  <div class="ws-screen">
+    <div class="ws-topbar">
+      <div class="ws-topbar-logo">🛡️ 안전보건 관리</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span id="topbarUser" style="font-size:13px;color:var(--text2);"></span>
+        <button class="btn btn-secondary btn-sm" onclick="handleLogout()">로그아웃</button>
+      </div>
     </div>
-    <nav class="sidebar-nav">
-      <div class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard"><span class="icon">📋</span> 대장 목록</div>
-      <div class="nav-item" onclick="showPage('register')" id="nav-register"><span class="icon">➕</span> MSDS 등록</div>
-      <div class="nav-item" onclick="showPage('warning')" id="nav-warning"><span class="icon">⚠️</span> 경고표지</div>
-      <div class="nav-item" onclick="showPage('settings')" id="nav-settings"><span class="icon">⚙️</span> 협력사·설정</div>
-    </nav>
-    <div class="sidebar-bottom">
-      <div class="user-info" id="userInfo"></div>
-      <button class="logout-btn" onclick="handleLogout()">로그아웃</button>
+    <div class="ws-content">
+      <div class="ws-greeting" id="wsGreeting">안녕하세요 👋</div>
+      <div class="ws-greeting-sub">관리할 현장을 선택하거나 새 현장을 추가하세요.</div>
+
+      <div class="ws-section-title">내 현장 목록</div>
+      <div class="ws-list" id="wsList">
+        <div style="text-align:center;padding:40px;color:var(--text3);">
+          <div class="spinner" style="margin:0 auto 12px;"></div>
+          불러오는 중...
+        </div>
+      </div>
+      <div style="height:16px;"></div>
+      <div class="ws-add-btn" onclick="openModal('createWSModal')">
+        + 새 현장 추가하기
+      </div>
     </div>
   </div>
+</div>
 
-  <div class="main">
-    <!-- Dashboard -->
-    <div class="page active" id="page-dashboard">
-      <div class="page-header">
-        <div><div class="page-title">MSDS 관리대장</div><div class="page-subtitle" id="dashSubtitle">총 0건</div></div>
-        <div class="header-actions">
-          <button class="btn btn-secondary" onclick="printList()">🖨️ 목록 인쇄</button>
-          <button class="btn btn-secondary" onclick="exportExcel()">📊 엑셀</button>
-          <button class="btn btn-secondary" onclick="openPackageModal()">📦 협력사 패키지</button>
-          <button class="btn btn-primary" onclick="showPage('register')">➕ 신규 등록</button>
-        </div>
+<!-- 메인 앱 -->
+<div id="appScreen" style="display:none">
+  <div class="app">
+
+    <!-- 사이드바 (데스크탑) -->
+    <div class="sidebar">
+      <div class="sidebar-header" onclick="goWorkspaces()">
+        <div class="sidebar-back">← 현장 목록</div>
+        <div class="sidebar-ws-name" id="sidebarWSName">현장명</div>
       </div>
-      <div class="content">
-        <div class="stats-row">
-          <div class="stat-card"><div class="stat-label">전체 등록</div><div class="stat-value accent" id="statTotal">0</div></div>
-          <div class="stat-card"><div class="stat-label">특별관리물질</div><div class="stat-value danger" id="statSpecial">0</div></div>
-          <div class="stat-card"><div class="stat-label">사용중 물질</div><div class="stat-value ok" id="statActive">0</div></div>
-          <div class="stat-card"><div class="stat-label">MSDS 미수령</div><div class="stat-value warn" id="statPending">0</div></div>
+      <nav class="sidebar-nav">
+        <div class="nav-section">메인</div>
+        <div class="nav-item active" id="nav-home" onclick="showPage('home')">
+          <span class="nav-icon">🏠</span> 홈
         </div>
-        <div class="filter-bar">
-          <div class="search-wrap"><span class="search-icon">🔍</span><input type="text" placeholder="제품명, 제조사, 공급업체, CAS 검색..." id="searchInput" oninput="renderTable()"></div>
-          <select class="filter-select" id="filterContractor" onchange="renderTable()"><option value="">전체 협력사</option></select>
-          <select class="filter-select" id="filterWorkType" onchange="renderTable()"><option value="">전체 공종</option></select>
-          <select class="filter-select" id="filterStatus" onchange="renderTable()"><option value="">전체 상태</option><option value="active">사용중</option><option value="ended">사용종료</option></select>
-          <select class="filter-select" id="filterReceipt" onchange="renderTable()"><option value="">전체 수령</option><option value="received">수령완료</option><option value="pending">미수령</option></select>
-          <select class="filter-select" id="filterSpecial" onchange="renderTable()"><option value="">전체</option><option value="Y">특별관리물질만</option><option value="N">일반물질만</option></select>
+
+        <div class="nav-section">화학물질</div>
+        <div class="nav-item" id="nav-msds" onclick="showPage('msds')">
+          <span class="nav-icon">🧪</span> MSDS 대장
+          <span class="nav-badge" id="navBadgeMsds" style="display:none">0</span>
         </div>
-        <div class="hint">💡 협력사 필터를 걸고 'PDF 내려받기/인쇄'하면 해당 협력사 자료만 정리됩니다.</div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr>
-              <th style="width:36px"><input type="checkbox" id="checkAll" onchange="toggleAll(this)"></th>
-              <th>No.</th><th>제품명</th><th>사용 협력사</th><th>공종</th><th>공급업체</th><th>CAS No.</th><th>특별관리</th><th>상태</th><th>수령</th><th>원본</th><th>ver.</th><th>관리</th>
-            </tr></thead>
-            <tbody id="tableBody"><tr class="empty-row"><td colspan="13">로딩 중...</td></tr></tbody>
-          </table>
+        <div class="nav-item" id="nav-warning" onclick="showPage('warning')">
+          <span class="nav-icon">⚠️</span> 경고표지
+        </div>
+        <div class="nav-item" id="nav-upload-link" onclick="showPage('upload-link')">
+          <span class="nav-icon">🔗</span> 협력사 링크
+        </div>
+
+        <div class="nav-section">측정 · 진단</div>
+        <div class="nav-item" id="nav-measure" onclick="showPage('measure')">
+          <span class="nav-icon">📊</span> 작업환경측정
+        </div>
+        <div class="nav-item" id="nav-health" onclick="showPage('health')">
+          <span class="nav-icon">🏥</span> 건강진단
+        </div>
+
+        <div class="nav-section">관리</div>
+        <div class="nav-item" id="nav-settings" onclick="showPage('settings')">
+          <span class="nav-icon">⚙️</span> 설정
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <div class="user-avatar" id="sidebarAvatar">?</div>
+          <div style="flex:1;min-width:0;">
+            <div class="user-name" id="sidebarName">-</div>
+            <div class="user-email" id="sidebarEmail">-</div>
+          </div>
+          <button class="logout-btn" onclick="handleLogout()" title="로그아웃">⏻</button>
         </div>
       </div>
     </div>
 
-    <!-- Register -->
-    <div class="page" id="page-register">
-      <div class="page-header">
-        <div><div class="page-title" id="regPageTitle">MSDS 등록</div><div class="page-subtitle">PDF를 올리면 Claude가 자동 추출합니다</div></div>
-        <div class="header-actions"><button class="btn btn-secondary" onclick="showPage('dashboard')">← 목록으로</button></div>
+    <!-- 메인 콘텐츠 -->
+    <div class="main" id="mainContent">
+
+      <!-- ═══ 홈 ═══ -->
+      <div class="page active" id="page-home">
+        <div class="page-header">
+          <div>
+            <div class="page-title" id="homeTitle">대시보드</div>
+            <div class="page-subtitle" id="homeDate"></div>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" onclick="showPage('msds');setTimeout(()=>document.getElementById('msdsRegisterBtn').click(),100)">+ MSDS 등록</button>
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div class="stats-row">
+            <div class="stat-card" onclick="showPage('msds')">
+              <div class="stat-label">MSDS 등록</div>
+              <div class="stat-value primary" id="homeStatTotal">0</div>
+              <div class="stat-sub">전체 물질</div>
+            </div>
+            <div class="stat-card" onclick="showPage('msds');document.getElementById('filterReceipt').value='pending';renderMsdsTable()">
+              <div class="stat-label">MSDS 미수령</div>
+              <div class="stat-value danger" id="homeStatPending">0</div>
+              <div class="stat-sub">링크 전송 필요</div>
+            </div>
+            <div class="stat-card" onclick="showPage('msds');document.getElementById('filterSpecial').value='Y';renderMsdsTable()">
+              <div class="stat-label">특별관리물질</div>
+              <div class="stat-value warn" id="homeStatSpecial">0</div>
+              <div class="stat-sub">CMR 물질</div>
+            </div>
+            <div class="stat-card" onclick="showPage('msds');document.getElementById('filterStatus').value='active';renderMsdsTable()">
+              <div class="stat-label">사용중 물질</div>
+              <div class="stat-value ok" id="homeStatActive">0</div>
+              <div class="stat-sub">현재 반입중</div>
+            </div>
+          </div>
+
+          <div class="home-grid">
+            <!-- 미수령 알림 -->
+            <div id="pendingAlert" style="display:none">
+              <div class="alert-card">
+                <div class="alert-card-title">⚠️ MSDS 미수령 협력사</div>
+                <div id="pendingList"></div>
+              </div>
+            </div>
+
+            <!-- 최근 등록 -->
+            <div>
+              <div class="ws-section-title" style="margin-bottom:10px;">최근 등록 MSDS</div>
+              <div class="recent-list" id="recentMsdsList">
+                <div style="color:var(--text3);font-size:13px;text-align:center;padding:20px;">등록된 물질이 없습니다</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="content">
+
+      <!-- ═══ MSDS 대장 ═══ -->
+      <div class="page" id="page-msds">
+        <div class="page-header">
+          <div>
+            <div class="page-title">MSDS 관리대장</div>
+            <div class="page-subtitle" id="msdsSubtitle">총 0건</div>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-secondary" onclick="printMsdsList()">🖨️ 인쇄</button>
+            <button class="btn btn-secondary" onclick="exportMsdsExcel()">📊 엑셀</button>
+            <button class="btn btn-secondary" onclick="openPackageModal()">📦 패키지</button>
+            <button class="btn btn-primary" id="msdsRegisterBtn" onclick="openMsdsRegister()">+ 등록</button>
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div class="filter-bar">
+            <div class="search-wrap">
+              <span class="search-icon">🔍</span>
+              <input type="text" placeholder="제품명, 공급업체, CAS 검색..." id="searchInput" oninput="renderMsdsTable()">
+            </div>
+            <select class="filter-select" id="filterContractor" onchange="onFilterContractorChange()"><option value="">전체 협력사</option></select>
+            <select class="filter-select" id="filterWorkType" onchange="renderMsdsTable()"><option value="">전체 공종</option></select>
+            <select class="filter-select" id="filterStatus" onchange="renderMsdsTable()"><option value="">전체 상태</option><option value="active">사용중</option><option value="ended">사용종료</option></select>
+            <select class="filter-select" id="filterReceipt" onchange="renderMsdsTable()"><option value="">전체 수령</option><option value="received">수령완료</option><option value="pending">미수령</option></select>
+            <select class="filter-select" id="filterSpecial" onchange="renderMsdsTable()"><option value="">전체</option><option value="Y">특별관리만</option></select>
+          </div>
+          <div class="hint">💡 협력사 필터 → '패키지' 버튼으로 목록+PDF+경고표지 한번에 출력</div>
+          <div class="table-wrap">
+            <div class="table-wrap-scroll">
+              <table>
+                <thead><tr>
+                  <th style="width:36px"><input type="checkbox" id="checkAll" onchange="toggleAll(this)"></th>
+                  <th>제품명</th><th>협력사</th><th>공종</th><th>공급업체</th><th>CAS</th>
+                  <th>특별</th><th>상태</th><th>수령</th><th>원본</th><th>관리</th>
+                </tr></thead>
+                <tbody id="msdsTableBody">
+                  <tr class="empty-row"><td colspan="11">로딩 중...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ 경고표지 ═══ -->
+      <div class="page" id="page-warning">
+        <div class="page-header">
+          <div>
+            <div class="page-title">경고표지 생성</div>
+            <div class="page-subtitle">물질 선택 → 미리보기 확인 → A4 인쇄</div>
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div class="warn-layout">
+            <div class="warn-left">
+              <div class="card" style="margin-bottom:16px;">
+                <div class="form-field" style="margin-bottom:12px;">
+                  <label class="form-label">현장명</label>
+                  <input class="form-input" id="warningSite" placeholder="예) 성동자이리버뷰 신축공사" oninput="updateWarningPreview()">
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:10px;">
+                  <button class="btn btn-secondary btn-sm" onclick="selectAllWarn(true)">전체 선택</button>
+                  <button class="btn btn-secondary btn-sm" onclick="selectAllWarn(false)">전체 해제</button>
+                  <div style="flex:1"></div>
+                  <button class="btn btn-primary btn-sm" onclick="printWarnings()">🖨️ 인쇄</button>
+                </div>
+              </div>
+              <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;letter-spacing:.5px;">물질 선택</div>
+              <div class="warn-pick-list" id="warnPickList">
+                <div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">등록된 물질이 없습니다</div>
+              </div>
+            </div>
+            <div class="warn-right">
+              <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;letter-spacing:.5px;">미리보기 (인쇄 결과와 동일)</div>
+              <div class="warn-preview-wrap">
+                <div class="warn-preview-scroll" id="warningPreview">
+                  <div class="warn-empty">왼쪽에서 물질을 선택하세요</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ 협력사 링크 ═══ -->
+      <div class="page" id="page-upload-link">
+        <div class="page-header">
+          <div>
+            <div class="page-title">협력사 업로드 링크</div>
+            <div class="page-subtitle">협력사가 로그인 없이 MSDS를 직접 올릴 수 있습니다</div>
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-title"><span class="card-title-icon">📋</span> 사용 방법</div>
+            <ol style="font-size:13px;color:var(--text2);line-height:2;padding-left:20px;">
+              <li>협력사를 선택하고 링크를 발급하세요</li>
+              <li>링크를 카카오톡/문자로 협력사 담당자에게 전송하세요</li>
+              <li>협력사가 링크를 열면 공종 선택 후 PDF/이미지를 올릴 수 있어요</li>
+              <li>업로드 완료 시 MSDS 대장에 자동으로 등록됩니다</li>
+            </ol>
+          </div>
+          <div class="card">
+            <div class="card-title"><span class="card-title-icon">🔗</span> 협력사별 링크 발급</div>
+            <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+              <select class="form-input" id="linkContractor" style="flex:1;min-width:180px;"><option value="">협력사 선택</option></select>
+              <button class="btn btn-primary" onclick="generateUploadLink()">링크 발급</button>
+            </div>
+            <div id="tokenList">
+              <div style="font-size:13px;color:var(--text3);text-align:center;padding:20px;">발급된 링크가 없습니다</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ 작업환경측정 ═══ -->
+      <div class="page" id="page-measure">
+        <div class="page-header">
+          <div>
+            <div class="page-title">작업환경측정</div>
+            <div class="page-subtitle">측정 결과 업로드 → 자동 분석 → 서류 다운로드</div>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" onclick="openMeasureUpload()">+ 측정결과 업로드</button>
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div id="measureList">
+            <div style="text-align:center;padding:60px 20px;color:var(--text3);">
+              <div style="font-size:40px;margin-bottom:12px;">📊</div>
+              <div style="font-size:15px;font-weight:600;color:var(--text2);margin-bottom:6px;">등록된 측정 결과가 없습니다</div>
+              <div style="font-size:13px;margin-bottom:20px;">측정 결과 PDF를 업로드하면 자동으로 분석됩니다</div>
+              <button class="btn btn-primary btn-lg" onclick="openMeasureUpload()">+ 측정결과 업로드</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ 건강진단 ═══ -->
+      <div class="page" id="page-health">
+        <div class="page-header">
+          <div>
+            <div class="page-title">근로자 건강진단</div>
+            <div class="page-subtitle">건강진단 파일 업로드 → 자동 분석 → 엑셀 다운로드</div>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" onclick="openHealthUpload()">+ 건강진단 업로드</button>
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div id="healthList">
+            <div style="text-align:center;padding:60px 20px;color:var(--text3);">
+              <div style="font-size:40px;margin-bottom:12px;">🏥</div>
+              <div style="font-size:15px;font-weight:600;color:var(--text2);margin-bottom:6px;">등록된 건강진단 결과가 없습니다</div>
+              <div style="font-size:13px;margin-bottom:20px;">건강진단 파일(PDF/이미지)을 업로드하면 자동으로 분석됩니다</div>
+              <button class="btn btn-primary btn-lg" onclick="openHealthUpload()">+ 건강진단 업로드</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ 설정 ═══ -->
+      <div class="page" id="page-settings">
+        <div class="page-header">
+          <div>
+            <div class="page-title">설정</div>
+            <div class="page-subtitle">현장 · 협력사 · 팀원 관리</div>
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div class="card">
+            <div class="card-title"><span class="card-title-icon">🏗️</span> 현장 정보</div>
+            <div class="form-field" style="margin-bottom:12px;">
+              <label class="form-label">현장명</label>
+              <input class="form-input" id="wsNameEdit" placeholder="현장명 입력">
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="updateWSName()">저장</button>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span class="card-title-icon">👷</span> 협력사 목록</div>
+            <div class="tag-list" id="contractorTags"></div>
+            <div class="add-tag-row">
+              <input type="text" id="newContractor" placeholder="협력사명 입력 후 Enter" onkeydown="if(event.key==='Enter')addContractor()">
+              <button class="btn btn-primary btn-sm" onclick="addContractor()">추가</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span class="card-title-icon">🏗️</span> 공종 관리 (협력사별)</div>
+            <div class="form-note" style="margin-bottom:12px;">협력사를 선택하면 해당 협력사의 공종을 관리할 수 있습니다.</div>
+            <div style="margin-bottom:12px;">
+              <select class="form-input" id="workTypeContractor" onchange="renderWorkTypeTags()">
+                <option value="">협력사를 선택하세요</option>
+              </select>
+            </div>
+            <div class="tag-list" id="workTypeTags"><div style="color:var(--text3);font-size:13px;">협력사를 먼저 선택하세요</div></div>
+            <div class="add-tag-row" id="workTypeAddRow" style="display:none">
+              <input type="text" id="newWorkType" placeholder="공종명 입력 후 Enter" onkeydown="if(event.key==='Enter')addWorkType()">
+              <button class="btn btn-primary btn-sm" onclick="addWorkType()">추가</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span class="card-title-icon">👥</span> 팀원 관리</div>
+            <div id="memberList" style="margin-bottom:16px;">
+              <div style="color:var(--text3);font-size:13px;">로딩 중...</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="openModal('inviteModal')">+ 팀원 초대</button>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span class="card-title-icon">ℹ️</span> 계정 정보</div>
+            <div id="accountInfo" class="form-note" style="line-height:2;"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /main -->
+  </div><!-- /app -->
+
+  <!-- 모바일 하단 탭바 -->
+  <div class="mobile-tabbar">
+    <div class="mobile-tabs">
+      <button class="mobile-tab active" id="mtab-home" onclick="showPage('home')">
+        <span class="mobile-tab-icon">🏠</span>
+        <span class="mobile-tab-label">홈</span>
+      </button>
+      <button class="mobile-tab" id="mtab-msds" onclick="showPage('msds')" style="position:relative">
+        <span class="mobile-tab-icon">🧪</span>
+        <span class="mobile-tab-label">MSDS</span>
+        <span class="mobile-tab-badge" id="mBadgeMsds" style="display:none">0</span>
+      </button>
+      <button class="mobile-tab" id="mtab-measure" onclick="showPage('measure')">
+        <span class="mobile-tab-icon">📊</span>
+        <span class="mobile-tab-label">측정</span>
+      </button>
+      <button class="mobile-tab" id="mtab-health" onclick="showPage('health')">
+        <span class="mobile-tab-icon">🏥</span>
+        <span class="mobile-tab-label">건강</span>
+      </button>
+      <button class="mobile-tab" id="mtab-settings" onclick="showPage('settings')">
+        <span class="mobile-tab-icon">⚙️</span>
+        <span class="mobile-tab-label">설정</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 모달들 ═══ -->
+
+<!-- 현장 생성 -->
+<div class="modal-backdrop" id="createWSModal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title">새 현장 추가</div>
+      <button class="modal-close" onclick="closeModal('createWSModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field">
+        <label class="form-label">현장명 <span class="required">*</span></label>
+        <input class="form-input" id="wsNameInput" placeholder="예) 성동자이리버뷰 신축공사">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('createWSModal')">취소</button>
+      <button class="btn btn-primary" onclick="createWorkspace()">생성</button>
+    </div>
+  </div>
+</div>
+
+<!-- MSDS 등록 모달 -->
+<div class="modal-backdrop" id="msdsRegisterModal">
+  <div class="modal wide">
+    <div class="modal-header">
+      <div class="modal-title" id="msdsRegisterTitle">MSDS 등록</div>
+      <button class="modal-close" onclick="closeModal('msdsRegisterModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- 업로드 탭 -->
+      <div id="msdsUploadTab">
+        <div class="form-grid" style="margin-bottom:14px;">
+          <div class="form-field">
+            <label class="form-label">사용 협력사 <span class="required">*</span></label>
+            <select class="form-input" id="batchContractor" onchange="updateBatchWorkTypes()"><option value="">선택하세요</option></select>
+          </div>
+          <div class="form-field">
+            <label class="form-label">취급 공종</label>
+            <select class="form-input" id="batchWorkType"><option value="">선택 (선택사항)</option></select>
+          </div>
+        </div>
+        <div class="form-note" style="margin-bottom:10px;">📂 PDF 또는 JPG 파일만 가능. 여러 파일 동시 업로드 지원. 폴더 드래그 시 협력사·공종 자동 인식.</div>
+        <div id="msdsUploadZone" class="upload-zone"
+          onclick="document.getElementById('pdfInput').click()"
+          ondragover="dragOver(event,'msdsUploadZone')"
+          ondrop="dropMsdsFiles(event)"
+          ondragleave="dragLeave(event,'msdsUploadZone')">
+          <div class="upload-icon">📂</div>
+          <div class="upload-text">파일 또는 폴더를 여기에 드래그하세요</div>
+          <div class="upload-sub">PDF · JPG · PNG · 클릭해서 선택</div>
+          <input type="file" id="pdfInput" accept=".pdf,.jpg,.jpeg,.png" multiple onchange="handleMsdsFileSelect(event)">
+        </div>
+        <div style="text-align:center;margin-bottom:12px;">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('folderInput').click()">
+            📁 폴더째 업로드
+          </button>
+          <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none" onchange="handleFolderSelect(event)">
+        </div>
+        <div id="msdsFileQueue" class="file-queue" style="display:none"></div>
+        <div id="msdsBatchBar" class="batch-bar" style="display:none">
+          <span class="batch-info" id="msdsBatchInfo"></span>
+          <button class="btn btn-danger btn-sm" onclick="clearMsdsFiles()">전체 제거</button>
+          <button class="btn btn-primary" id="parseAllBtn" onclick="parseAllFiles()">✨ 분석 후 일괄 저장</button>
+        </div>
+        <div style="text-align:center;margin-top:8px;">
+          <button class="auth-link" onclick="switchMsdsTab('manual')">직접 입력하기 →</button>
+        </div>
+      </div>
+
+      <!-- 수동 입력 탭 -->
+      <div id="msdsManualTab" style="display:none">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+          <button class="btn btn-secondary btn-sm" onclick="switchMsdsTab('upload')">← 파일 업로드</button>
+          <span style="font-size:13px;color:var(--text2);">직접 입력 모드</span>
+        </div>
         <div class="form-section">
-          <div class="form-section-title">📄 MSDS 원본 파일 (협력사만 선택하면 끝)</div>
-          <div class="form-grid" style="margin-bottom:16px;">
-            <div class="form-field"><label class="form-label">사용 협력사 <span class="required">*</span></label><select class="form-input" id="batchContractor"><option value="">선택하세요</option></select></div>
-            <div class="form-field"><label class="form-label">취급 공종</label><select class="form-input" id="batchWorkType"><option value="">선택 (선택사항)</option></select></div>
-          </div>
-          <div class="form-note" style="margin-bottom:12px;">PDF·JPG·PNG 모두 가능. <b>폴더째 올리면</b> 폴더명에서 협력사·공종을 자동 인식해요. (위 선택은 폴더에서 못 찾았을 때만 적용)</div>
-          <div id="uploadZone" class="upload-zone" onclick="document.getElementById('pdfInput').click()" ondragover="dragOver(event)" ondrop="dropFiles(event)" ondragleave="dragLeave(event)">
-            <div class="upload-icon">📂</div>
-            <div class="upload-text">PDF·이미지를 끌어다 놓으세요</div>
-            <div class="upload-sub">여러 파일 동시 가능 · 클릭해서 선택</div>
-            <input type="file" id="pdfInput" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple onchange="handleFileSelect(event)">
-          </div>
-          <div style="text-align:center;margin-bottom:16px;">
-            <button class="btn btn-secondary" onclick="document.getElementById('folderInput').click()">📁 폴더째 업로드</button>
-            <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none" onchange="handleFolderSelect(event)">
-          </div>
-          <div id="fileQueue" class="file-queue" style="display:none"></div>
-          <div id="batchBar" class="batch-bar" style="display:none">
-            <span class="batch-info" id="batchInfo"></span>
-            <button class="btn btn-danger btn-sm" onclick="clearAllFiles()">전체 제거</button>
-            <button class="btn btn-primary" id="parseAllBtn" onclick="parseAllFiles()">✨ 전체 파싱 후 일괄 저장</button>
+          <div class="form-section-title">기본 정보</div>
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="form-label">제품명 <span class="required">*</span></label>
+              <input class="form-input" id="f_productName">
+            </div>
+            <div class="form-field">
+              <label class="form-label">사용 협력사 <span class="required">*</span></label>
+              <select class="form-input" id="f_contractor" onchange="updateManualWorkTypes()"><option value="">선택</option></select>
+            </div>
+            <div class="form-field">
+              <label class="form-label">취급 공종</label>
+              <select class="form-input" id="f_workType"><option value="">선택</option></select>
+            </div>
+            <div class="form-field">
+              <label class="form-label">공급업체 <span class="required">*</span></label>
+              <input class="form-input" id="f_supplier">
+            </div>
+            <div class="form-field">
+              <label class="form-label">공급업체 연락처</label>
+              <input class="form-input" id="f_supplierContact" placeholder="예) 02-1234-5678">
+            </div>
+            <div class="form-field">
+              <label class="form-label">MSDS 개정일</label>
+              <input class="form-input" type="date" id="f_issueDate">
+            </div>
           </div>
         </div>
-
-        <details id="manualSection">
-          <summary>✏️ PDF 없이 직접 입력하기 (수동)</summary>
-          <div style="padding-top:16px;">
-            <div class="form-section">
-              <div class="form-section-title">📦 제품 기본 정보</div>
-              <div class="form-grid">
-                <div class="form-field"><label class="form-label">제품명 <span class="required">*</span></label><input class="form-input" id="f_productName"></div>
-                <div class="form-field"><label class="form-label">사용 협력사 <span class="required">*</span></label><select class="form-input" id="f_contractor"><option value="">선택</option></select></div>
-                <div class="form-field"><label class="form-label">취급 공종</label><select class="form-input" id="f_workType"><option value="">선택</option></select></div>
-                <div class="form-field"><label class="form-label">공급업체 <span class="required">*</span></label><input class="form-input" id="f_supplier"></div>
-                <div class="form-field"><label class="form-label">공급업체 연락처</label><input class="form-input" id="f_supplierContact"></div>
-                <div class="form-field"><label class="form-label">MSDS 개정일</label><input class="form-input" type="date" id="f_issueDate"></div>
-              </div>
+        <div class="form-section">
+          <div class="form-section-title">구성 성분</div>
+          <div class="form-field" style="margin-bottom:10px;">
+            <label class="form-label">CAS No. (쉼표로 구분)</label>
+            <input class="form-input" id="f_casNo" placeholder="예) 67-64-1, 108-88-3">
+          </div>
+          <div class="form-field">
+            <label class="form-label">구성 성분</label>
+            <textarea class="form-input" id="f_components" placeholder="예) 아세톤(67-64-1) 30%, 톨루엔(108-88-3) 20%"></textarea>
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-section-title">GHS 위험성</div>
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="form-label">신호어</label>
+              <select class="form-input" id="f_signalWord"><option value="">선택</option><option>위험 (Danger)</option><option>경고 (Warning)</option><option>해당없음</option></select>
             </div>
-            <div class="form-section">
-              <div class="form-section-title">🧪 구성 성분</div>
-              <div class="form-grid col1">
-                <div class="form-field"><label class="form-label">CAS No. (쉼표로 구분)</label><input class="form-input" id="f_casNo"></div>
-                <div class="form-field"><label class="form-label">구성 성분 <span style="font-weight:400;color:var(--text3)">— 형식: 성분명(CAS) 함유량%, ...</span></label><textarea class="form-input" id="f_components" placeholder="아세톤(67-64-1) 30%, 톨루엔(108-88-3) 20%"></textarea></div>
-              </div>
+            <div class="form-field">
+              <label class="form-label">GHS 픽토그램</label>
+              <input class="form-input" id="f_pictograms" placeholder="예) GHS02, GHS07">
             </div>
-            <div class="form-section">
-              <div class="form-section-title">⚠️ GHS 위험성</div>
-              <div class="form-grid">
-                <div class="form-field"><label class="form-label">신호어</label><select class="form-input" id="f_signalWord"><option value="">선택</option><option>위험 (Danger)</option><option>경고 (Warning)</option><option>해당없음</option></select></div>
-                <div class="form-field"><label class="form-label">GHS 픽토그램 (코드)</label><input class="form-input" id="f_pictograms" placeholder="GHS02, GHS07, GHS08"></div>
-                <div class="form-field span2"><label class="form-label">H코드 (유해·위험)</label><input class="form-input" id="f_hCodes" placeholder="H225, H319, H336"></div>
-                <div class="form-field span2"><label class="form-label">P코드 (예방조치)</label><input class="form-input" id="f_pCodes" placeholder="P210, P280, P305"></div>
-                <div class="form-field span2"><label class="form-label">추천 보호구</label><input class="form-input" id="f_protectiveEquipment" placeholder="내화학성 장갑, 보안경, 방독마스크"></div>
-              </div>
+            <div class="form-field span2">
+              <label class="form-label">H코드 (유해·위험문구)</label>
+              <input class="form-input" id="f_hCodes" placeholder="예) H225, H319, H336">
             </div>
-            <div class="form-section">
-              <div class="form-section-title">⚖️ 법정 대상물질 (Claude 1차 판단 후 수정)</div>
-              <div class="legal-checks">
-                <label class="legal-check"><input type="checkbox" id="f_legal_measurement"> 작업환경측정 대상</label>
-                <label class="legal-check"><input type="checkbox" id="f_legal_exam"> 특수건강진단 대상</label>
-                <label class="legal-check"><input type="checkbox" id="f_legal_manage"> 관리대상 유해물질</label>
-                <label class="legal-check"><input type="checkbox" id="f_legal_permit"> 허가대상 유해물질</label>
-                <label class="legal-check"><input type="checkbox" id="f_legal_special"> 특별관리물질(CMR)</label>
-                <label class="legal-check"><input type="checkbox" id="f_legal_dangerous"> 위험물 규제대상</label>
-              </div>
-              <div class="form-field" style="margin-top:12px;"><label class="form-label">특수검진 주기</label><input class="form-input" id="f_legalExamCycle" placeholder="배치후 1차: 1개월, 이후: 6개월"></div>
+            <div class="form-field span2">
+              <label class="form-label">P코드 (예방조치문구)</label>
+              <input class="form-input" id="f_pCodes" placeholder="예) P210, P280, P305">
             </div>
-            <div style="display:flex;gap:10px;justify-content:flex-end;">
-              <button class="btn btn-secondary" onclick="resetForm()">초기화</button>
-              <button class="btn btn-primary" onclick="saveManual()">💾 대장에 저장</button>
+            <div class="form-field span2">
+              <label class="form-label">추천 보호구</label>
+              <input class="form-input" id="f_protectiveEquipment" placeholder="예) 내화학성 장갑, 보안경, 방독마스크">
             </div>
           </div>
-        </details>
-      </div>
-    </div>
-
-    <!-- Warning -->
-    <div class="page" id="page-warning">
-      <div class="page-header"><div><div class="page-title">경고표지 생성</div><div class="page-subtitle">물질을 선택하면 A4 경고표지 생성 · 복수 선택 가능</div></div></div>
-      <div class="content">
-        <div class="warn-layout">
-          <div class="warn-left">
-            <div class="form-field" style="margin-bottom:12px;"><label class="form-label">현장명</label><input class="form-input" id="warningSite" placeholder="예) 성동자이리버뷰 신축공사" oninput="updateWarningPreview()"></div>
-            <label class="form-label">물질 선택 (복수)</label>
-            <div class="warn-pick-list" id="warnPickList"></div>
-            <div class="warn-actions">
-              <button class="btn btn-secondary btn-sm" onclick="selectAllWarn(true)">전체 선택</button>
-              <button class="btn btn-secondary btn-sm" onclick="selectAllWarn(false)">전체 해제</button>
-              <div style="flex:1"></div>
-              <button class="btn btn-primary" onclick="printWarnings()">🖨️ A4 인쇄/PDF</button>
-            </div>
+        </div>
+        <div class="form-section">
+          <div class="form-section-title">법정 대상물질</div>
+          <div class="legal-checks">
+            <label class="legal-check"><input type="checkbox" id="f_legal_measurement"> 작업환경측정 대상</label>
+            <label class="legal-check"><input type="checkbox" id="f_legal_exam"> 특수건강진단 대상</label>
+            <label class="legal-check"><input type="checkbox" id="f_legal_manage"> 관리대상 유해물질</label>
+            <label class="legal-check"><input type="checkbox" id="f_legal_permit"> 허가대상 유해물질</label>
+            <label class="legal-check"><input type="checkbox" id="f_legal_special"> 특별관리물질(CMR)</label>
+            <label class="legal-check"><input type="checkbox" id="f_legal_dangerous"> 위험물 규제대상</label>
           </div>
-          <div class="warn-right">
-            <label class="form-label">미리보기</label>
-            <div id="warningPreview" class="warn-preview"><div class="warn-empty">왼쪽에서 물질을 선택하세요</div></div>
+          <div class="form-field" style="margin-top:10px;">
+            <label class="form-label">특수검진 주기</label>
+            <input class="form-input" id="f_legalExamCycle" placeholder="예) 배치후 1차: 1개월, 이후: 6개월">
           </div>
         </div>
       </div>
     </div>
-
-    <!-- Settings -->
-    <div class="page" id="page-settings">
-      <div class="page-header"><div><div class="page-title">협력사 · 설정</div><div class="page-subtitle">현장 협력사 목록을 관리합니다</div></div></div>
-      <div class="content">
-        <div class="settings-card">
-          <div class="settings-card-title">👷 사용 협력사 목록</div>
-          <div class="form-note" style="margin-bottom:12px;">현장에서 화학물질을 사용하는 협력사를 등록하세요. 공급업체는 MSDS에서 자동 추출됩니다.</div>
-          <div class="tag-list" id="contractorTags"></div>
-          <div class="add-tag-row"><input type="text" id="newContractor" placeholder="협력사명 입력 후 Enter" onkeydown="if(event.key==='Enter')addContractor()"><button class="btn btn-primary btn-sm" onclick="addContractor()">추가</button></div>
-        </div>
-        <div class="settings-card">
-          <div class="settings-card-title">🏗️ 취급 공종 목록</div>
-          <div class="form-note" style="margin-bottom:12px;">공종을 등록하면 폴더 업로드 시 폴더명과 자동 매칭되고, 공종별 필터·분류가 가능합니다.</div>
-          <div class="tag-list" id="workTypeTags"></div>
-          <div class="add-tag-row"><input type="text" id="newWorkType" placeholder="공종명 입력 후 Enter" onkeydown="if(event.key==='Enter')addWorkType()"><button class="btn btn-primary btn-sm" onclick="addWorkType()">추가</button></div>
-        </div>
-        <div class="settings-card">
-          <div class="settings-card-title">ℹ️ 계정 정보</div>
-          <div id="accountInfo" class="form-note"></div>
-        </div>
-      </div>
+    <div class="modal-footer" id="msdsManualFooter" style="display:none">
+      <button class="btn btn-secondary" onclick="resetMsdsForm()">초기화</button>
+      <button class="btn btn-primary" onclick="saveMsdsManual()">💾 저장</button>
     </div>
   </div>
 </div>
 
-<!-- Modals -->
-<div class="modal-backdrop" id="detailModal">
+<!-- MSDS 상세 -->
+<div class="modal-backdrop" id="msdsDetailModal">
   <div class="modal">
-    <div class="modal-header"><div class="modal-title" id="detailTitle">MSDS 상세</div><button class="modal-close" onclick="closeModal('detailModal')">✕</button></div>
+    <div class="modal-header">
+      <div class="modal-title" id="detailTitle">MSDS 상세</div>
+      <button class="modal-close" onclick="closeModal('msdsDetailModal')">✕</button>
+    </div>
     <div class="modal-body" id="detailBody"></div>
     <div class="modal-footer">
-      <button class="btn btn-secondary btn-sm" id="detailViewPdfBtn">📄 PDF 열기</button>
-      <button class="btn btn-secondary btn-sm" onclick="editRecord()">✏️ 수정</button>
-      <button class="btn btn-danger btn-sm" id="detailDeleteBtn">🗑️ 삭제</button>
-      <button class="btn btn-primary btn-sm" onclick="closeModal('detailModal')">닫기</button>
+      <button class="btn btn-secondary btn-sm" id="detailViewFileBtn" style="display:none">📄 원본 보기</button>
+      <button class="btn btn-secondary btn-sm" onclick="editMsdsRecord()">✏️ 수정</button>
+      <button class="btn btn-danger btn-sm" id="detailDeleteBtn">🗑 삭제</button>
+      <button class="btn btn-primary btn-sm" onclick="closeModal('msdsDetailModal')">닫기</button>
     </div>
   </div>
 </div>
 
-<div class="modal-backdrop" id="pdfModal">
+<!-- 원본 파일 뷰어 -->
+<div class="modal-backdrop" id="fileViewerModal">
   <div class="modal wide">
-    <div class="modal-header"><div class="modal-title" id="pdfModalTitle">PDF 뷰어</div><button class="modal-close" onclick="closePdfModal()">✕</button></div>
-    <div class="modal-body"><iframe id="pdfFrame" class="pdf-viewer-frame"></iframe></div>
-    <div class="modal-footer"><button class="btn btn-secondary btn-sm" id="pdfDownloadBtn">📥 다운로드</button><button class="btn btn-primary btn-sm" onclick="closePdfModal()">닫기</button></div>
-  </div>
-</div>
-
-<div class="modal-backdrop" id="packageModal">
-  <div class="modal">
-    <div class="modal-header"><div class="modal-title">📦 협력사별 일괄 출력</div><button class="modal-close" onclick="closeModal('packageModal')">✕</button></div>
-    <div class="modal-body">
-      <div class="form-field" style="margin-bottom:18px;"><label class="form-label">협력사 선택</label><select class="form-input" id="pkgContractor" onchange="updatePkgCount()"><option value="">선택하세요</option></select></div>
-      <div class="form-field" style="margin-bottom:18px;"><label class="form-label">사용 상태</label><select class="form-input" id="pkgStatus" onchange="updatePkgCount()"><option value="">전체</option><option value="active">사용중만</option><option value="ended">사용종료만</option></select></div>
-      <div class="form-note" style="margin-bottom:10px;font-weight:600;">출력 항목</div>
-      <label class="pkg-opt"><input type="checkbox" id="pkgList" checked><div><div class="wp-name">📋 MSDS 목록 (엑셀)</div></div></label>
-      <label class="pkg-opt"><input type="checkbox" id="pkgPdf" checked><div><div class="wp-name">📄 원본 PDF 전체</div></div></label>
-      <label class="pkg-opt"><input type="checkbox" id="pkgWarn" checked><div><div class="wp-name">⚠️ 경고표지 (A4 PDF)</div></div></label>
-      <div id="pkgCount" class="pkg-count"></div>
+    <div class="modal-header">
+      <div class="modal-title" id="fileViewerTitle">파일 보기</div>
+      <button class="modal-close" onclick="closeFileViewer()">✕</button>
     </div>
-    <div class="modal-footer"><button class="btn btn-secondary btn-sm" onclick="closeModal('packageModal')">취소</button><button class="btn btn-primary btn-sm" onclick="exportPackage()">📦 패키지 생성</button></div>
+    <div class="modal-body">
+      <iframe id="fileViewerFrame" class="pdf-viewer-frame" style="display:none"></iframe>
+      <img id="fileViewerImg" style="display:none;width:100%;max-height:65vh;object-fit:contain;background:#f5f5f5;border-radius:8px;">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" id="fileDownloadBtn">📥 다운로드</button>
+      <button class="btn btn-primary btn-sm" onclick="closeFileViewer()">닫기</button>
+    </div>
   </div>
 </div>
 
+<!-- 수령 관리 -->
 <div class="modal-backdrop" id="receiptModal">
-  <div class="modal">
-    <div class="modal-header"><div class="modal-title">📥 MSDS 수령 관리</div><button class="modal-close" onclick="closeModal('receiptModal')">✕</button></div>
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title">📥 수령 관리</div>
+      <button class="modal-close" onclick="closeModal('receiptModal')">✕</button>
+    </div>
     <div class="modal-body" id="receiptBody"></div>
-    <div class="modal-footer"><button class="btn btn-primary btn-sm" onclick="saveReceipt()">저장</button></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('receiptModal')">취소</button>
+      <button class="btn btn-primary" onclick="saveReceipt()">저장</button>
+    </div>
   </div>
 </div>
 
+<!-- 협력사 패키지 -->
+<div class="modal-backdrop" id="packageModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">📦 협력사별 일괄 출력</div>
+      <button class="modal-close" onclick="closeModal('packageModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field" style="margin-bottom:14px;">
+        <label class="form-label">협력사 선택</label>
+        <select class="form-input" id="pkgContractor" onchange="updatePkgCount()"><option value="">선택하세요</option></select>
+      </div>
+      <div class="form-field" style="margin-bottom:14px;">
+        <label class="form-label">사용 상태</label>
+        <select class="form-input" id="pkgStatus" onchange="updatePkgCount()"><option value="">전체</option><option value="active">사용중만</option><option value="ended">사용종료만</option></select>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px;">출력 항목 선택</div>
+      <label style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;">
+        <input type="checkbox" id="pkgList" checked> <div><div style="font-size:13px;font-weight:600;">📋 MSDS 목록 (엑셀)</div></div>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;">
+        <input type="checkbox" id="pkgPdf" checked> <div><div style="font-size:13px;font-weight:600;">📄 원본 파일 전체 (ZIP)</div></div>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;">
+        <input type="checkbox" id="pkgWarn" checked> <div><div style="font-size:13px;font-weight:600;">⚠️ 경고표지 (A4 인쇄)</div></div>
+      </label>
+      <div id="pkgCount" style="font-size:13px;color:var(--primary);font-weight:600;margin-top:14px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('packageModal')">취소</button>
+      <button class="btn btn-primary" onclick="exportPackage()">📦 패키지 생성</button>
+    </div>
+  </div>
+</div>
+
+<!-- 작업환경측정 업로드 -->
+<div class="modal-backdrop" id="measureUploadModal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <div class="modal-title">📊 작업환경측정 결과 업로드</div>
+      <button class="modal-close" onclick="closeModal('measureUploadModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="margin-bottom:14px;">
+        <div class="form-field">
+          <label class="form-label">측정 회차 <span class="required">*</span></label>
+          <input class="form-input" id="measureRound" placeholder="예) 2026년 1차 (상반기)">
+        </div>
+        <div class="form-field">
+          <label class="form-label">측정 기간 <span class="required">*</span></label>
+          <input class="form-input" id="measurePeriod" placeholder="예) 2026.05.21~22">
+        </div>
+      </div>
+      <div class="form-note" style="margin-bottom:12px;">측정결과 보고서 PDF를 업로드하면 분진·소음 결과표와 사후관리 결과표를 자동으로 생성합니다.</div>
+      <div id="measureUploadZone" class="upload-zone"
+        onclick="document.getElementById('measureFileInput').click()"
+        ondragover="dragOver(event,'measureUploadZone')"
+        ondrop="dropMeasureFile(event)"
+        ondragleave="dragLeave(event,'measureUploadZone')">
+        <div class="upload-icon">📄</div>
+        <div class="upload-text">측정결과 PDF를 여기에 드래그하세요</div>
+        <div class="upload-sub">PDF 파일만 가능</div>
+        <input type="file" id="measureFileInput" accept=".pdf" onchange="handleMeasureFile(event)">
+      </div>
+      <div id="measureFileInfo" style="display:none" class="file-item done" style="margin-top:8px;">
+        <span class="fi-icon">📄</span>
+        <div class="fi-info"><div class="fi-name" id="measureFileName"></div></div>
+        <button class="fi-remove" onclick="clearMeasureFile()">✕</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('measureUploadModal')">취소</button>
+      <button class="btn btn-primary" onclick="analyzeMeasure()" id="measureAnalyzeBtn">🤖 AI 분석 시작</button>
+    </div>
+  </div>
+</div>
+
+<!-- 작업환경측정 결과 -->
+<div class="modal-backdrop" id="measureResultModal">
+  <div class="modal wide">
+    <div class="modal-header">
+      <div class="modal-title" id="measureResultTitle">측정 결과</div>
+      <button class="modal-close" onclick="closeModal('measureResultModal')">✕</button>
+    </div>
+    <div class="modal-body" id="measureResultBody"></div>
+    <div class="modal-footer" id="measureResultFooter"></div>
+  </div>
+</div>
+
+<!-- 건강진단 업로드 -->
+<div class="modal-backdrop" id="healthUploadModal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <div class="modal-title">🏥 건강진단 파일 업로드</div>
+      <button class="modal-close" onclick="closeModal('healthUploadModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field" style="margin-bottom:14px;">
+        <label class="form-label">진단 회차 <span class="required">*</span></label>
+        <input class="form-input" id="healthRound" placeholder="예) 2026년 상반기 특수건강진단">
+      </div>
+      <div class="form-note" style="margin-bottom:12px;">건강진단 결과 파일(PDF 또는 이미지)을 업로드하면 AI가 자동으로 내용을 분석합니다.<br>여러 명의 결과가 담긴 파일도 가능합니다.</div>
+      <div id="healthUploadZone" class="upload-zone"
+        onclick="document.getElementById('healthFileInput').click()"
+        ondragover="dragOver(event,'healthUploadZone')"
+        ondrop="dropHealthFiles(event)"
+        ondragleave="dragLeave(event,'healthUploadZone')">
+        <div class="upload-icon">🏥</div>
+        <div class="upload-text">건강진단 파일을 여기에 드래그하세요</div>
+        <div class="upload-sub">PDF · JPG · PNG · 여러 파일 가능</div>
+        <input type="file" id="healthFileInput" accept=".pdf,.jpg,.jpeg,.png" multiple onchange="handleHealthFiles(event)">
+      </div>
+      <div id="healthFileQueue" class="file-queue" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('healthUploadModal')">취소</button>
+      <button class="btn btn-primary" onclick="analyzeHealth()" id="healthAnalyzeBtn">🤖 AI 분석 시작</button>
+    </div>
+  </div>
+</div>
+
+<!-- 건강진단 확인/수정 -->
+<div class="modal-backdrop" id="healthConfirmModal">
+  <div class="modal wide">
+    <div class="modal-header">
+      <div class="modal-title">건강진단 결과 확인</div>
+      <button class="modal-close" onclick="closeModal('healthConfirmModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--warn-light);border:1.5px solid #FCD34D;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--warn);">
+        ⚠️ AI가 추출한 내용을 확인하고 수정하세요. 특히 이름, 협력사, 검진일자, 결과코드를 꼼꼼히 확인해주세요.
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="confirm-table" id="healthConfirmTable">
+          <thead><tr>
+            <th>#</th><th>이름</th><th>협력사</th><th>직무구분</th><th>검진일자</th>
+            <th>검진구분<br><span style="font-weight:400;font-size:10px">1:일반 2:특수 3:배치전</span></th>
+            <th>결과코드<br><span style="font-weight:400;font-size:10px">A B C1 C2 D1 D2 R U V</span></th>
+            <th>유해인자별 판정</th>
+          </tr></thead>
+          <tbody id="healthConfirmBody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:16px;">
+        <div class="form-note" style="margin-bottom:10px;font-weight:600;">📤 회사 엑셀 양식 업로드</div>
+        <div class="form-note" style="margin-bottom:10px;">L열(검진일자), M열(구분코드), N열(결과코드), O열(유해인자판정)을 자동으로 채워드립니다.</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <input type="file" id="healthExcelInput" accept=".xlsx,.xls" style="display:none" onchange="handleHealthExcel(event)">
+          <button class="btn btn-secondary" onclick="document.getElementById('healthExcelInput').click()">📤 엑셀 양식 업로드</button>
+          <span id="healthExcelName" style="font-size:13px;color:var(--text2);"></span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('healthConfirmModal')">취소</button>
+      <button class="btn btn-ok" onclick="downloadHealthExcel()" id="healthDownloadBtn" disabled>📥 엑셀 다운로드</button>
+      <button class="btn btn-primary" onclick="saveHealthRecord()">💾 대장에 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 팀원 초대 -->
+<div class="modal-backdrop" id="inviteModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">팀원 초대</div>
+      <button class="modal-close" onclick="closeModal('inviteModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-note" style="margin-bottom:14px;">초대할 팀원이 먼저 회원가입을 완료해야 합니다.</div>
+      <div class="form-field" style="margin-bottom:12px;">
+        <label class="form-label">이메일 <span class="required">*</span></label>
+        <input class="form-input" id="inviteEmail" placeholder="team@example.com" type="email">
+      </div>
+      <div class="form-field">
+        <label class="form-label">권한</label>
+        <select class="form-input" id="inviteRole">
+          <option value="member">멤버 — 조회 및 등록</option>
+          <option value="admin">관리자 — 모든 권한</option>
+        </select>
+      </div>
+      <div class="auth-msg" id="inviteMsg" style="margin-top:10px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('inviteModal')">취소</button>
+      <button class="btn btn-primary" onclick="handleInvite()">초대</button>
+    </div>
+  </div>
+</div>
+
+<!-- 토스트 -->
 <div class="toast-wrap" id="toastWrap"></div>
 
 <script type="module" src="/src/main.js"></script>
