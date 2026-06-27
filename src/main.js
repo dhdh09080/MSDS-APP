@@ -1499,7 +1499,6 @@ window.downloadMeasureAfter = function() {
 // ═══════════════════════════════════════════════
 window.openHealthUpload = function() {
   healthFileQueue = []; healthConfirmData = []; healthExcelData = null; healthExcelName_val = null;
-  document.getElementById('healthRound').value = '';
   document.getElementById('healthFileQueue').style.display = 'none';
   document.getElementById('healthUploadZone').style.display = 'block';
   openModal('healthUploadModal');
@@ -1545,12 +1544,10 @@ function renderHealthFileQueue() {
 window.removeHealthFile = function(id) { healthFileQueue = healthFileQueue.filter(f => f.id !== id); renderHealthFileQueue(); };
 
 window.analyzeHealth = async function() {
-  const round = document.getElementById('healthRound').value.trim();
-  if (!round) { toast('진단 회차를 입력하세요', 'error'); return; }
   if (healthFileQueue.length === 0) { toast('파일을 먼저 업로드하세요', 'error'); return; }
   const btn = document.getElementById('healthAnalyzeBtn');
   btn.disabled = true; btn.textContent = '🤖 AI 분석 중...';
-  healthCurrentRound = round;
+  healthCurrentRound = new Date().toLocaleDateString('ko-KR');
   healthConfirmData = [];
   for (const item of healthFileQueue) {
     item.status = 'parsing'; renderHealthFileQueue();
