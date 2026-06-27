@@ -140,7 +140,6 @@ async function loadWorkspaces() {
   }));
   renderWorkspaceList();
 }
-}
 
 function renderWorkspaceList() {
   const el = document.getElementById('wsList');
