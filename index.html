@@ -204,49 +204,58 @@
       </div>
 
       <!-- ═══ MSDS 대장 ═══ -->
-      <div class="page" id="page-msds">
-        <div class="page-header">
-          <div>
-            <div class="page-title">MSDS 관리대장</div>
-            <div class="page-subtitle" id="msdsSubtitle">총 0건</div>
-          </div>
-          <div class="header-actions">
-            <button class="btn btn-secondary" onclick="printMsdsList()">🖨️ 인쇄</button>
-            <button class="btn btn-secondary" onclick="exportMsdsExcel()">📊 엑셀</button>
-            <button class="btn btn-secondary" onclick="openPackageModal()">📦 패키지</button>
-            <button class="btn btn-primary" id="msdsRegisterBtn" onclick="openMsdsRegister()">+ 등록</button>
-          </div>
+<div class="page" id="page-msds">
+  <div class="page-header">
+    <div>
+      <div class="page-title">MSDS 관리대장</div>
+      <div class="page-subtitle" id="msdsSubtitle">총 0건</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary" onclick="printMsdsList()">🖨️ 인쇄</button>
+      <button class="btn btn-secondary" onclick="exportMsdsExcel()">📊 엑셀</button>
+      <button class="btn btn-secondary" onclick="openPackageModal()">📦 패키지</button>
+      <button class="btn btn-primary" id="msdsRegisterBtn" onclick="openMsdsRegister()">+ 등록</button>
+    </div>
+  </div>
+  <div style="display:flex;flex:1;overflow:hidden;">
+
+    <!-- 왼쪽 협력사 사이드바 -->
+    <div class="msds-sidebar">
+      <div class="msds-sidebar-title">협력사</div>
+      <div id="contractorSidebar"></div>
+    </div>
+
+    <!-- 오른쪽 목록 -->
+    <div class="msds-content">
+      <div class="filter-bar">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" placeholder="제품명, 공급업체, CAS 검색..." id="searchInput" oninput="renderMsdsTable()">
         </div>
-        <div class="content-scroll">
-          <div class="filter-bar">
-            <div class="search-wrap">
-              <span class="search-icon">🔍</span>
-              <input type="text" placeholder="제품명, 공급업체, CAS 검색..." id="searchInput" oninput="renderMsdsTable()">
-            </div>
-            <select class="filter-select" id="filterContractor" onchange="onFilterContractorChange()"><option value="">전체 협력사</option></select>
-            <select class="filter-select" id="filterWorkType" onchange="renderMsdsTable()"><option value="">전체 공종</option></select>
-            <select class="filter-select" id="filterStatus" onchange="renderMsdsTable()"><option value="">전체 상태</option><option value="active">사용중</option><option value="ended">사용종료</option></select>
-            <select class="filter-select" id="filterReceipt" onchange="renderMsdsTable()"><option value="">전체 수령</option><option value="received">수령완료</option><option value="pending">미수령</option></select>
-            <select class="filter-select" id="filterSpecial" onchange="renderMsdsTable()"><option value="">전체</option><option value="Y">특별관리만</option></select>
-          </div>
-          <div class="hint">💡 협력사 필터 → '패키지' 버튼으로 목록+PDF+경고표지 한번에 출력</div>
-          <div class="table-wrap">
-            <div class="table-wrap-scroll">
-              <table>
-                <thead><tr>
-                  <th style="width:36px"><input type="checkbox" id="checkAll" onchange="toggleAll(this)"></th>
-                  <th>제품명</th><th>협력사</th><th>공종</th><th>공급업체</th><th>CAS</th>
-                  <th>특별</th><th>상태</th><th>수령</th><th>원본</th><th>관리</th>
-                </tr></thead>
-                <tbody id="msdsTableBody">
-                  <tr class="empty-row"><td colspan="11">로딩 중...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <select class="filter-select" id="filterWorkType" onchange="renderMsdsTable()"><option value="">전체 공종</option></select>
+        <select class="filter-select" id="filterStatus" onchange="renderMsdsTable()"><option value="">전체 상태</option><option value="active">사용중</option><option value="ended">사용종료</option></select>
+        <select class="filter-select" id="filterReceipt" onchange="renderMsdsTable()"><option value="">전체 수령</option><option value="received">수령완료</option><option value="pending">미수령</option></select>
+        <select class="filter-select" id="filterSpecial" onchange="renderMsdsTable()"><option value="">전체</option><option value="Y">특별관리만</option></select>
+      </div>
+      <div class="hint">💡 협력사 선택 → '패키지' 버튼으로 목록+PDF+경고표지 한번에 출력</div>
+      <div class="table-wrap">
+        <div class="table-wrap-scroll">
+          <table>
+            <thead><tr>
+              <th style="width:36px"><input type="checkbox" id="checkAll" onchange="toggleAll(this)"></th>
+              <th>제품명</th><th>협력사</th><th>공종</th><th>공급업체</th><th>CAS</th>
+              <th>특별</th><th>상태</th><th>수령</th><th>원본</th><th>관리</th>
+            </tr></thead>
+            <tbody id="msdsTableBody">
+              <tr class="empty-row"><td colspan="11">로딩 중...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
+    </div>
 
+  </div>
+</div>
       <!-- ═══ 경고표지 ═══ -->
       <div class="page" id="page-warning">
         <div class="page-header">

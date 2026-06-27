@@ -252,15 +252,11 @@ async function loadWorkTypes() {
 
 function populateContractorSelects() {
   const opts = '<option value="">선택하세요</option>' + contractors.map(c => `<option value="${c.id}" data-name="${c.name}">${c.name}</option>`).join('');
-  const opts2 = '<option value="">전체 협력사</option>' + contractors.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
   ['batchContractor','f_contractor','pkgContractor','linkContractor','workTypeContractor'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (id === 'filterContractor') { el.innerHTML = opts2; return; }
-    const cur = el.value; el.innerHTML = id === 'filterContractor' ? opts2 : opts; el.value = cur;
+    const cur = el.value; el.innerHTML = opts; el.value = cur;
   });
-  const fc = document.getElementById('filterContractor');
-  if (fc) { const cur = fc.value; fc.innerHTML = opts2; fc.value = cur; }
 }
 
 function getWorkTypesForContractor(contractorId) {
@@ -484,6 +480,7 @@ async function loadMsdsRecords() {
     .select('*').eq('workspace_id', currentWS.id).order('created_at', { ascending: false });
   msdsRecords = data || [];
   updateStats(); renderMsdsTable(); renderHomeDashboard(); renderWarnPickList();
+  renderContractorSidebar(); // 추가
 }
 
 function updateStats() {
@@ -541,7 +538,7 @@ function renderHomeDashboard() {
 // ═══════════════════════════════════════════════
 function getFilteredMsds() {
   const q = (document.getElementById('searchInput')?.value||'').toLowerCase();
-  const fCon = document.getElementById('filterContractor')?.value||'';
+  const fCon = window.selectedContractor || '';
   const fWork = document.getElementById('filterWorkType')?.value||'';
   const fSt = document.getElementById('filterStatus')?.value||'';
   const fRc = document.getElementById('filterReceipt')?.value||'';
@@ -1235,7 +1232,48 @@ window.exportPackage = async function() {
   toast(`${con} 패키지 완료`, 'success');
   closeModal('packageModal');
 };
+// ═══════════════════════════════════════════════
+// MSDS 협력사 사이드바
+// ═══════════════════════════════════════════════
+window.selectedContractor = '';
 
+window.selectContractorSidebar = function(name) {
+  window.selectedContractor = name;
+  // 사이드바 활성화 표시
+  document.querySelectorAll('.sidebar-con-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.name === name);
+  });
+  // 공종 필터 업데이트
+  const con = contractors.find(c => c.name === name);
+  const wts = con ? getWorkTypesForContractor(con.id) : [];
+  const wtSel = document.getElementById('filterWorkType');
+  if (wtSel) {
+    wtSel.innerHTML = '<option value="">전체 공종</option>' + wts.map(w => `<option value="${w.name}">${w.name}</option>`).join('');
+  }
+  // 서브타이틀 업데이트
+  const filtered = getFilteredMsds();
+  document.getElementById('msdsSubtitle').textContent = name ? `${name} · ${filtered.length}건` : `총 ${msdsRecords.length}건`;
+  renderMsdsTable();
+};
+
+function renderContractorSidebar() {
+  const el = document.getElementById('contractorSidebar');
+  if (!el) return;
+  // 협력사별 물질 수 계산
+  const counts = {};
+  msdsRecords.forEach(r => { counts[r.contractor] = (counts[r.contractor]||0) + 1; });
+  const sortedContractors = [...contractors].sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+  el.innerHTML = `
+    <div class="sidebar-con-item ${!window.selectedContractor?'active':''}" data-name="" onclick="selectContractorSidebar('')">
+      <span class="sidebar-con-name">전체 보기</span>
+      <span class="sidebar-con-count">${msdsRecords.length}</span>
+    </div>
+    ${sortedContractors.map(c => `
+      <div class="sidebar-con-item ${window.selectedContractor===c.name?'active':''}" data-name="${c.name}" onclick="selectContractorSidebar('${c.name}')">
+        <span class="sidebar-con-name">${c.name}</span>
+        <span class="sidebar-con-count">${counts[c.name]||0}</span>
+      </div>`).join('')}`;
+}
 // ═══════════════════════════════════════════════
 // 작업환경측정
 // ═══════════════════════════════════════════════
