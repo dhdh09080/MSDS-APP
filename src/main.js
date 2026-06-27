@@ -175,7 +175,7 @@ window.createWorkspace = async function() {
   toast(name + ' 현장이 추가됐습니다', 'success');
 };
 
-async function enterWorkspace(wsId) {
+window.enterWorkspace = async function(wsId) {
   currentWS = workspaces.find(w => w.id === wsId);
   if (!currentWS) return;
   document.getElementById('workspaceScreen').style.display = 'none';
