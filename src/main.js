@@ -125,13 +125,21 @@ async function showWorkspaces() {
 }
 
 async function loadWorkspaces() {
+  const { data: memberRows } = await supabase.from('workspace_members')
+    .select('workspace_id, role').eq('user_id', user.id);
+  if (!memberRows || memberRows.length === 0) {
+    workspaces = []; renderWorkspaceList(); return;
+  }
+  const wsIds = memberRows.map(m => m.workspace_id);
   const { data, error } = await supabase.from('workspaces')
-    .select('*, workspace_members!inner(role)')
-    .eq('workspace_members.user_id', user.id)
-    .order('created_at', { ascending: true });
-  if (error) { toast('현장 목록 로드 실패', 'error'); return; }
-  workspaces = data || [];
+    .select('*').in('id', wsIds).order('created_at', { ascending: true });
+  if (error) { toast('현장 목록 로드 실패', 'error'); workspaces = []; renderWorkspaceList(); return; }
+  workspaces = (data || []).map(ws => ({
+    ...ws,
+    workspace_members: [{ role: memberRows.find(m => m.workspace_id === ws.id)?.role || 'member' }]
+  }));
   renderWorkspaceList();
+}
 }
 
 function renderWorkspaceList() {
