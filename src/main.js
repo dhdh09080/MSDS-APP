@@ -1019,7 +1019,7 @@ function buildWarnLabel(r, site) {
     <div class="wl-block"><div class="wl-block-head">유해·위험 문구</div><ul class="wl-list">${hHtml}</ul></div>
     <div class="wl-block"><div class="wl-block-head">예방조치 문구</div><ul class="wl-list">${pHtml}</ul></div>
     ${r.protective_equipment?`<div class="wl-block"><div class="wl-block-head">개인보호구</div><div class="wl-pe">${r.protective_equipment}</div></div>`:''}
-    ${r.legal_special==='Y'?`<div class="wl-special">⚠️ 특별관리물질 — 발암성·생식독성 등 CMR 물질, 취급 시 관리감독자 확인 및 특별안전보건교육 필수</div>`:''}
+    ${r.legal_special==='Y'?`<div class="wl-special">⚠️ 특별관리물질 — 취급 시 관리감독자 확인 및 특별안전보건교육 필수</div>`:''}
     <div class="wl-foot">
       <div><b>공급업체</b>${r.supplier||'-'} ${r.supplier_contact?'('+r.supplier_contact+')':''}</div>
       <div><b>사용 협력사</b>${r.contractor||'-'} ${r.work_type?'/ '+r.work_type:''}</div>
@@ -1036,25 +1036,25 @@ window.printWarnings = function() {
   const labels = ids.map(id => msdsRecords.find(r => r.id === id)).filter(Boolean);
   const w = window.open('', '_blank');
   const pages = labels.map(r => `<div class="page-a4">${buildWarnLabel(r, site)}</div>`).join('');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지</title><style>
-    @page{size:A4;margin:12mm;}
+ w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지</title><style>
+    @page{size:A4;margin:8mm;}
     *{box-sizing:border-box;}
     body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;}
-    .page-a4{min-height:273mm;display:flex;align-items:center;justify-content:center;page-break-after:always;}
+    .page-a4{width:100%;height:277mm;display:flex;align-items:center;justify-content:center;page-break-after:always;overflow:hidden;}
     .page-a4:last-child{page-break-after:auto;}
-    .wlabel{border:3px solid #111;border-radius:6px;padding:20px;width:100%;font-family:'Malgun Gothic',sans-serif;color:#111;background:#fff;}
-    .wl-top{text-align:center;font-size:13px;font-weight:700;margin-bottom:10px;}
-    .wl-name-box{border:2.5px solid #E30613;border-radius:6px;text-align:center;font-size:26px;font-weight:900;padding:10px;margin-bottom:14px;letter-spacing:4px;}
-    .wl-picto-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:14px;align-items:flex-end;}
-    .wl-signal-bar{text-align:center;font-size:17px;font-weight:900;color:#fff;padding:7px;border-radius:6px;margin-bottom:14px;}
+    .wlabel{border:3px solid #111;border-radius:6px;padding:14px;width:100%;font-family:'Malgun Gothic',sans-serif;color:#111;background:#fff;}
+    .wl-top{text-align:center;font-size:11px;font-weight:700;margin-bottom:6px;}
+    .wl-name-box{border:2.5px solid #E30613;border-radius:5px;text-align:center;font-size:20px;font-weight:900;padding:7px;margin-bottom:10px;letter-spacing:2px;}
+    .wl-picto-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end;}
+    .wl-signal-bar{text-align:center;font-size:13px;font-weight:900;color:#fff;padding:5px;border-radius:5px;margin-bottom:10px;}
     .wl-signal-bar.danger{background:#C0392B;} .wl-signal-bar.warning{background:#E67E22;}
-    .wl-block{margin-bottom:10px;border:1px solid #ccc;border-radius:5px;overflow:hidden;}
-    .wl-block-head{background:#C0392B;color:#fff;font-size:12px;font-weight:800;padding:5px 12px;}
-    .wl-list{margin:0;padding:8px 12px 8px 26px;font-size:12px;line-height:1.8;}
-    .wl-pe{padding:8px 12px;font-size:12px;font-weight:600;}
-    .wl-special{background:#FFF3CD;border:2px solid #FFC107;border-radius:5px;padding:8px;margin:8px 0;font-size:11px;font-weight:800;color:#856404;text-align:center;}
-    .wl-foot{border-top:1px solid #ddd;padding-top:8px;margin-top:10px;font-size:11px;color:#555;line-height:1.8;}
-    .wl-foot b{color:#333;margin-right:4px;}
+    .wl-block{margin-bottom:7px;border:1px solid #ccc;border-radius:4px;overflow:hidden;}
+    .wl-block-head{background:#C0392B;color:#fff;font-size:10px;font-weight:800;padding:3px 10px;}
+    .wl-list{margin:0;padding:5px 10px 5px 22px;font-size:9px;line-height:1.6;}
+    .wl-pe{padding:5px 10px;font-size:9px;font-weight:600;}
+    .wl-special{background:#FFF3CD;border:1.5px solid #FFC107;border-radius:4px;padding:6px;margin:6px 0;font-size:9px;font-weight:800;color:#856404;text-align:center;}
+    .wl-foot{border-top:1px solid #ddd;padding-top:6px;margin-top:8px;font-size:9px;color:#555;line-height:1.7;}
+    .wl-foot b{color:#333;margin-right:3px;}
   </style></head><body>${pages}<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
   w.document.close();
   toast(`${labels.length}건 인쇄 준비 완료`, 'success');
