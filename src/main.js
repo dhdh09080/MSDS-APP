@@ -1212,19 +1212,32 @@ window.exportPackage = async function() {
   if (wantList) {
     const YN = v => v === 'Y' ? 'O' : '';
     const rows = [];
-    targets.forEach((r, idx) => {
+    let no = 0;
+    filtered.forEach(r => {
+      no++;
       const comps = splitComponents(r);
-      comps.forEach((comp, i) => {
-        rows.push({ 'No.':i===0?idx+1:'', '공종':i===0?(r.work_type||''):'', '제품명':i===0?r.product_name:'',
-          '공급업체':i===0?(r.supplier||''):'', '연락처':i===0?(r.supplier_contact||''):'',
-          '개정일':i===0?(r.issue_date||''):'', 'CAS No.':comp.cas||'', '성분':comp.name||'',
-          '측정':i===0?YN(r.legal_measurement):'', '특수검진':i===0?(r.legal_exam==='Y'?(r.legal_exam_cycle||'대상'):''):'',
-          '관리':i===0?YN(r.legal_manage):'', '허가':i===0?YN(r.legal_permit):'',
-          '특별':i===0?YN(r.legal_special):'', '위험물':i===0?YN(r.legal_dangerous):'',
-          '보호구':i===0?(r.protective_equipment||''):'',
-        });
+      comps.forEach((comp, idx) => {
+        rows.push(`<tr style="${idx > 0 ? 'background:#fafafa;' : ''}">
+          <td class="ctr">${idx===0 ? no : ''}</td>
+          <td>${idx===0 ? r.contractor : ''}</td>
+          <td>${idx===0 ? (r.work_type||'-') : ''}</td>
+          <td class="pname">${idx===0 ? r.product_name : ''}</td>
+          <td>${idx===0 ? (r.supplier||'-') : ''}</td>
+          <td>${idx===0 ? (r.supplier_contact||'-') : ''}</td>
+          <td class="ctr">${idx===0 ? (r.issue_date||'-') : ''}</td>
+          <td>${comp.cas||'-'}</td>
+          <td>${comp.name||'-'}</td>
+          <td class="ctr">${idx===0 ? YN(r.legal_measurement) : ''}</td>
+          <td class="ctr">${idx===0 ? (r.legal_exam==='Y' ? (r.legal_exam_cycle||'●') : '') : ''}</td>
+          <td class="ctr">${idx===0 ? YN(r.legal_manage) : ''}</td>
+          <td class="ctr">${idx===0 ? YN(r.legal_permit) : ''}</td>
+          <td class="ctr">${idx===0 ? YN(r.legal_special) : ''}</td>
+          <td class="ctr">${idx===0 ? YN(r.legal_dangerous) : ''}</td>
+          <td style="font-size:8px;">${idx===0 ? (r.protective_equipment||'-') : ''}</td>
+        </tr>`);
       });
     });
+    const rowsHtml = rows.join('');
     const ws2 = XLSX.utils.json_to_sheet(rows); const wb2 = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2, ws2, con.slice(0,30));
     root.file(`${con}_MSDS목록.xlsx`, XLSX.write(wb2, {bookType:'xlsx',type:'array'}));
   }
