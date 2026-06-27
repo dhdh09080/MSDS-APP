@@ -1125,16 +1125,32 @@ window.printMsdsList = function() {
   if (filtered.length === 0) { toast('인쇄할 데이터가 없습니다', 'error'); return; }
   const YN = v => v === 'Y' ? '●' : '';
   const title = `MSDS 관리대장 — ${currentWS.name}`;
-  const rows = filtered.map((r,i) => `<tr>
-    <td class="ctr">${i+1}</td><td>${r.contractor}</td><td>${r.work_type||'-'}</td>
-    <td class="pname">${r.product_name}</td><td>${r.supplier||'-'}</td><td>${r.supplier_contact||'-'}</td>
-    <td class="ctr">${r.issue_date||'-'}</td><td>${r.cas_no||'-'}</td>
-    <td class="ctr">${YN(r.legal_measurement)}</td>
-    <td class="ctr">${r.legal_exam==='Y'?(r.legal_exam_cycle||'●'):''}</td>
-    <td class="ctr">${YN(r.legal_manage)}</td><td class="ctr">${YN(r.legal_permit)}</td>
-    <td class="ctr">${YN(r.legal_special)}</td><td class="ctr">${YN(r.legal_dangerous)}</td>
-    <td style="font-size:8px;">${r.protective_equipment||'-'}</td>
-  </tr>`).join('');
+  const rows = [];
+  let no = 0;
+  filtered.forEach(r => {
+    no++;
+    const comps = splitComponents(r);
+    comps.forEach((comp, idx) => {
+      rows.push(`<tr>
+        <td class="ctr">${idx===0?no:''}</td>
+        <td>${idx===0?r.contractor:''}</td>
+        <td>${idx===0?(r.work_type||'-'):''}</td>
+        <td class="pname">${idx===0?r.product_name:''}</td>
+        <td>${idx===0?(r.supplier||'-'):''}</td>
+        <td>${idx===0?(r.supplier_contact||'-'):''}</td>
+        <td class="ctr">${idx===0?(r.issue_date||'-'):''}</td>
+        <td>${comp.cas||'-'}</td>
+        <td style="font-size:8px;">${comp.name||'-'}</td>
+        <td class="ctr">${idx===0?YN(r.legal_measurement):''}</td>
+        <td class="ctr">${idx===0?(r.legal_exam==='Y'?(r.legal_exam_cycle||'●'):''):''}</td>
+        <td class="ctr">${idx===0?YN(r.legal_manage):''}</td>
+        <td class="ctr">${idx===0?YN(r.legal_permit):''}</td>
+        <td class="ctr">${idx===0?YN(r.legal_special):''}</td>
+        <td class="ctr">${idx===0?YN(r.legal_dangerous):''}</td>
+        <td style="font-size:8px;">${idx===0?(r.protective_equipment||'-'):''}</td>
+      </tr>`);
+    });
+  });
   const w = window.open('', '_blank');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>
     @page{size:A4 landscape;margin:8mm;}*{box-sizing:border-box;}
@@ -1150,7 +1166,7 @@ window.printMsdsList = function() {
   <div class="doc-head"><div style="font-size:16px;font-weight:800;">${title}</div><div style="font-size:10px;color:#555;">총 ${filtered.length}건 · ${today()}</div></div>
   <div class="legend"><b>범례</b> ● = 해당 · 측정=작업환경측정 · 특수검진=특수건강진단(주기) · 관리=관리대상 · 허가=허가대상 · 특별=특별관리물질(CMR) · 위험=위험물</div>
   <table>
-    <thead><tr><th>No</th><th>협력사</th><th>공종</th><th>제품명</th><th>공급업체</th><th>연락처</th><th>개정일</th><th>CAS</th><th>측정</th><th>특수검진</th><th>관리</th><th>허가</th><th>특별</th><th>위험</th><th>보호구</th></tr></thead>
+    <thead><tr><th>No</th><th>협력사</th><th>공종</th><th>제품명</th><th>공급업체</th><th>연락처</th><th>개정일</th><th>CAS No.</th><th>구성성분명</th><th>측정</th><th>특수검진</th><th>관리</th><th>허가</th><th>특별</th><th>위험</th><th>보호구</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
   <script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
