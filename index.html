@@ -721,12 +721,30 @@
     <div class="modal-body">
       <div class="form-grid" style="margin-bottom:14px;">
         <div class="form-field">
-          <label class="form-label">측정 회차 <span class="required">*</span></label>
-          <input class="form-input" id="measureRound" placeholder="예) 2026년 1차 (상반기)">
+          <label class="form-label">연도 <span class="required">*</span></label>
+          <select class="form-input" id="measureYear">
+            <option value="">선택</option>
+            <option value="2026">2026년</option>
+            <option value="2025">2025년</option>
+            <option value="2024">2024년</option>
+            <option value="2023">2023년</option>
+          </select>
         </div>
         <div class="form-field">
-          <label class="form-label">측정 기간 <span class="required">*</span></label>
-          <input class="form-input" id="measurePeriod" placeholder="예) 2026.05.21~22">
+          <label class="form-label">상/하반기 <span class="required">*</span></label>
+          <select class="form-input" id="measureHalf">
+            <option value="">선택</option>
+            <option value="1차 (상반기)">1차 (상반기)</option>
+            <option value="2차 (하반기)">2차 (하반기)</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">측정 시작일 <span class="required">*</span></label>
+          <input class="form-input" type="date" id="measureDateFrom">
+        </div>
+        <div class="form-field">
+          <label class="form-label">측정 종료일 <span class="required">*</span></label>
+          <input class="form-input" type="date" id="measureDateTo">
         </div>
       </div>
       <div class="form-note" style="margin-bottom:12px;">측정결과 보고서 PDF를 업로드하면 분진·소음 결과표와 사후관리 결과표를 자동으로 생성합니다.</div>

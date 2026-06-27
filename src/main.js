@@ -1312,8 +1312,10 @@ window.openMeasureUpload = function() {
   measureFileB64 = null; measureFileName_val = null;
   document.getElementById('measureFileInfo').style.display = 'none';
   document.getElementById('measureUploadZone').style.display = 'block';
-  document.getElementById('measureRound').value = '';
-  document.getElementById('measurePeriod').value = '';
+  document.getElementById('measureYear').value = new Date().getFullYear().toString();
+  document.getElementById('measureHalf').value = '';
+  document.getElementById('measureDateFrom').value = '';
+  document.getElementById('measureDateTo').value = '';
   openModal('measureUploadModal');
 };
 
@@ -1348,9 +1350,14 @@ window.clearMeasureFile = function() {
 };
 
 window.analyzeMeasure = async function() {
-  const round = document.getElementById('measureRound').value.trim();
-  const period = document.getElementById('measurePeriod').value.trim();
-  if (!round || !period) { toast('측정 회차와 기간을 입력하세요', 'error'); return; }
+  const year = document.getElementById('measureYear').value;
+  const half = document.getElementById('measureHalf').value;
+  const dateFrom = document.getElementById('measureDateFrom').value;
+  const dateTo = document.getElementById('measureDateTo').value;
+  if (!year || !half) { toast('연도와 상/하반기를 선택하세요', 'error'); return; }
+  if (!dateFrom || !dateTo) { toast('측정 기간을 선택하세요', 'error'); return; }
+  const round = `${year}년 ${half}`;
+  const period = `${dateFrom} ~ ${dateTo}`;
   if (!measureFileB64) { toast('파일을 먼저 업로드하세요', 'error'); return; }
   const btn = document.getElementById('measureAnalyzeBtn');
   btn.disabled = true; btn.textContent = '🤖 AI 분석 중...';
