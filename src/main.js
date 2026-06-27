@@ -81,7 +81,7 @@ window.handleSignup = async function() {
   const { error } = await supabase.auth.signUp({ email, password, options: { data: { name } } });
   btn.disabled = false; btn.textContent = '회원가입';
   if (error) { msg.className='auth-msg error'; msg.textContent=translateAuthError(error.message); return; }
-  msg.className='auth-msg success'; msg.textContent='가입 완료! 이메일 인증 후 로그인하세요.';
+  msg.className='auth-msg success'; msg.textContent='가입 완료! 로그인하세요.';
   setTimeout(() => switchTab('login'), 2000);
 };
 
