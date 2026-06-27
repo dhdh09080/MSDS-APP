@@ -1077,7 +1077,7 @@ function splitComponents(r) {
 }
 
 window.exportMsdsExcel = function() {
-  const filtered = getFilteredMsds();
+  const filtered = getFilteredMsds().sort((a,b) => a.contractor.localeCompare(b.contractor, 'ko'));
   if (filtered.length === 0) { toast('내보낼 데이터가 없습니다', 'error'); return; }
   const YN = v => v === 'Y' ? 'O' : '';
   const rows = [];
