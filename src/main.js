@@ -1077,7 +1077,12 @@ function splitComponents(r) {
 }
 
 window.exportMsdsExcel = function() {
-  const filtered = getFilteredMsds().sort((a,b) => a.contractor.localeCompare(b.contractor, 'ko'));
+  const filtered = getFilteredMsds()
+    .sort((a,b) => {
+      const conSort = a.contractor.localeCompare(b.contractor, 'ko');
+      if (conSort !== 0) return conSort;
+      return a.product_name.localeCompare(b.product_name, 'ko');
+    });
   if (filtered.length === 0) { toast('내보낼 데이터가 없습니다', 'error'); return; }
   const YN = v => v === 'Y' ? 'O' : '';
   const rows = [];
@@ -1110,7 +1115,12 @@ window.exportMsdsExcel = function() {
 // Print List
 // ═══════════════════════════════════════════════
 window.printMsdsList = function() {
-  const filtered = getFilteredMsds();
+  const filtered = getFilteredMsds()
+    .sort((a,b) => {
+      const conSort = a.contractor.localeCompare(b.contractor, 'ko');
+      if (conSort !== 0) return conSort;
+      return a.product_name.localeCompare(b.product_name, 'ko'); // 같은 협력사면 제품명순
+    });
   if (filtered.length === 0) { toast('인쇄할 데이터가 없습니다', 'error'); return; }
   const YN = v => v === 'Y' ? '●' : '';
   const title = `MSDS 관리대장 — ${currentWS.name}`;
