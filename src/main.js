@@ -1036,7 +1036,7 @@ window.printWarnings = function() {
   const labels = ids.map(id => msdsRecords.find(r => r.id === id)).filter(Boolean);
   const w = window.open('', '_blank');
   const pages = labels.map(r => `<div class="page-a4">${buildWarnLabel(r, site)}</div>`).join('');
- w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지</title><style>
+w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지</title><style>
     @page{size:A4;margin:6mm;}
     *{box-sizing:border-box;}
     body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;}
@@ -1048,10 +1048,13 @@ window.printWarnings = function() {
     .wl-picto-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end;}
     .wl-signal-bar{text-align:center;font-size:15px;font-weight:900;color:#fff;padding:6px;border-radius:5px;margin-bottom:10px;}
     .wl-signal-bar.danger{background:#C0392B;} .wl-signal-bar.warning{background:#E67E22;}
+    .wl-two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:7px;}
     .wl-block{margin-bottom:7px;border:1px solid #ccc;border-radius:4px;overflow:hidden;}
+    .wl-block.full{margin-bottom:7px;}
     .wl-block-head{background:#C0392B;color:#fff;font-size:10px;font-weight:800;padding:3px 10px;}
-    .wl-list{margin:0;padding:5px 10px 5px 22px;font-size:9px;line-height:1.7;}
-    .wl-pe{padding:5px 10px;font-size:9px;font-weight:600;}
+    .wl-list{margin:0;padding:5px 10px 5px 22px;font-size:9px;line-height:1.7;columns:2;column-gap:12px;}
+    .wl-list li{break-inside:avoid;}
+    .wl-pe{padding:5px 10px;font-size:9px;font-weight:600;columns:2;column-gap:12px;}
     .wl-special{background:#FFF3CD;border:1.5px solid #FFC107;border-radius:4px;padding:6px;margin:6px 0;font-size:9px;font-weight:800;color:#856404;text-align:center;}
     .wl-foot{border-top:1px solid #ddd;padding-top:6px;margin-top:8px;font-size:9px;color:#555;line-height:1.7;}
     .wl-foot b{color:#333;margin-right:3px;}
