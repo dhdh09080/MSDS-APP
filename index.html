@@ -422,7 +422,14 @@
             </div>
             <button class="btn btn-secondary btn-sm" onclick="openModal('inviteModal')">+ 팀원 초대</button>
           </div>
+          <div class="card">
+            <div class="card-title"><span class="card-title-icon">⚖️</span> 법정물질 일괄 재판정</div>
+            <div class="form-note" style="margin-bottom:14px;">기존에 등록된 MSDS의 법정물질 판정을 산안법 별표 CAS 데이터베이스 기준으로 일괄 업데이트합니다. API 비용 없이 즉시 처리됩니다.</div>
+            <button class="btn btn-primary" id="reanalyzeLegalBtn" onclick="reanalyzeLegal()">⚖️ 법정물질 일괄 재판정</button>
+          </div>
 
+          <div class="card">
+            <div class="card-title"><span class="card-title-icon">ℹ️</span> 계정 정보</div>
           <div class="card">
             <div class="card-title"><span class="card-title-icon">ℹ️</span> 계정 정보</div>
             <div id="accountInfo" class="form-note" style="line-height:2;"></div>
