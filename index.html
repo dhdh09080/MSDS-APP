@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#2563EB">
-<title>안전보건 관리시스템</title>
+<title>현장관리시스템</title>
 <link rel="stylesheet" href="/src/style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -13,7 +13,7 @@
 
 <!-- 로딩 -->
 <div id="loadingScreen">
-  <div class="loading-logo">🛡️ 안전보건 관리</div>
+  <div class="loading-logo">🛡️ 현장관리시스템</div>
   <div class="spinner"></div>
   <div class="loading-sub">잠시만 기다려주세요...</div>
 </div>
@@ -24,7 +24,7 @@
     <div class="auth-card">
       <div class="auth-logo">
         <div class="auth-badge">SAFETY MANAGER</div>
-        <div class="auth-title">안전보건 관리시스템</div>
+        <div class="auth-title">현장관리시스템</div>
         <div class="auth-sub">MSDS · 작업환경측정 · 건강진단</div>
       </div>
 
@@ -67,7 +67,7 @@
 <div id="workspaceScreen" style="display:none">
   <div class="ws-screen">
     <div class="ws-topbar">
-      <div class="ws-topbar-logo">🛡️ 안전보건 관리</div>
+      <div class="ws-topbar-logo">🛡️ 현장관리시스템</div>
       <div style="display:flex;gap:8px;align-items:center;">
         <span id="topbarUser" style="font-size:13px;color:var(--text2);"></span>
         <button class="btn btn-secondary btn-sm" onclick="handleLogout()">로그아웃</button>
@@ -107,6 +107,9 @@
         <div class="nav-item active" id="nav-home" onclick="showPage('home')">
           <span class="nav-icon">🏠</span> 홈
         </div>
+        <div class="nav-item" id="nav-calendar" onclick="showPage('calendar')">
+          <span class="nav-icon">📅</span> 일정관리
+        </div>
 
         <div class="nav-section">화학물질</div>
         <div class="nav-item" id="nav-msds" onclick="showPage('msds')">
@@ -126,6 +129,9 @@
         </div>
         <div class="nav-item" id="nav-health" onclick="showPage('health')">
           <span class="nav-icon">🏥</span> 건강진단
+        </div>
+        <div class="nav-item" id="nav-photos" onclick="showPage('photos')">
+          <span class="nav-icon">📷</span> 사진 클라우드
         </div>
 
         <div class="nav-section">관리</div>
@@ -160,6 +166,56 @@
           </div>
         </div>
         <div class="content-scroll">
+          <div id="licenseAlertWrap" style="display:none;margin-bottom:16px;">
+            <div class="alert-card">
+              <div class="alert-card-title">📑 사업자등록증 미제출 협력사</div>
+              <div id="licenseAlertList"></div>
+            </div>
+          </div>
+
+          <div id="submissionNoAlertWrap" style="display:none;margin-bottom:16px;">
+            <div class="alert-card">
+              <div class="alert-card-title">⚠️ MSDS 제출번호 확인 필요</div>
+              <div id="submissionNoAlertList"></div>
+            </div>
+          </div>
+
+          <div class="home-grid" style="margin-bottom:20px;">
+            <!-- 이번 주기 루틴 업무 -->
+            <div class="card">
+              <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                <span><span class="card-title-icon">🔁</span> 루틴 업무</span>
+                <button class="btn btn-outline btn-sm" onclick="showPage('settings')">관리</button>
+              </div>
+              <div id="routineTaskDashList">
+                <div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">등록된 루틴 업무가 없습니다</div>
+              </div>
+            </div>
+
+            <!-- 오늘 할 일 -->
+            <div class="card">
+              <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                <span><span class="card-title-icon">✅</span> 오늘 할 일</span>
+              </div>
+              <div class="add-tag-row" style="margin-bottom:10px;">
+                <input type="text" id="newTodoInput" placeholder="할 일 입력 후 Enter" onkeydown="if(event.key==='Enter')addTodo()">
+                <button class="btn btn-primary btn-sm" onclick="addTodo()">추가</button>
+              </div>
+              <div id="todoList"></div>
+            </div>
+
+            <!-- 다가오는 일정 -->
+            <div class="card">
+              <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                <span><span class="card-title-icon">📅</span> 다가오는 일정</span>
+                <button class="btn btn-outline btn-sm" onclick="showPage('calendar')">캘린더 보기</button>
+              </div>
+              <div id="upcomingEventsList">
+                <div style="color:var(--text3);font-size:13px;text-align:center;padding:20px;">예정된 일정이 없습니다</div>
+              </div>
+            </div>
+          </div>
+
           <div class="stats-row">
             <div class="stat-card" onclick="showPage('msds')">
               <div class="stat-label">MSDS 등록</div>
@@ -314,6 +370,36 @@
               <li>업로드 완료 시 MSDS 대장에 자동으로 등록됩니다</li>
             </ol>
           </div>
+
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-title"><span class="card-title-icon">📢</span> 전체 협력사용 공용 링크</div>
+            <div class="form-note" style="margin-bottom:14px;">단체 카카오톡방 등에 한 번만 공유하면, 협력사가 직접 자기 회사를 선택(또는 직접 입력)해서 업로드할 수 있는 링크입니다. 현장당 1개만 발급됩니다.</div>
+            <div id="publicLinkEmptyState">
+              <div style="margin-bottom:12px;">
+                <label class="legal-check" style="margin-bottom:8px;"><input type="checkbox" id="publicLinkAllowMsds" checked> MSDS 업로드 허용</label>
+                <label class="legal-check"><input type="checkbox" id="publicLinkAllowLicense" checked> 사업자등록증 업로드 허용</label>
+              </div>
+              <button class="btn btn-primary" onclick="generatePublicUploadLink()">📢 공용 링크 발급</button>
+            </div>
+            <div id="publicLinkActiveState" style="display:none;">
+              <div class="token-card">
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">📢 전체 협력사용 링크</div>
+                  <div class="token-url" id="publicLinkUrl"></div>
+                  <div class="token-meta" id="publicLinkMeta"></div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+                  <button class="btn btn-primary btn-sm" onclick="copyPublicLink()">복사</button>
+                  <button class="btn btn-danger btn-sm" onclick="revokePublicLink()">삭제</button>
+                </div>
+              </div>
+              <div style="margin-top:12px;">
+                <label class="legal-check" style="margin-bottom:8px;"><input type="checkbox" id="publicLinkAllowMsdsEdit" onchange="updatePublicLinkSettings()"> MSDS 업로드 허용</label>
+                <label class="legal-check"><input type="checkbox" id="publicLinkAllowLicenseEdit" onchange="updatePublicLinkSettings()"> 사업자등록증 업로드 허용</label>
+              </div>
+            </div>
+          </div>
+
           <div class="card">
             <div class="card-title"><span class="card-title-icon">🔗</span> 협력사별 링크 발급</div>
             <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
@@ -339,6 +425,12 @@
           </div>
         </div>
         <div class="content-scroll">
+          <div class="card" style="margin-bottom:18px;">
+            <div class="card-title"><span class="card-title-icon">📅</span> 연간 측정 체크리스트</div>
+            <div class="form-note" style="margin-bottom:6px;">작업환경측정은 상반기 1회, 하반기 1회 진행하면 됩니다. 진행 여부를 체크해두세요.</div>
+            <div id="measureRoundsChecklist"></div>
+          </div>
+
           <div id="measureList">
             <div style="text-align:center;padding:60px 20px;color:var(--text3);">
               <div style="font-size:40px;margin-bottom:12px;">📊</div>
@@ -357,18 +449,152 @@
             <div class="page-title">근로자 건강진단</div>
             <div class="page-subtitle">건강진단 파일 업로드 → 자동 분석 → 엑셀 다운로드</div>
           </div>
-          <div class="header-actions">
+          <div class="header-actions" id="healthHeaderActions">
             <button class="btn btn-primary" onclick="openHealthUpload()">+ 건강진단 업로드</button>
           </div>
         </div>
         <div class="content-scroll">
-          <div id="healthList">
-            <div style="text-align:center;padding:60px 20px;color:var(--text3);">
-              <div style="font-size:40px;margin-bottom:12px;">🏥</div>
-              <div style="font-size:15px;font-weight:600;color:var(--text2);margin-bottom:6px;">등록된 건강진단 결과가 없습니다</div>
-              <div style="font-size:13px;margin-bottom:20px;">건강진단 파일(PDF/이미지)을 업로드하면 자동으로 분석됩니다</div>
-              <button class="btn btn-primary btn-lg" onclick="openHealthUpload()">+ 건강진단 업로드</button>
+          <div class="health-subtabs" style="display:flex;gap:8px;margin-bottom:18px;border-bottom:1.5px solid var(--border);">
+            <button class="health-subtab active" id="hsub-result" onclick="switchHealthSub('result')">결과지 AI 분석</button>
+            <button class="health-subtab" id="hsub-placement" onclick="switchHealthSub('placement')">배치전 확인서 추적</button>
+          </div>
+
+          <!-- 서브: 결과지 AI 분석 -->
+          <div id="healthSubResult">
+            <div id="healthList">
+              <div style="text-align:center;padding:60px 20px;color:var(--text3);">
+                <div style="font-size:40px;margin-bottom:12px;">🏥</div>
+                <div style="font-size:15px;font-weight:600;color:var(--text2);margin-bottom:6px;">등록된 건강진단 결과가 없습니다</div>
+                <div style="font-size:13px;margin-bottom:20px;">건강진단 파일(PDF/이미지)을 업로드하면 자동으로 분석됩니다</div>
+                <button class="btn btn-primary btn-lg" onclick="openHealthUpload()">+ 건강진단 업로드</button>
+              </div>
             </div>
+          </div>
+
+          <!-- 서브: 배치전 확인서 추적 -->
+          <div id="healthSubPlacement" style="display:none;">
+            <div class="card" style="margin-bottom:16px;">
+              <div class="card-title"><span class="card-title-icon">📋</span> 명단 업로드</div>
+              <div class="form-note" style="margin-bottom:12px;">회사 양식 건강진단 목록 엑셀을 업로드하세요. 재직자만 자동으로 추출되며, 매 업로드 시 새 스냅샷으로 분석됩니다 (이전 업로드와 누적되지 않음).</div>
+              <input type="file" id="placementExcelInput" accept=".xlsx,.xls" style="display:none" onchange="handlePlacementExcel(event)">
+              <button class="btn btn-primary" onclick="document.getElementById('placementExcelInput').click()">📤 엑셀 업로드</button>
+              <span id="placementFileName" style="font-size:13px;color:var(--text2);margin-left:10px;"></span>
+            </div>
+
+            <div class="card" id="placementFilterCard" style="display:none;margin-bottom:16px;">
+              <div class="card-title"><span class="card-title-icon">🎯</span> 추적 대상 판정코드 선택</div>
+              <div class="form-note" style="margin-bottom:10px;">배치전 판정코드 중 결과지를 받아야 할 대상을 선택하세요.</div>
+              <div id="placementCodeChecks" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;"></div>
+              <label class="legal-check"><input type="checkbox" id="placementMissingCheck" checked> 배치전 누락(공백)자 포함</label>
+              <div style="margin-top:14px;">
+                <button class="btn btn-primary" onclick="runPlacementFilter()">🔍 명단 추출</button>
+              </div>
+            </div>
+
+            <div id="placementResultArea" style="display:none;">
+              <div class="page-header" style="padding:0;margin-bottom:14px;">
+                <div>
+                  <div style="font-size:15px;font-weight:700;" id="placementResultSummary"></div>
+                </div>
+                <div class="header-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button class="btn btn-ok btn-sm" onclick="savePlacementSnapshot()">💾 스냅샷 저장</button>
+                  <button class="btn btn-outline btn-sm" onclick="downloadPlacementExcel()">📥 엑셀 다운로드</button>
+                  <button class="btn btn-outline btn-sm" onclick="downloadPlacementImageAll()">🖼️ 전체 이미지</button>
+                  <button class="btn btn-outline btn-sm" onclick="downloadPlacementImagesByContractor()">🖼️ 협력사별 이미지(ZIP)</button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <div class="table-wrap-scroll">
+                  <table id="placementResultTable">
+                    <thead>
+                      <tr><th>협력회사</th><th>직종</th><th>성명</th><th>배치전 상태</th><th>연락처</th></tr>
+                    </thead>
+                    <tbody id="placementResultBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="card" style="margin-top:24px;">
+              <div class="card-title"><span class="card-title-icon">🗂️</span> 스냅샷 이력</div>
+              <div class="form-note" style="margin-bottom:12px;">저장된 스냅샷 날짜를 클릭하면 그 시점 명단을 다시 다운로드할 수 있습니다.</div>
+              <div id="placementSnapshotList">
+                <div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">저장된 스냅샷이 없습니다</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ═══ 사진 클라우드 ═══ -->
+      <div class="page" id="page-photos">
+        <div class="page-header">
+          <div>
+            <div class="page-title">사진 클라우드</div>
+            <div class="page-subtitle">주제별 · 날짜별 증빙 사진 보관 (드래그해서 폴더 이동 가능)</div>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-outline" onclick="openPhotoPrintModal()">🖨️ 사진대지 인쇄</button>
+            <button class="btn btn-outline" onclick="openAddAlbumModal()">+ 주제 추가</button>
+            <button class="btn btn-primary" onclick="openPhotoUploadModal()" id="photoUploadBtn" disabled>📤 사진 업로드</button>
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div class="photo-album-tabs" id="photoAlbumTabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;"></div>
+
+          <div id="photoAlbumEmpty" style="display:none;text-align:center;padding:60px 20px;color:var(--text3);">
+            <div style="font-size:40px;margin-bottom:12px;">📷</div>
+            <div style="font-size:15px;font-weight:600;color:var(--text2);margin-bottom:6px;">등록된 주제가 없습니다</div>
+            <div style="font-size:13px;margin-bottom:20px;">주제를 추가하고 사진을 모아보세요</div>
+            <button class="btn btn-primary btn-lg" onclick="openAddAlbumModal()">+ 주제 추가</button>
+          </div>
+
+          <!-- 날짜 폴더 그리드 (앨범 안의 날짜들) -->
+          <div id="photoDateFolderView">
+            <div id="photoDateFolderGrid" class="date-folder-grid"></div>
+          </div>
+
+          <!-- 특정 날짜 폴더 내부 (사진 그리드) -->
+          <div id="photoFolderDetailView" style="display:none;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+              <button class="btn btn-outline btn-sm" onclick="closeDateFolder()">← 날짜 목록</button>
+              <div id="photoFolderDetailTitle" style="font-size:15px;font-weight:800;"></div>
+            </div>
+            <div id="photoFolderDetailGrid" class="photo-grid"></div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ═══ 일정관리 ═══ -->
+      <div class="page" id="page-calendar">
+        <div class="page-header">
+          <div>
+            <div class="page-title">일정관리</div>
+            <div class="page-subtitle">협력사 미팅, 점검일 등 팀 공유 일정</div>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" onclick="openEventModal()">+ 일정 추가</button>
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div class="card">
+            <div class="cal-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+              <button class="btn btn-outline btn-sm" onclick="calShiftMonth(-1)">← 이전</button>
+              <div id="calMonthLabel" style="font-size:17px;font-weight:800;color:var(--text);"></div>
+              <button class="btn btn-outline btn-sm" onclick="calShiftMonth(1)">다음 →</button>
+            </div>
+            <div class="cal-weekdays" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;">
+              <div class="cal-weekday">일</div><div class="cal-weekday">월</div><div class="cal-weekday">화</div>
+              <div class="cal-weekday">수</div><div class="cal-weekday">목</div><div class="cal-weekday">금</div><div class="cal-weekday">토</div>
+            </div>
+            <div id="calGrid" class="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;"></div>
+          </div>
+
+          <div class="card" id="calSelectedDayCard" style="margin-top:16px;display:none;">
+            <div class="card-title" id="calSelectedDayTitle"></div>
+            <div id="calSelectedDayEvents"></div>
           </div>
         </div>
       </div>
@@ -398,6 +624,57 @@
               <input type="text" id="newContractor" placeholder="협력사명 입력 후 Enter" onkeydown="if(event.key==='Enter')addContractor()">
               <button class="btn btn-primary btn-sm" onclick="addContractor()">추가</button>
             </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+              <span><span class="card-title-icon">🔁</span> 루틴 업무 관리</span>
+            </div>
+            <div class="form-note" style="margin-bottom:12px;">매주/매월 반복되는 업무를 등록하면 대시보드에 주기적으로 표시됩니다.</div>
+            <div id="routineTaskList" style="margin-bottom:14px;"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+              <div class="form-field" style="flex:2;min-width:160px;">
+                <label class="form-label">업무 내용</label>
+                <input class="form-input" id="newRoutineTitle" placeholder="예) 위험성평가 현장 점검">
+              </div>
+              <div class="form-field" style="flex:1;min-width:110px;">
+                <label class="form-label">주기</label>
+                <select class="form-input" id="newRoutineFreq" onchange="toggleRoutineFreqInput()">
+                  <option value="weekly">매주</option>
+                  <option value="monthly">매월</option>
+                </select>
+              </div>
+              <div class="form-field" id="routineWeekdayField" style="flex:1;min-width:110px;">
+                <label class="form-label">요일</label>
+                <select class="form-input" id="newRoutineWeekday">
+                  <option value="1">월요일</option>
+                  <option value="2">화요일</option>
+                  <option value="3">수요일</option>
+                  <option value="4">목요일</option>
+                  <option value="5">금요일</option>
+                  <option value="6">토요일</option>
+                  <option value="0">일요일</option>
+                </select>
+              </div>
+              <div class="form-field" id="routineDayField" style="flex:1;min-width:110px;display:none;">
+                <label class="form-label">매월 며칠</label>
+                <input class="form-input" id="newRoutineDay" type="number" min="1" max="31" value="1">
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="addRoutineTask()">추가</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+              <span><span class="card-title-icon">📑</span> 사업자등록증 관리</span>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-outline btn-sm" onclick="downloadAllLicenses()">📦 전체 다운로드</button>
+                <input type="file" id="manualLicenseInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleManualLicenseUpload(event)">
+              </div>
+            </div>
+            <div class="form-note" style="margin-bottom:12px;">협력사가 업로드 링크를 통해 직접 제출하거나, 여기서 관리자가 직접 업로드할 수 있습니다. 한 번 제출되면 협력사 화면에는 재업로드 요청이 뜨지 않습니다.</div>
+            <div id="businessLicenseStatus" style="margin-bottom:10px;font-size:13px;font-weight:700;"></div>
+            <div id="businessLicenseList"></div>
           </div>
 
           <div class="card">
@@ -452,9 +729,9 @@
         <span class="mobile-tab-label">MSDS</span>
         <span class="mobile-tab-badge" id="mBadgeMsds" style="display:none">0</span>
       </button>
-      <button class="mobile-tab" id="mtab-measure" onclick="showPage('measure')">
-        <span class="mobile-tab-icon">📊</span>
-        <span class="mobile-tab-label">측정</span>
+      <button class="mobile-tab" id="mtab-calendar" onclick="showPage('calendar')">
+        <span class="mobile-tab-icon">📅</span>
+        <span class="mobile-tab-label">일정</span>
       </button>
       <button class="mobile-tab" id="mtab-health" onclick="showPage('health')">
         <span class="mobile-tab-icon">🏥</span>
@@ -643,6 +920,8 @@
     <div class="modal-body" id="detailBody"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary btn-sm" id="detailViewFileBtn" style="display:none">📄 원본 보기</button>
+      <button class="btn btn-outline btn-sm" id="msdsRenewBtn" onclick="openMsdsRenewPicker()">🔄 새 MSDS로 갱신</button>
+      <input type="file" id="msdsRenewFileInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleMsdsRenewFile(event)">
       <button class="btn btn-secondary btn-sm" onclick="editMsdsRecord()">✏️ 수정</button>
       <button class="btn btn-danger btn-sm" id="detailDeleteBtn">🗑 삭제</button>
       <button class="btn btn-primary btn-sm" onclick="closeModal('msdsDetailModal')">닫기</button>
@@ -883,6 +1162,163 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('inviteModal')">취소</button>
       <button class="btn btn-primary" onclick="handleInvite()">초대</button>
+    </div>
+  </div>
+</div>
+
+<!-- 일정 추가/수정 -->
+<div class="modal-backdrop" id="eventModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title" id="eventModalTitle">일정 추가</div>
+      <button class="modal-close" onclick="closeModal('eventModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ev_id">
+      <div class="form-field" style="margin-bottom:12px;">
+        <label class="form-label">제목 <span class="required">*</span></label>
+        <input class="form-input" id="ev_title" placeholder="예) 세방테크 협력사 미팅">
+      </div>
+      <div class="form-field" style="margin-bottom:12px;">
+        <label class="form-label">분류</label>
+        <select class="form-input" id="ev_category">
+          <option value="general">일반</option>
+          <option value="meeting">협력사 미팅</option>
+          <option value="inspection">점검일</option>
+          <option value="contractor">협력사 일정</option>
+        </select>
+      </div>
+      <div class="form-field" style="margin-bottom:12px;">
+        <label class="form-label">날짜 <span class="required">*</span></label>
+        <input class="form-input" id="ev_date" type="date">
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:12px;">
+        <div class="form-field" style="flex:1;">
+          <label class="form-label">시작 시간</label>
+          <input class="form-input" id="ev_start" type="time">
+        </div>
+        <div class="form-field" style="flex:1;">
+          <label class="form-label">종료 시간</label>
+          <input class="form-input" id="ev_end" type="time">
+        </div>
+      </div>
+      <div class="form-note" style="margin-bottom:12px;">시간을 비워두면 종일 일정으로 표시됩니다.</div>
+      <div class="form-field">
+        <label class="form-label">메모</label>
+        <textarea class="form-input" id="ev_desc" rows="3" placeholder="상세 내용 (선택)"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="ev_deleteBtn" style="display:none;margin-right:auto;" onclick="deleteEvent()">삭제</button>
+      <button class="btn btn-secondary" onclick="closeModal('eventModal')">취소</button>
+      <button class="btn btn-primary" onclick="saveEvent()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 사진대지 인쇄 설정 -->
+<div class="modal-backdrop" id="photoPrintModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">사진대지 인쇄 (Word)</div>
+      <button class="modal-close" onclick="closeModal('photoPrintModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field" style="margin-bottom:14px;">
+        <label class="form-label">주제 <span class="required">*</span></label>
+        <select class="form-input" id="printAlbumSelect"></select>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <div class="form-field" style="flex:1;">
+          <label class="form-label">시작일 <span class="required">*</span></label>
+          <input class="form-input" id="printDateFrom" type="date">
+        </div>
+        <div class="form-field" style="flex:1;">
+          <label class="form-label">종료일 <span class="required">*</span></label>
+          <input class="form-input" id="printDateTo" type="date">
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:6px;">
+        <label class="form-label">페이지당 배치</label>
+        <div style="display:flex;gap:10px;">
+          <label class="legal-check" style="flex:1;"><input type="radio" name="printLayout" value="2x3" checked> 2 × 3 (6장/페이지, 권장)</label>
+          <label class="legal-check" style="flex:1;"><input type="radio" name="printLayout" value="2x4"> 2 × 4 (8장/페이지)</label>
+        </div>
+      </div>
+      <div class="form-note" style="margin-top:8px;">선택한 기간 내 해당 주제의 사진이 일자별로 정리된 Word 문서로 생성됩니다. 사진이 없는 날짜는 제외됩니다.</div>
+      <div id="printPreviewCount" style="margin-top:10px;font-size:13px;font-weight:700;color:var(--primary);"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('photoPrintModal')">취소</button>
+      <button class="btn btn-primary" id="photoPrintConfirmBtn" onclick="generatePhotoLedgerDocx()">📄 Word 생성</button>
+    </div>
+  </div>
+</div>
+
+<!-- 사진 업로드 (날짜 지정) -->
+<div class="modal-backdrop" id="photoUploadModal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title">사진 업로드</div>
+      <button class="modal-close" onclick="closeModal('photoUploadModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field" style="margin-bottom:14px;">
+        <label class="form-label">촬영(작업)일 <span class="required">*</span></label>
+        <input class="form-input" id="photoUploadDate" type="date">
+        <div class="form-note" style="margin-top:6px;">선택한 날짜의 폴더로 저장됩니다. 여러 날짜를 한 번에 올리려면 날짜별로 나눠서 업로드해주세요.</div>
+      </div>
+      <div class="upload-zone" id="photoUploadDropZone" tabindex="0" style="border:2.5px dashed var(--border);border-radius:var(--radius);padding:30px 16px;text-align:center;cursor:pointer;background:var(--surface2);outline:none;" onclick="document.getElementById('photoUploadFileInput').click()">
+        <input type="file" id="photoUploadFileInput" accept="image/*" multiple style="display:none" onchange="handlePhotoFilesSelected(event)">
+        <div style="font-size:32px;margin-bottom:8px;">📤</div>
+        <div style="font-size:14px;font-weight:700;">여러 장 한번에 선택 가능</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px;">클릭하여 사진 선택 · 카카오톡 등에서 복사한 사진은 <b>Ctrl+V</b>로 바로 붙여넣기</div>
+      </div>
+      <div id="photoUploadFileList" style="margin-top:12px;font-size:13px;color:var(--text2);"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('photoUploadModal')">취소</button>
+      <button class="btn btn-primary" id="photoUploadConfirmBtn" onclick="confirmPhotoUpload()" disabled>업로드</button>
+    </div>
+  </div>
+</div>
+
+<!-- 주제 추가 -->
+<div class="modal-backdrop" id="addAlbumModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">사진 주제 추가</div>
+      <button class="modal-close" onclick="closeModal('addAlbumModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-note" style="margin-bottom:14px;">자주 쓰는 주제를 빠르게 추가하거나, 직접 입력할 수 있습니다.</div>
+      <div class="tag-list" style="margin-bottom:16px;" id="presetAlbumChips"></div>
+      <div class="form-field">
+        <label class="form-label">직접 입력</label>
+        <input class="form-input" id="customAlbumName" placeholder="예) 추락방지망 설치 현황" onkeydown="if(event.key==='Enter')addCustomAlbum()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addAlbumModal')">취소</button>
+      <button class="btn btn-primary" onclick="addCustomAlbum()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- 사진 크게보기 -->
+<div class="modal-backdrop" id="photoViewModal">
+  <div class="modal wide" style="max-width:720px">
+    <div class="modal-header">
+      <div class="modal-title" id="photoViewTitle">사진</div>
+      <button class="modal-close" onclick="closeModal('photoViewModal')">✕</button>
+    </div>
+    <div class="modal-body" style="text-align:center;">
+      <img id="photoViewImg" style="max-width:100%;max-height:65vh;border-radius:8px;">
+      <div id="photoViewMeta" style="margin-top:10px;font-size:13px;color:var(--text3);"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="photoViewDeleteBtn" style="margin-right:auto;" onclick="deletePhotoFromViewer()">삭제</button>
+      <button class="btn btn-secondary" onclick="closeModal('photoViewModal')">닫기</button>
     </div>
   </div>
 </div>

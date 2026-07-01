@@ -42,6 +42,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 /* 카드 */
 .card { background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); margin-bottom: 16px; }
 .card-title { font-size: 16px; font-weight: 800; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.form-note { font-size: 12px; color: var(--text3); line-height: 1.6; }
 
 /* 공종 버튼들 */
 .worktype-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -120,7 +121,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 
 <!-- 헤더 -->
 <div class="header">
-  <div class="header-logo">🛡️ 안전보건 관리시스템</div>
+  <div class="header-logo">🛡️ 현장관리시스템</div>
   <div class="header-ws" id="headerWS">현장 MSDS 업로드</div>
   <div class="header-desc" id="headerDesc">MSDS 파일을 업로드해주세요</div>
 </div>
@@ -139,6 +140,21 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
     <div class="error-icon">❌</div>
     <div class="error-title">링크가 유효하지 않습니다</div>
     <div class="error-sub" id="errorMsg">만료된 링크이거나 잘못된 주소입니다.<br>담당 보건관리자에게 새 링크를 요청하세요.</div>
+  </div>
+
+  <!-- 협력사 선택 (공용 링크 전용) -->
+  <div id="contractorPickView" style="display:none">
+    <div class="card">
+      <div class="card-title">👷 소속 협력사를 선택해주세요</div>
+      <div class="worktype-grid" id="contractorPickGrid" style="grid-template-columns:1fr;"></div>
+      <div style="margin-top:14px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;">목록에 없나요?</div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="newContractorNameInput" placeholder="협력사명을 입력하세요" style="flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;font-family:var(--font);font-size:14px;outline:none;">
+          <button class="btn btn-secondary" onclick="addNewContractorAndSelect()">추가</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- 업로드 화면 -->
@@ -199,6 +215,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 
     <!-- STEP 3: 완료 -->
     <div id="stepView3" style="display:none">
+      <div class="card" id="licenseOnlyIntro" style="display:none;margin-bottom:16px;">
+        <div class="card-title">📑 사업자등록증 제출</div>
+        <div class="form-note">이 링크는 사업자등록증 제출 전용입니다.</div>
+      </div>
       <div class="complete-screen">
         <div class="complete-icon">✅</div>
         <div class="complete-title">업로드 완료!</div>
@@ -209,6 +229,26 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
         <div class="complete-actions">
           <button class="btn btn-primary" onclick="printWarning()">⚠️ 경고표지 인쇄</button>
           <button class="btn btn-secondary" onclick="resetForm()">+ 추가 파일 업로드</button>
+        </div>
+      </div>
+
+      <div class="card" id="licenseCard" style="display:none;margin-top:20px;">
+        <div class="card-title">📑 사업자등록증 제출</div>
+        <div id="licenseAlreadyDone" style="display:none;">
+          <div style="display:flex;align-items:center;gap:8px;color:var(--ok);font-size:14px;font-weight:700;padding:8px 0;">
+            ✅ 제출 완료 (<span id="licenseFileNameDisplay"></span>)
+          </div>
+          <div style="font-size:12.5px;color:var(--text3);">이미 사업자등록증이 제출되어 있습니다. 재제출이 필요하면 보건관리자에게 문의하세요.</div>
+        </div>
+        <div id="licenseUploadZoneWrap">
+          <div class="form-note" style="margin-bottom:10px;">최초 1회만 제출하면 됩니다. 사업자등록증 사본(PDF 또는 사진)을 올려주세요.</div>
+          <div id="licenseUploadZone" class="upload-zone" style="padding:24px 16px;" onclick="document.getElementById('licenseFileInput').click()">
+            <input type="file" id="licenseFileInput" accept=".pdf,.jpg,.jpeg,.png" onchange="handleLicenseFileSelect(event)">
+            <div class="upload-icon" style="font-size:32px;">📄</div>
+            <div class="upload-text" style="font-size:14px;">사업자등록증 업로드</div>
+            <div class="upload-sub">PDF 또는 사진 파일</div>
+          </div>
+          <div id="licenseUploadStatus" style="margin-top:10px;font-size:13px;"></div>
         </div>
       </div>
     </div>
@@ -229,32 +269,81 @@ const supabase = createClient(
 
 let wsData = null, tokenData = null, contractorData = null;
 let workTypes = [], selectedWorkType = '', fileQueue = [];
+let licenseData = null;
+let publicLinkData = null, contractorList = [];
 
 // ─── 초기화 ───
 async function init() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('token');
-  if (!token) { showError('링크에 토큰이 없습니다.'); return; }
+  const ptoken = params.get('ptoken');
+
+  if (!token && !ptoken) { showError('링크에 토큰이 없습니다.'); return; }
 
   try {
+    if (ptoken) {
+      // ─── 공용 링크 ───
+      const { data: plink, error } = await supabase.from('public_upload_links')
+        .select('*, workspace:workspace_id(*)').eq('token', ptoken).single();
+      if (error || !plink) { showError('유효하지 않은 링크입니다.'); return; }
+      publicLinkData = plink; wsData = plink.workspace;
+
+      const { data: cons } = await supabase.from('contractors')
+        .select('*').eq('workspace_id', wsData.id).order('name');
+      contractorList = cons || [];
+
+      document.getElementById('headerWS').textContent = wsData.name;
+      document.getElementById('headerDesc').textContent = '협력사 선택 후 업로드';
+      document.getElementById('loadingView').style.display = 'none';
+      renderContractorPicker();
+      document.getElementById('contractorPickView').style.display = 'block';
+      return;
+    }
+
+    // ─── 개별 협력사 토큰 ───
     const { data: tok, error } = await supabase.from('upload_tokens')
       .select('*, workspace:workspace_id(*), contractor:contractor_id(id,name)')
       .eq('token', token).single();
     if (error || !tok) { showError('유효하지 않은 링크입니다.'); return; }
     if (tok.expires_at && new Date(tok.expires_at) < new Date()) { showError('만료된 링크입니다.'); return; }
     tokenData = tok; wsData = tok.workspace; contractorData = tok.contractor;
-
-    // 공종 로드
-    const { data: wts } = await supabase.from('work_types')
-      .select('*').eq('workspace_id', wsData.id).eq('contractor_id', contractorData.id).order('created_at');
-    workTypes = wts || [];
-
-    document.getElementById('headerWS').textContent = wsData.name;
-    document.getElementById('headerDesc').textContent = `${contractorData.name} · MSDS 업로드`;
-    document.getElementById('loadingView').style.display = 'none';
-    document.getElementById('uploadView').style.display = 'block';
-    renderWorkTypes();
+    await proceedToUploadView();
   } catch (err) { showError('오류가 발생했습니다: ' + err.message); }
+}
+
+// 협력사 확정 후 (개별 토큰 또는 공용 링크에서 선택 완료) 공통 진입 처리
+async function proceedToUploadView() {
+  // 공종 로드
+  const { data: wts } = await supabase.from('work_types')
+    .select('*').eq('workspace_id', wsData.id).eq('contractor_id', contractorData.id).order('created_at');
+  workTypes = wts || [];
+
+  // 사업자등록증 제출 여부 로드
+  const { data: lic } = await supabase.from('business_licenses')
+    .select('*').eq('contractor_id', contractorData.id).eq('workspace_id', wsData.id).maybeSingle();
+  licenseData = lic || null;
+
+  document.getElementById('headerDesc').textContent = `${contractorData.name} · 업로드`;
+  document.getElementById('contractorPickView').style.display = 'none';
+
+  const allowMsds = publicLinkData ? publicLinkData.allow_msds : true;
+  const allowLicense = publicLinkData ? publicLinkData.allow_license : true;
+
+  if (!allowMsds && allowLicense) {
+    // MSDS 업로드 불가, 사업자등록증만 가능 → 바로 완료 화면(사업자등록증 카드만)으로
+    document.getElementById('uploadView').style.display = 'block';
+    document.getElementById('stepView1').style.display = 'none';
+    document.getElementById('stepView2').style.display = 'none';
+    document.getElementById('stepView3').style.display = 'block';
+    document.querySelector('.steps').style.display = 'none';
+    document.getElementById('licenseOnlyIntro').style.display = 'block';
+    document.querySelector('.complete-screen').style.display = 'none';
+    renderLicenseCard();
+    return;
+  }
+
+  document.getElementById('uploadView').style.display = 'block';
+  renderWorkTypes();
 }
 
 function showError(msg) {
@@ -421,6 +510,7 @@ window.startUpload = async function() {
     setStep(3);
     document.getElementById('stepView2').style.display = 'none';
     document.getElementById('stepView3').style.display = 'block';
+    renderLicenseCard();
   } else { toast('업로드 실패. 다시 시도해주세요.', 'error'); }
 };
 
@@ -445,6 +535,93 @@ function toast(msg, type='') {
   el.className = 'toast ' + type; el.textContent = msg;
   wrap.appendChild(el); setTimeout(() => el.remove(), 3000);
 }
+
+// ─── 사업자등록증 ───
+// ─── 협력사 선택 (공용 링크) ───
+function renderContractorPicker() {
+  const grid = document.getElementById('contractorPickGrid');
+  if (!contractorList.length) {
+    grid.innerHTML = `<div style="text-align:center;color:var(--text3);font-size:13px;padding:10px 0;">등록된 협력사가 없습니다. 아래에서 직접 추가해주세요.</div>`;
+    return;
+  }
+  grid.innerHTML = contractorList.map(c => `<button class="worktype-btn" onclick="selectExistingContractor('${c.id}')">${c.name}</button>`).join('');
+}
+
+window.selectExistingContractor = async function(id) {
+  const c = contractorList.find(x => x.id === id);
+  if (!c) return;
+  contractorData = { id: c.id, name: c.name };
+  document.getElementById('loadingView').style.display = 'block';
+  document.getElementById('contractorPickView').style.display = 'none';
+  await proceedToUploadView();
+  document.getElementById('loadingView').style.display = 'none';
+};
+
+window.addNewContractorAndSelect = async function() {
+  const name = document.getElementById('newContractorNameInput').value.trim();
+  if (!name) { toast('협력사명을 입력하세요', 'error'); return; }
+  if (contractorList.some(c => c.name === name)) {
+    const existing = contractorList.find(c => c.name === name);
+    selectExistingContractor(existing.id);
+    return;
+  }
+  try {
+    const { data, error } = await supabase.from('contractors')
+      .insert({ workspace_id: wsData.id, name }).select().single();
+    if (error) throw error;
+    contractorData = { id: data.id, name: data.name };
+    document.getElementById('loadingView').style.display = 'block';
+    document.getElementById('contractorPickView').style.display = 'none';
+    await proceedToUploadView();
+    document.getElementById('loadingView').style.display = 'none';
+  } catch (err) {
+    toast('협력사 추가 실패: ' + err.message, 'error');
+  }
+};
+
+function renderLicenseCard() {
+  const allowLicense = publicLinkData ? publicLinkData.allow_license : true;
+  if (!allowLicense) {
+    document.getElementById('licenseCard').style.display = 'none';
+    return;
+  }
+  document.getElementById('licenseCard').style.display = 'block';
+  if (licenseData) {
+    document.getElementById('licenseAlreadyDone').style.display = 'block';
+    document.getElementById('licenseUploadZoneWrap').style.display = 'none';
+    document.getElementById('licenseFileNameDisplay').textContent = licenseData.file_name;
+  } else {
+    document.getElementById('licenseAlreadyDone').style.display = 'none';
+    document.getElementById('licenseUploadZoneWrap').style.display = 'block';
+  }
+}
+
+window.handleLicenseFileSelect = async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('licenseUploadStatus');
+  statusEl.textContent = '업로드 중...';
+  statusEl.style.color = 'var(--text3)';
+
+  try {
+    const ext = file.name.split('.').pop();
+    const path = `${wsData.id}/${contractorData.id}_${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('business-licenses').upload(path, file, { contentType: file.type, upsert: true });
+    if (upErr) throw upErr;
+
+    const { error: dbErr } = await supabase.from('business_licenses').upsert({
+      workspace_id: wsData.id, contractor_id: contractorData.id, file_name: file.name, file_path: path, uploaded_by: 'contractor',
+    }, { onConflict: 'contractor_id' });
+    if (dbErr) throw dbErr;
+
+    licenseData = { file_name: file.name, file_path: path };
+    toast('사업자등록증이 제출됐습니다', 'success');
+    renderLicenseCard();
+  } catch (err) {
+    statusEl.textContent = '업로드 실패: ' + err.message;
+    statusEl.style.color = 'var(--danger)';
+  }
+};
 
 init();
 </script>

@@ -13,6 +13,14 @@ let msdsFileQueue = [], healthFileQueue = [];
 let editingMsdsId = null, currentDetailId = null, receiptEditId = null;
 let warnSelected = new Set();
 let measureFileData = null, measureFileName_val = null;
+
+// 전역 붙여넣기 캐치: 사진 업로드 모달이 열려있을 때 어디서 Ctrl+V를 눌러도 잡히도록 보강
+document.addEventListener('paste', (e) => {
+  const modal = document.getElementById('photoUploadModal');
+  if (modal && modal.classList.contains('open') && typeof window.handlePhotoPaste === 'function') {
+    window.handlePhotoPaste(e);
+  }
+});
 let healthConfirmData = [], healthExcelData = null, healthExcelName_val = null;
 let healthCurrentRound = null;
 let currentMeasureData = null;
@@ -190,8 +198,11 @@ window.enterWorkspace = async function(wsId) {
   document.getElementById('sidebarEmail').textContent = user.email;
   document.getElementById('sidebarAvatar').textContent = name.charAt(0).toUpperCase();
   document.getElementById('accountInfo').innerHTML = `이메일: ${user.email}<br>이름: ${name}<br>가입일: ${new Date(user.created_at).toLocaleDateString('ko-KR')}`;
-  await Promise.all([loadContractors(), loadWorkTypes(), loadMembers(), loadTokens()]);
+  await Promise.all([loadContractors(), loadWorkTypes(), loadMembers(), loadTokens(), loadPublicLink()]);
   await loadMsdsRecords();
+  await Promise.all([loadPlacementSnapshots(), loadTodos(), loadRoutineTasks(), loadBusinessLicenses(), loadMeasureRounds(), loadMeasureResults()]);
+  await loadPhotoAlbums();
+  await loadPhotos();
   showPage('home');
 }
 
@@ -216,8 +227,8 @@ window.updateWSName = async function() {
 // ═══════════════════════════════════════════════
 // Navigation
 // ═══════════════════════════════════════════════
-const PAGES = ['home','msds','warning','upload-link','measure','health','settings'];
-const MOBILE_TABS = ['home','msds','measure','health','settings'];
+const PAGES = ['home','calendar','msds','warning','upload-link','measure','health','photos','settings'];
+const MOBILE_TABS = ['home','calendar','msds','health','settings'];
 
 window.showPage = function(id) {
   PAGES.forEach(p => {
@@ -228,7 +239,11 @@ window.showPage = function(id) {
     document.getElementById('mtab-'+t)?.classList.toggle('active', t === id);
   });
   if (id === 'warning') { renderWarnPickList(); updateWarningPreview(); }
-  if (id === 'upload-link') renderTokenList();
+  if (id === 'upload-link') { renderTokenList(); renderPublicLinkUI(); }
+  if (id === 'health') switchHealthSub('result');
+  if (id === 'calendar') { loadCalendarEvents().then(renderCalendar); }
+  if (id === 'photos') { renderPhotoAlbumTabs(); renderPhotoDateFolders(); activeDateFolder = null; }
+  if (id === 'measure') { renderMeasureRoundsChecklist(); renderMeasureList(); }
   if (id === 'settings') { renderContractorTags(); loadMembers(); }
   document.getElementById('mainContent')?.scrollTo(0, 0);
   if (id === 'settings') {
@@ -506,6 +521,24 @@ function updateStats() {
 }
 
 function renderHomeDashboard() {
+  // MSDS 제출번호 확인 필요 알림
+  const subNoIssues = msdsRecords.filter(r => r.submission_no_valid === 'N');
+  const subWrap = document.getElementById('submissionNoAlertWrap');
+  const subList = document.getElementById('submissionNoAlertList');
+  if (subWrap && subList) {
+    if (subNoIssues.length > 0) {
+      subWrap.style.display = 'block';
+      subList.innerHTML = subNoIssues.slice(0, 8).map(r => `
+        <div class="alert-item">
+          <span><b>${r.product_name}</b> · ${r.contractor}${r.submission_no ? ` · 입력값: ${r.submission_no}` : ' · 제출번호 없음'}</span>
+          <button class="btn btn-warn btn-sm" onclick="showMsdsDetail('${r.id}')">확인하기</button>
+        </div>
+      `).join('') + (subNoIssues.length > 8 ? `<div style="font-size:12px;color:var(--text3);margin-top:6px;">외 ${subNoIssues.length - 8}건 더 — MSDS 대장에서 확인</div>` : '');
+    } else {
+      subWrap.style.display = 'none';
+    }
+  }
+
   // 미수령 알림
   const pending = msdsRecords.filter(r => r.receipt_status === 'pending');
   const pendingAlert = document.getElementById('pendingAlert');
@@ -582,7 +615,7 @@ window.renderMsdsTable = function() {
     const file = r.has_pdf ? `<span class="pdf-link" onclick="viewFile('${r.id}')">📄</span>` : '-';
     return `<tr>
       <td><input type="checkbox" class="row-check" value="${r.id}" onchange="updateCheckAll()"></td>
-      <td><div class="td-name">${r.product_name}</div><div class="td-sub">v${r.version||1}</div></td>
+      <td><div class="td-name">${r.product_name}</div><div class="td-sub">v${r.version||1}${r.submission_no_valid === 'N' ? ' · <span style="color:var(--danger);font-weight:700;">⚠ 제출번호 확인필요</span>' : ''}</div></td>
       <td>${r.contractor}</td>
       <td>${r.work_type||'-'}</td>
       <td>${r.supplier||'-'}</td>
@@ -747,6 +780,7 @@ window.parseAllFiles = async function() {
         legal_exam_cycle: parsed.legalExamCycle||'', legal_manage: parsed.legalManage||'N',
         legal_permit: parsed.legalPermit||'N', legal_special: parsed.legalSpecial||'N',
         legal_dangerous: parsed.legalDangerous||'N', special: parsed.legalSpecial==='Y'?'Y_special':'N',
+        submission_no: parsed.submissionNo||'', submission_no_valid: parsed.submissionNoValid||'N',
         receipt_status: 'received', receipt_date: today(),
       });
       await uploadMsdsFile(recId, item.name, item.data, item.mediaType);
@@ -856,6 +890,7 @@ window.showMsdsDetail = function(id) {
     <div class="detail-row"><div class="detail-key">취급 공종</div><div class="detail-val">${r.work_type||'-'}</div></div>
     <div class="detail-row"><div class="detail-key">공급업체</div><div class="detail-val">${r.supplier||'-'} ${r.supplier_contact?'('+r.supplier_contact+')':''}</div></div>
     <div class="detail-row"><div class="detail-key">MSDS 개정일</div><div class="detail-val">${r.issue_date||'-'}</div></div>
+    <div class="detail-row"><div class="detail-key">제출번호</div><div class="detail-val">${r.submission_no ? r.submission_no : '<span style="color:var(--danger);font-weight:700;">없음</span>'} ${r.submission_no_valid === 'N' ? '<span class="badge badge-danger" style="margin-left:6px;">⚠ 확인 필요</span>' : ''}</div></div>
     <div class="detail-row"><div class="detail-key">CAS No.</div><div class="detail-val">${r.cas_no||'-'}</div></div>
     <div class="detail-row"><div class="detail-key">구성성분</div><div class="detail-val" style="white-space:pre-wrap;">${r.components||'-'}</div></div>
     <div class="detail-row"><div class="detail-key">신호어</div><div class="detail-val">${r.signal_word||'-'}</div></div>
@@ -877,6 +912,71 @@ window.showMsdsDetail = function(id) {
 };
 
 window.editMsdsRecord = function() { closeModal('msdsDetailModal'); startMsdsEdit(currentDetailId); };
+
+// ─── 새 MSDS 파일로 갱신 (기존 레코드를 AI 재분석 결과로 버전업) ───
+window.openMsdsRenewPicker = function() {
+  if (!currentDetailId) return;
+  document.getElementById('msdsRenewFileInput').value = '';
+  document.getElementById('msdsRenewFileInput').click();
+};
+
+window.handleMsdsRenewFile = async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const recId = currentDetailId;
+  const old = msdsRecords.find(r => r.id === recId);
+  if (!old) { toast('대상 MSDS를 찾을 수 없습니다', 'error'); return; }
+
+  const btn = document.getElementById('msdsRenewBtn');
+  const originalText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 분석 중...'; }
+
+  try {
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = ev => resolve(ev.target.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const parsed = await callParseFunction(base64, file.type);
+
+    const nv = (old.version || 1) + 1;
+    const history = [...(old.history || []), { version: old.version || 1, date: (old.updated_at || old.created_at || '').split('T')[0], note: '새 MSDS 파일로 갱신' }];
+
+    const updateFields = {
+      product_name: parsed.productName || old.product_name,
+      supplier: parsed.supplier || old.supplier,
+      supplier_contact: parsed.supplierContact || old.supplier_contact,
+      cas_no: parsed.casNo || '', components: parsed.components || '',
+      signal_word: parsed.signalWord || '', h_codes: parsed.hCodes || '', p_codes: parsed.pCodes || '',
+      pictograms: parsed.pictograms || '', issue_date: parsed.issueDate || '',
+      protective_equipment: parsed.protectiveEquipment || '',
+      legal_measurement: parsed.legalMeasurement || 'N', legal_exam: parsed.legalExam || 'N',
+      legal_exam_cycle: parsed.legalExamCycle || '', legal_manage: parsed.legalManage || 'N',
+      legal_permit: parsed.legalPermit || 'N', legal_special: parsed.legalSpecial || 'N',
+      legal_dangerous: parsed.legalDangerous || 'N', special: parsed.legalSpecial === 'Y' ? 'Y_special' : 'N',
+      submission_no: parsed.submissionNo || '', submission_no_valid: parsed.submissionNoValid || 'N',
+      version: nv, history, updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('msds_records').update(updateFields).eq('id', recId);
+    if (error) throw error;
+
+    await uploadMsdsFile(recId, file.name, base64, file.type);
+    await loadMsdsRecords();
+
+    const updated = msdsRecords.find(r => r.id === recId);
+    if (updated) showMsdsDetail(recId); // 상세 화면 새로고침
+    toast(`새 MSDS로 갱신됐습니다 (v${nv})${parsed.submissionNoValid === 'N' ? ' — 제출번호 확인 필요' : ''}`, parsed.submissionNoValid === 'N' ? 'warn' : 'success');
+  } catch (err) {
+    console.error(err);
+    toast('갱신 실패: ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = originalText; }
+    e.target.value = '';
+  }
+};
 
 window.startMsdsEdit = function(id) {
   const r = msdsRecords.find(x => x.id === id); if (!r) return;
@@ -1387,9 +1487,43 @@ window.analyzeMeasure = async function() {
     currentMeasureData = { round, period, ...data.result };
     closeModal('measureUploadModal');
     showMeasureResult(currentMeasureData);
+
+    // DB 저장 + 원본 PDF 보관 (백그라운드, 실패해도 결과 화면은 그대로 유지)
+    btn.textContent = '💾 저장 중...';
+    try {
+      const recId = await saveMeasureResult(currentMeasureData, measureFileName_val);
+      await uploadMeasurePdf(recId, measureFileName_val, measureFileB64);
+      currentMeasureData.id = recId;
+      currentMeasureData.file_name = measureFileName_val;
+      await loadMeasureResults();
+    } catch (saveErr) {
+      console.error('측정결과 저장 실패:', saveErr);
+      toast('분석은 완료됐지만 저장에 실패했습니다. 다운로드로 결과를 보관해주세요.', 'warn');
+    }
   } catch (err) { toast('분석 실패: ' + err.message, 'error'); }
   finally { btn.disabled = false; btn.textContent = '🤖 AI 분석 시작'; }
 };
+
+async function saveMeasureResult(d, fileName) {
+  const { data, error } = await supabase.from('measure_results').insert({
+    workspace_id: currentWS.id, uploaded_by: user.id,
+    round: d.round, period: d.period,
+    dust: d.dust || [], noise: d.noise || [], work_types: d.workTypes || [],
+    dust_exceeded: !!d.dustExceeded, noise_exceeded: !!d.noiseExceeded, mixed_exceeded: !!d.mixedExceeded,
+    file_name: fileName || null,
+  }).select().single();
+  if (error) throw new Error('DB 저장 실패: ' + error.message);
+  return data.id;
+}
+
+async function uploadMeasurePdf(recId, fileName, base64Data) {
+  if (!base64Data) return;
+  const path = `${currentWS.id}/${recId}.pdf`;
+  const blob = base64ToBlob(base64Data, 'application/pdf');
+  const { error } = await supabase.storage.from('measure-pdfs').upload(path, blob, { contentType: 'application/pdf', upsert: true });
+  if (error) { console.warn('PDF 업로드 실패:', error.message); return; }
+  await supabase.from('measure_results').update({ file_path: path }).eq('id', recId);
+}
 
 function showMeasureResult(d) {
   document.getElementById('measureResultTitle').textContent = `측정 결과 — ${d.round}`;
@@ -1438,28 +1572,80 @@ function showMeasureResult(d) {
 
   document.getElementById('measureResultFooter').innerHTML = `
     <button class="btn btn-secondary" onclick="closeModal('measureResultModal')">닫기</button>
+    ${d.file_path ? `<button class="btn btn-outline btn-sm" onclick="viewMeasureOriginalPdf()">📄 원본 PDF 보기</button>` : ''}
     <button class="btn btn-primary btn-sm" onclick="downloadMeasureDust()">📥 분진 결과표</button>
     <button class="btn btn-primary btn-sm" onclick="downloadMeasureNoise()">📥 소음 결과표</button>
     <button class="btn btn-primary btn-sm" onclick="downloadMeasureAfter()">📥 사후관리 결과표</button>`;
   openModal('measureResultModal');
-  saveMeasureToList(d);
 }
 
-function saveMeasureToList(d) {
-  const list = document.getElementById('measureList');
-  const card = document.createElement('div');
-  card.className = 'measure-card';
-  card.innerHTML = `<div class="measure-round">${d.round}</div>
-    <div class="measure-date">측정 기간: ${d.period}</div>
-    <div class="measure-badges">
-      <span class="badge badge-primary">분진 ${d.dust?.length||0}건</span>
-      <span class="badge badge-primary">소음 ${d.noise?.length||0}건</span>
-      ${d.dustExceeded||d.noiseExceeded ? '<span class="badge badge-danger">기준 초과 있음</span>' : '<span class="badge badge-ok">전체 기준 이하</span>'}
-    </div>`;
-  card.onclick = () => { currentMeasureData = d; showMeasureResult(d); };
-  if (list.querySelector('[style*="text-align:center"]')) list.innerHTML = '';
-  list.prepend(card);
+// ─── 작업환경측정 결과 영구 저장 목록 (DB 기반) ───
+let measureResults = [];
+
+async function loadMeasureResults() {
+  const { data, error } = await supabase.from('measure_results')
+    .select('*').eq('workspace_id', currentWS.id).order('created_at', { ascending: false });
+  if (error) { console.error(error); measureResults = []; return; }
+  measureResults = data || [];
+  renderMeasureList();
 }
+
+function renderMeasureList() {
+  const list = document.getElementById('measureList');
+  if (!list) return;
+  if (!measureResults.length) {
+    list.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--text3);">
+      <div style="font-size:40px;margin-bottom:12px;">📊</div>
+      <div style="font-size:15px;font-weight:600;color:var(--text2);margin-bottom:6px;">등록된 측정 결과가 없습니다</div>
+      <div style="font-size:13px;margin-bottom:20px;">측정 결과 PDF를 업로드하면 자동으로 분석됩니다</div>
+      <button class="btn btn-primary btn-lg" onclick="openMeasureUpload()">+ 측정결과 업로드</button>
+    </div>`;
+    return;
+  }
+  list.innerHTML = measureResults.map(r => `
+    <div class="measure-card" onclick="openSavedMeasureResult('${r.id}')">
+      <div class="measure-round">${r.round}</div>
+      <div class="measure-date">측정 기간: ${r.period}${r.file_name ? ' · ' + r.file_name : ''}</div>
+      <div class="measure-badges">
+        <span class="badge badge-primary">분진 ${r.dust?.length||0}건</span>
+        <span class="badge badge-primary">소음 ${r.noise?.length||0}건</span>
+        ${r.dust_exceeded||r.noise_exceeded ? '<span class="badge badge-danger">기준 초과 있음</span>' : '<span class="badge badge-ok">전체 기준 이하</span>'}
+        ${r.file_path ? '<span class="badge badge-gray">📄 원본 보관됨</span>' : ''}
+      </div>
+      <button class="btn btn-danger btn-sm" style="position:absolute;top:14px;right:14px;" onclick="event.stopPropagation();deleteMeasureResult('${r.id}')">🗑</button>
+    </div>
+  `).join('');
+}
+
+window.openSavedMeasureResult = function(id) {
+  const r = measureResults.find(x => x.id === id);
+  if (!r) return;
+  currentMeasureData = {
+    id: r.id, round: r.round, period: r.period,
+    dust: r.dust || [], noise: r.noise || [], workTypes: r.work_types || [],
+    dustExceeded: r.dust_exceeded, noiseExceeded: r.noise_exceeded, mixedExceeded: r.mixed_exceeded,
+    file_name: r.file_name, file_path: r.file_path,
+  };
+  showMeasureResult(currentMeasureData);
+};
+
+window.viewMeasureOriginalPdf = async function() {
+  if (!currentMeasureData?.file_path) { toast('보관된 원본 파일이 없습니다', 'error'); return; }
+  const { data, error } = await supabase.storage.from('measure-pdfs').createSignedUrl(currentMeasureData.file_path, 3600);
+  if (error) { toast('파일을 열 수 없습니다: ' + error.message, 'error'); return; }
+  window.open(data.signedUrl, '_blank');
+};
+
+window.deleteMeasureResult = async function(id) {
+  const r = measureResults.find(x => x.id === id);
+  if (!r) return;
+  if (!confirm(`"${r.round}" 측정 결과를 삭제하시겠습니까? (원본 PDF도 함께 삭제됩니다)`)) return;
+  if (r.file_path) await supabase.storage.from('measure-pdfs').remove([r.file_path]);
+  await supabase.from('measure_results').delete().eq('id', id);
+  await loadMeasureResults();
+  toast('삭제됐습니다');
+};
+
 
 window.downloadMeasureDust = function() {
   if (!currentMeasureData) return;
@@ -1843,4 +2029,1603 @@ window.reanalyzeLegal = async function() {
   btn.disabled = false;
   btn.textContent = '✅ 법정물질 일괄 재판정';
   toast(`${updated}건 업데이트 완료 (CAS 없음 ${skipped}건 제외)`, 'success');
+};
+
+// ═══════════════════════════════════════════════
+// 건강진단 — 배치전 확인서 추적
+// ═══════════════════════════════════════════════
+let placementRawRows = [];   // 재직자만, 원본 파싱 결과
+let placementCodeSet = [];   // 발견된 판정코드 목록
+let placementFiltered = [];  // 추출 결과
+
+window.switchHealthSub = function(which) {
+  document.getElementById('hsub-result').classList.toggle('active', which === 'result');
+  document.getElementById('hsub-placement').classList.toggle('active', which === 'placement');
+  document.getElementById('healthSubResult').style.display = which === 'result' ? '' : 'none';
+  document.getElementById('healthSubPlacement').style.display = which === 'placement' ? '' : 'none';
+  const headerActions = document.getElementById('healthHeaderActions');
+  if (headerActions) headerActions.style.display = which === 'result' ? '' : 'none';
+};
+
+// 배치전 셀 값에서 판정코드 추출. 예: "2026.06.25 (V)" -> "V" / "" -> null(누락)
+function extractPlacementCode(val) {
+  if (val === null || val === undefined) return null;
+  const s = String(val).trim();
+  if (!s) return null;
+  const m = s.match(/\(([^)]+)\)\s*$/);
+  if (m) return m[1].trim();
+  // 괄호 없이 코드만 있는 경우 대비
+  if (/^[A-Za-z0-9]+$/.test(s)) return s;
+  return null;
+}
+
+window.handlePlacementExcel = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('placementFileName').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const wb = XLSX.read(ev.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!rows.length) { toast('데이터가 없습니다', 'error'); return; }
+
+      // 헤더 유연 매칭
+      const headerKeys = Object.keys(rows[0]);
+      const findKey = (cands) => headerKeys.find(h => cands.some(c => h.includes(c)));
+      const kCon = findKey(['협력회사','협력사']);
+      const kJob = findKey(['직종']);
+      const kName = findKey(['성명']);
+      const kStatus = findKey(['재직상태']);
+      const kPlacement = findKey(['배치전']) && !findKey(['배치전']).includes('판정코드')
+        ? headerKeys.find(h => h === '배치전') || findKey(['배치전'])
+        : findKey(['배치전']);
+      const kPhone = findKey(['휴대전화','연락처','전화']);
+
+      if (!kCon || !kName || !kStatus || !kPlacement) {
+        toast('필수 열(협력회사/성명/재직상태/배치전)을 찾을 수 없습니다. 양식을 확인하세요.', 'error');
+        return;
+      }
+
+      // 재직자만 필터
+      const active = rows.filter(r => String(r[kStatus] || '').trim() === '재직');
+
+      placementRawRows = active.map(r => ({
+        contractor: String(r[kCon] || '').trim(),
+        job: kJob ? String(r[kJob] || '').trim() : '',
+        name: String(r[kName] || '').trim(),
+        phone: kPhone ? String(r[kPhone] || '').trim() : '',
+        placementRaw: r[kPlacement],
+        code: extractPlacementCode(r[kPlacement]),
+      }));
+
+      // 발견된 코드 집계
+      const codeCount = {};
+      placementRawRows.forEach(r => {
+        if (r.code) codeCount[r.code] = (codeCount[r.code] || 0) + 1;
+      });
+      placementCodeSet = Object.keys(codeCount).sort();
+
+      const missingCount = placementRawRows.filter(r => !r.code).length;
+
+      // 체크박스 렌더링
+      const wrap = document.getElementById('placementCodeChecks');
+      wrap.innerHTML = placementCodeSet.map(code => `
+        <label class="placement-code-chip">
+          <input type="checkbox" class="placement-code-cb" value="${code}" ${code === 'V' ? 'checked' : ''}>
+          <span>${code} (${codeCount[code]}명)</span>
+        </label>
+      `).join('');
+      document.getElementById('placementMissingCheck').nextSibling && null;
+      const missingLabel = document.getElementById('placementMissingCheck').closest('.legal-check');
+      if (missingLabel) missingLabel.lastChild.textContent = ` 배치전 누락(공백)자 포함 (${missingCount}명)`;
+
+      document.getElementById('placementFilterCard').style.display = '';
+      document.getElementById('placementResultArea').style.display = 'none';
+      toast(`재직자 ${active.length}명 불러옴 (전체 ${rows.length}명 중)`, 'success');
+    } catch (err) {
+      console.error(err);
+      toast('엑셀 파싱 실패: ' + err.message, 'error');
+    }
+  };
+  reader.readAsBinaryString(file);
+};
+
+window.runPlacementFilter = function() {
+  activeSnapshotId = null;
+  const checkedCodes = Array.from(document.querySelectorAll('.placement-code-cb:checked')).map(cb => cb.value);
+  const includeMissing = document.getElementById('placementMissingCheck').checked;
+
+  if (!checkedCodes.length && !includeMissing) {
+    toast('판정코드를 1개 이상 선택하거나 누락자 포함을 체크하세요', 'error');
+    return;
+  }
+
+  placementFiltered = placementRawRows.filter(r => {
+    if (r.code && checkedCodes.includes(r.code)) return true;
+    if (!r.code && includeMissing) return true;
+    return false;
+  });
+
+  // 협력사별, 가나다순 정렬
+  placementFiltered.sort((a, b) => {
+    if (a.contractor !== b.contractor) return a.contractor.localeCompare(b.contractor, 'ko');
+    return a.name.localeCompare(b.name, 'ko');
+  });
+
+  const body = document.getElementById('placementResultBody');
+  if (!placementFiltered.length) {
+    body.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:30px;">선택한 조건에 해당하는 재직자가 없습니다</td></tr>`;
+  } else {
+    body.innerHTML = placementFiltered.map(r => `
+      <tr>
+        <td>${r.contractor}</td>
+        <td>${r.job || '-'}</td>
+        <td>${r.name}</td>
+        <td>${r.code ? r.code : '<span style="color:#DC2626;font-weight:700;">누락</span>'}</td>
+        <td>${r.phone || '-'}</td>
+      </tr>
+    `).join('');
+  }
+
+  const contractorCount = new Set(placementFiltered.map(r => r.contractor)).size;
+  document.getElementById('placementResultSummary').textContent =
+    `결과지 미수령 대상: 총 ${placementFiltered.length}명 (${contractorCount}개 협력사)`;
+  document.getElementById('placementResultArea').style.display = '';
+  document.querySelector('#placementResultArea .btn-ok')?.style.setProperty('display', '');
+};
+
+window.downloadPlacementExcel = function() {
+  if (!placementFiltered.length) { toast('추출된 명단이 없습니다', 'error'); return; }
+  const wb = XLSX.utils.book_new();
+
+  // 전체 통합 시트
+  const allRows = placementFiltered.map(r => ({
+    '협력회사': r.contractor, '직종': r.job, '성명': r.name,
+    '배치전 상태': r.code || '누락', '연락처': r.phone,
+  }));
+  const wsAll = XLSX.utils.json_to_sheet(allRows);
+  XLSX.utils.book_append_sheet(wb, wsAll, '전체');
+
+  // 협력사별 시트
+  const byContractor = {};
+  placementFiltered.forEach(r => {
+    if (!byContractor[r.contractor]) byContractor[r.contractor] = [];
+    byContractor[r.contractor].push(r);
+  });
+  Object.entries(byContractor).forEach(([con, list]) => {
+    const rows = list.map(r => ({
+      '직종': r.job, '성명': r.name, '배치전 상태': r.code || '누락', '연락처': r.phone,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, con.slice(0, 30));
+  });
+
+  XLSX.writeFile(wb, `배치전_확인서_미수령_${today()}.xlsx`);
+};
+
+// Canvas로 명단 이미지 생성 (제목, 협력사명 옵션, 데이터 배열)
+function renderPlacementImageCanvas(title, list, subtitle) {
+  const rowH = 40, headerH = 56, titleH = subtitle ? 96 : 70, padX = 28, footerH = 24;
+  const colW = [70, 200, 130, 100, 140]; // No, 협력회사, 직종, 성명, 상태
+  const width = colW.reduce((a, b) => a + b, 0) + padX * 2;
+  const height = titleH + headerH + rowH * list.length + footerH + 20;
+
+  const canvas = document.createElement('canvas');
+  const scale = 2; // 고해상도
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+
+  // 배경
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, width, height);
+
+  // 타이틀
+  ctx.fillStyle = '#0F172A';
+  ctx.font = 'bold 22px sans-serif';
+  ctx.fillText(title, padX, 38);
+  if (subtitle) {
+    ctx.fillStyle = '#475569';
+    ctx.font = '14px sans-serif';
+    ctx.fillText(subtitle, padX, 62);
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(`생성일: ${today()}`, padX, 82);
+  } else {
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(`생성일: ${today()}`, padX, 58);
+  }
+
+  let y = titleH;
+  // 헤더 행
+  ctx.fillStyle = '#EFF6FF';
+  ctx.fillRect(padX, y, width - padX * 2, headerH);
+  ctx.fillStyle = '#2563EB';
+  ctx.font = 'bold 14px sans-serif';
+  const headers = ['No', '협력회사', '직종', '성명', '배치전 상태'];
+  let x = padX;
+  headers.forEach((h, i) => {
+    ctx.fillText(h, x + 12, y + headerH / 2 + 5);
+    x += colW[i];
+  });
+  y += headerH;
+
+  // 데이터 행
+  list.forEach((r, idx) => {
+    if (idx % 2 === 1) {
+      ctx.fillStyle = '#F8FAFC';
+      ctx.fillRect(padX, y, width - padX * 2, rowH);
+    }
+    ctx.strokeStyle = '#E2E8F0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padX, y + rowH);
+    ctx.lineTo(width - padX, y + rowH);
+    ctx.stroke();
+
+    let cx = padX;
+    const vals = [String(idx + 1), r.contractor, r.job || '-', r.name, r.code || '누락'];
+    vals.forEach((v, i) => {
+      if (i === 4 && !r.code) {
+        ctx.fillStyle = '#DC2626';
+        ctx.font = 'bold 14px sans-serif';
+      } else {
+        ctx.fillStyle = '#0F172A';
+        ctx.font = i === 3 ? 'bold 14px sans-serif' : '14px sans-serif';
+      }
+      const text = colW[i] && v.length > 14 ? v.slice(0, 13) + '…' : v;
+      ctx.fillText(text, cx + 12, y + rowH / 2 + 5);
+      cx += colW[i];
+    });
+    y += rowH;
+  });
+
+  // 테두리
+  ctx.strokeStyle = '#CBD5E1';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(padX, titleH, width - padX * 2, headerH + rowH * list.length);
+
+  return canvas;
+}
+
+function canvasToBlob(canvas) {
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+}
+
+window.downloadPlacementImageAll = async function() {
+  if (!placementFiltered.length) { toast('추출된 명단이 없습니다', 'error'); return; }
+  const contractorCount = new Set(placementFiltered.map(r => r.contractor)).size;
+  const canvas = renderPlacementImageCanvas(
+    '🏥 배치전 건강진단 결과지 미수령 명단',
+    placementFiltered,
+    `전체 ${placementFiltered.length}명 · ${contractorCount}개 협력사`
+  );
+  const blob = await canvasToBlob(canvas);
+  downloadBlob(blob, `배치전_확인서_미수령_전체_${today()}.png`);
+};
+
+window.downloadPlacementImagesByContractor = async function() {
+  if (!placementFiltered.length) { toast('추출된 명단이 없습니다', 'error'); return; }
+  const byContractor = {};
+  placementFiltered.forEach(r => {
+    if (!byContractor[r.contractor]) byContractor[r.contractor] = [];
+    byContractor[r.contractor].push(r);
+  });
+
+  const zip = new JSZip();
+  const folder = zip.folder(`배치전_확인서_미수령_협력사별_${today()}`);
+
+  for (const [con, list] of Object.entries(byContractor)) {
+    const canvas = renderPlacementImageCanvas(
+      `🏥 배치전 건강진단 결과지 미수령 명단`,
+      list,
+      `${con} · ${list.length}명`
+    );
+    const blob = await canvasToBlob(canvas);
+    folder.file(`${con}.png`, blob);
+  }
+
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  downloadBlob(zipBlob, `배치전_확인서_미수령_협력사별_${today()}.zip`);
+};
+
+// ─── 스냅샷 저장/불러오기 ───
+let placementSnapshots = [];
+let activeSnapshotId = null; // null이면 현재 작업 중인(미저장) 데이터
+
+window.savePlacementSnapshot = async function() {
+  if (!placementFiltered.length) { toast('저장할 명단이 없습니다', 'error'); return; }
+  const checkedCodes = Array.from(document.querySelectorAll('.placement-code-cb:checked')).map(cb => cb.value);
+  const includeMissing = document.getElementById('placementMissingCheck').checked;
+  const label = new Date().toLocaleString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+
+  const { error } = await supabase.from('placement_snapshots').insert({
+    workspace_id: currentWS.id,
+    created_by: user.id,
+    snapshot_label: label,
+    filter_codes: checkedCodes,
+    include_missing: includeMissing,
+    total_active: placementRawRows.length,
+    matched_count: placementFiltered.length,
+    data: placementFiltered,
+  });
+  if (error) { toast('저장 실패: ' + error.message, 'error'); return; }
+  toast('스냅샷이 저장됐습니다', 'success');
+  await loadPlacementSnapshots();
+};
+
+async function loadPlacementSnapshots() {
+  const { data, error } = await supabase.from('placement_snapshots')
+    .select('*').eq('workspace_id', currentWS.id).order('created_at', { ascending: false });
+  if (error) { console.error(error); return; }
+  placementSnapshots = data || [];
+  renderPlacementSnapshotList();
+}
+
+function renderPlacementSnapshotList() {
+  const el = document.getElementById('placementSnapshotList');
+  if (!el) return;
+  if (!placementSnapshots.length) {
+    el.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">저장된 스냅샷이 없습니다</div>`;
+    return;
+  }
+  el.innerHTML = placementSnapshots.map(s => `
+    <div class="snapshot-item" onclick="openSnapshot('${s.id}')">
+      <div>
+        <div style="font-weight:700;font-size:13.5px;">${s.snapshot_label}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px;">
+          미수령 ${s.matched_count}명 · 코드 ${s.filter_codes.join(', ') || '-'}${s.include_missing ? ' + 누락' : ''}
+        </div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteSnapshot('${s.id}')">삭제</button>
+    </div>
+  `).join('');
+}
+
+window.openSnapshot = function(id) {
+  const snap = placementSnapshots.find(s => s.id === id);
+  if (!snap) return;
+  placementFiltered = snap.data;
+  activeSnapshotId = id;
+
+  const body = document.getElementById('placementResultBody');
+  body.innerHTML = placementFiltered.map(r => `
+    <tr>
+      <td>${r.contractor}</td>
+      <td>${r.job || '-'}</td>
+      <td>${r.name}</td>
+      <td>${r.code ? r.code : '<span style="color:#DC2626;font-weight:700;">누락</span>'}</td>
+      <td>${r.phone || '-'}</td>
+    </tr>
+  `).join('');
+
+  const contractorCount = new Set(placementFiltered.map(r => r.contractor)).size;
+  document.getElementById('placementResultSummary').textContent =
+    `[${snap.snapshot_label} 스냅샷] 미수령 ${placementFiltered.length}명 (${contractorCount}개 협력사)`;
+  document.getElementById('placementResultArea').style.display = '';
+  // 저장된 스냅샷을 다시 저장할 필요는 없으니 저장 버튼 숨김
+  document.querySelector('#placementResultArea .btn-ok')?.style.setProperty('display', 'none');
+  document.getElementById('placementResultArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+window.deleteSnapshot = async function(id) {
+  if (!confirm('이 스냅샷을 삭제하시겠습니까?')) return;
+  await supabase.from('placement_snapshots').delete().eq('id', id);
+  await loadPlacementSnapshots();
+  toast('삭제됐습니다');
+};
+
+// ═══════════════════════════════════════════════
+// 일정관리 (캘린더)
+// ═══════════════════════════════════════════════
+let calendarEvents = [];
+let calViewYear, calViewMonth; // 0-indexed month
+let calSelectedDate = null;
+
+const CAL_CATEGORY_COLOR = { general: '#64748B', meeting: '#2563EB', inspection: '#DC2626', contractor: '#D97706' };
+const CAL_CATEGORY_LABEL = { general: '일반', meeting: '협력사 미팅', inspection: '점검일', contractor: '협력사 일정' };
+
+function initCalView() {
+  const now = new Date();
+  calViewYear = now.getFullYear();
+  calViewMonth = now.getMonth();
+}
+
+async function loadCalendarEvents() {
+  if (!calViewYear) initCalView();
+  const { data, error } = await supabase.from('calendar_events')
+    .select('*').eq('workspace_id', currentWS.id).order('event_date');
+  if (error) { console.error(error); calendarEvents = []; return; }
+  calendarEvents = data || [];
+  renderUpcomingEvents();
+}
+
+window.calShiftMonth = function(delta) {
+  calViewMonth += delta;
+  if (calViewMonth > 11) { calViewMonth = 0; calViewYear++; }
+  if (calViewMonth < 0) { calViewMonth = 11; calViewYear--; }
+  renderCalendar();
+};
+
+function renderCalendar() {
+  if (!calViewYear) initCalView();
+  document.getElementById('calMonthLabel').textContent = `${calViewYear}년 ${calViewMonth + 1}월`;
+
+  const firstDay = new Date(calViewYear, calViewMonth, 1);
+  const startWeekday = firstDay.getDay();
+  const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
+  const daysInPrevMonth = new Date(calViewYear, calViewMonth, 0).getDate();
+  const todayStr = today();
+
+  const eventsByDate = {};
+  calendarEvents.forEach(ev => {
+    if (!eventsByDate[ev.event_date]) eventsByDate[ev.event_date] = [];
+    eventsByDate[ev.event_date].push(ev);
+  });
+
+  const cells = [];
+  // 이전달 채우기
+  for (let i = startWeekday - 1; i >= 0; i--) {
+    cells.push({ day: daysInPrevMonth - i, dim: true, dateStr: null });
+  }
+  // 이번달
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${calViewYear}-${String(calViewMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    cells.push({ day: d, dim: false, dateStr, isToday: dateStr === todayStr });
+  }
+  // 다음달 채우기 (7의 배수로)
+  let nextDay = 1;
+  while (cells.length % 7 !== 0) { cells.push({ day: nextDay++, dim: true, dateStr: null }); }
+
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = cells.map((c, i) => {
+    const weekday = i % 7;
+    const numClass = weekday === 0 ? 'sun' : (weekday === 6 ? 'sat' : '');
+    if (c.dim) {
+      return `<div class="cal-cell dim"><div class="cal-cell-num">${c.day}</div></div>`;
+    }
+    const evs = eventsByDate[c.dateStr] || [];
+    const evHtml = evs.slice(0, 3).map(ev =>
+      `<div class="cal-event-pill" style="background:${ev.color || CAL_CATEGORY_COLOR[ev.category] || '#64748B'}">${ev.title}</div>`
+    ).join('');
+    const moreHtml = evs.length > 3 ? `<div class="cal-event-more">+${evs.length - 3}개 더보기</div>` : '';
+    return `<div class="cal-cell ${c.isToday ? 'today' : ''}" onclick="selectCalDay('${c.dateStr}')">
+      <div class="cal-cell-num ${numClass}">${c.day}</div>
+      ${evHtml}${moreHtml}
+    </div>`;
+  }).join('');
+}
+
+window.selectCalDay = function(dateStr) {
+  calSelectedDate = dateStr;
+  const evs = calendarEvents.filter(e => e.event_date === dateStr).sort((a,b) => (a.start_time||'').localeCompare(b.start_time||''));
+  const d = new Date(dateStr + 'T00:00:00');
+  document.getElementById('calSelectedDayTitle').innerHTML =
+    `<span class="card-title-icon">📌</span> ${d.toLocaleDateString('ko-KR', { month:'long', day:'numeric', weekday:'long' })}
+     <button class="btn btn-primary btn-sm" style="float:right;" onclick="openEventModal('${dateStr}')">+ 일정 추가</button>`;
+  const list = document.getElementById('calSelectedDayEvents');
+  if (!evs.length) {
+    list.innerHTML = `<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">이 날짜에 등록된 일정이 없습니다</div>`;
+  } else {
+    list.innerHTML = evs.map(ev => `
+      <div class="cal-day-event-item" onclick="openEventModal(null,'${ev.id}')">
+        <div class="cal-day-event-dot" style="background:${ev.color || CAL_CATEGORY_COLOR[ev.category] || '#64748B'}"></div>
+        <div style="flex:1;">
+          <div style="font-weight:700;font-size:13.5px;">${ev.title}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px;">
+            ${ev.start_time ? `${ev.start_time.slice(0,5)}${ev.end_time ? '–'+ev.end_time.slice(0,5) : ''}` : '종일'} · ${CAL_CATEGORY_LABEL[ev.category] || '일반'}
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+  document.getElementById('calSelectedDayCard').style.display = '';
+};
+
+window.openEventModal = function(presetDate, editId) {
+  document.getElementById('ev_id').value = '';
+  document.getElementById('ev_title').value = '';
+  document.getElementById('ev_category').value = 'general';
+  document.getElementById('ev_date').value = presetDate || calSelectedDate || today();
+  document.getElementById('ev_start').value = '';
+  document.getElementById('ev_end').value = '';
+  document.getElementById('ev_desc').value = '';
+  document.getElementById('ev_deleteBtn').style.display = 'none';
+  document.getElementById('eventModalTitle').textContent = '일정 추가';
+
+  if (editId) {
+    const ev = calendarEvents.find(e => e.id === editId);
+    if (ev) {
+      document.getElementById('ev_id').value = ev.id;
+      document.getElementById('ev_title').value = ev.title;
+      document.getElementById('ev_category').value = ev.category || 'general';
+      document.getElementById('ev_date').value = ev.event_date;
+      document.getElementById('ev_start').value = ev.start_time ? ev.start_time.slice(0,5) : '';
+      document.getElementById('ev_end').value = ev.end_time ? ev.end_time.slice(0,5) : '';
+      document.getElementById('ev_desc').value = ev.description || '';
+      document.getElementById('ev_deleteBtn').style.display = '';
+      document.getElementById('eventModalTitle').textContent = '일정 수정';
+    }
+  }
+  openModal('eventModal');
+};
+
+window.saveEvent = async function() {
+  const id = document.getElementById('ev_id').value;
+  const title = document.getElementById('ev_title').value.trim();
+  const category = document.getElementById('ev_category').value;
+  const event_date = document.getElementById('ev_date').value;
+  const start_time = document.getElementById('ev_start').value || null;
+  const end_time = document.getElementById('ev_end').value || null;
+  const description = document.getElementById('ev_desc').value.trim() || null;
+
+  if (!title) { toast('제목을 입력하세요', 'error'); return; }
+  if (!event_date) { toast('날짜를 선택하세요', 'error'); return; }
+
+  const payload = {
+    workspace_id: currentWS.id, title, category, event_date, start_time, end_time, description,
+    color: CAL_CATEGORY_COLOR[category] || '#64748B',
+  };
+
+  let error;
+  if (id) {
+    ({ error } = await supabase.from('calendar_events').update(payload).eq('id', id));
+  } else {
+    ({ error } = await supabase.from('calendar_events').insert({ ...payload, created_by: user.id }));
+  }
+  if (error) { toast('저장 실패: ' + error.message, 'error'); return; }
+
+  closeModal('eventModal');
+  await loadCalendarEvents();
+  renderCalendar();
+  if (calSelectedDate) selectCalDay(calSelectedDate);
+  toast('일정이 저장됐습니다', 'success');
+};
+
+window.deleteEvent = async function() {
+  const id = document.getElementById('ev_id').value;
+  if (!id) return;
+  if (!confirm('이 일정을 삭제하시겠습니까?')) return;
+  await supabase.from('calendar_events').delete().eq('id', id);
+  closeModal('eventModal');
+  await loadCalendarEvents();
+  renderCalendar();
+  if (calSelectedDate) selectCalDay(calSelectedDate);
+  toast('삭제됐습니다');
+};
+
+function renderUpcomingEvents() {
+  const el = document.getElementById('upcomingEventsList');
+  if (!el) return;
+  const todayStr = today();
+  const upcoming = calendarEvents
+    .filter(e => e.event_date >= todayStr)
+    .sort((a,b) => a.event_date.localeCompare(b.event_date) || (a.start_time||'').localeCompare(b.start_time||''))
+    .slice(0, 5);
+  if (!upcoming.length) {
+    el.innerHTML = `<div style="color:var(--text3);font-size:13px;text-align:center;padding:20px;">예정된 일정이 없습니다</div>`;
+    return;
+  }
+  el.innerHTML = upcoming.map(ev => {
+    const d = new Date(ev.event_date + 'T00:00:00');
+    const dLabel = d.toLocaleDateString('ko-KR', { month:'numeric', day:'numeric', weekday:'short' });
+    return `<div class="cal-day-event-item" onclick="showPage('calendar')">
+      <div class="cal-day-event-dot" style="background:${ev.color || CAL_CATEGORY_COLOR[ev.category] || '#64748B'}"></div>
+      <div style="flex:1;">
+        <div style="font-weight:700;font-size:13.5px;">${ev.title}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px;">${dLabel}${ev.start_time ? ' · '+ev.start_time.slice(0,5) : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// 투두리스트 (개인용)
+// ═══════════════════════════════════════════════
+let todos = [];
+
+async function loadTodos() {
+  const { data, error } = await supabase.from('todos')
+    .select('*').eq('workspace_id', currentWS.id).eq('user_id', user.id).order('sort_order');
+  if (error) { console.error(error); todos = []; return; }
+  todos = data || [];
+  renderTodos();
+}
+
+function renderTodos() {
+  const el = document.getElementById('todoList');
+  if (!el) return;
+  if (!todos.length) {
+    el.innerHTML = `<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">할 일을 추가해보세요</div>`;
+    return;
+  }
+  el.innerHTML = todos.map(t => `
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);">
+      <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTodo('${t.id}', this.checked)" style="width:17px;height:17px;cursor:pointer;flex-shrink:0;">
+      <div style="flex:1;font-size:13.5px;${t.done ? 'text-decoration:line-through;color:var(--text3);' : ''}">${t.content}</div>
+      <button class="btn btn-danger btn-sm" onclick="deleteTodo('${t.id}')" style="padding:4px 9px;">✕</button>
+    </div>
+  `).join('');
+}
+
+window.addTodo = async function() {
+  const input = document.getElementById('newTodoInput');
+  const content = input.value.trim();
+  if (!content) return;
+  const maxOrder = todos.reduce((m, t) => Math.max(m, t.sort_order), 0);
+  const { error } = await supabase.from('todos').insert({
+    workspace_id: currentWS.id, user_id: user.id, content, sort_order: maxOrder + 1,
+  });
+  if (error) { toast('추가 실패: ' + error.message, 'error'); return; }
+  input.value = '';
+  await loadTodos();
+};
+
+window.toggleTodo = async function(id, done) {
+  await supabase.from('todos').update({ done }).eq('id', id);
+  await loadTodos();
+};
+
+window.deleteTodo = async function(id) {
+  await supabase.from('todos').delete().eq('id', id);
+  await loadTodos();
+};
+
+// ═══════════════════════════════════════════════
+// 루틴 업무 (반복 체크리스트)
+// ═══════════════════════════════════════════════
+let routineTasks = [];
+let routineCompletions = []; // 현재 활성 주기에 대한 완료 기록만 보유
+
+function getISOWeekKey(d = new Date()) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+function getMonthKey(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function periodKeyFor(task, d = new Date()) {
+  return task.frequency === 'monthly' ? getMonthKey(d) : getISOWeekKey(d);
+}
+
+window.toggleRoutineFreqInput = function() {
+  const freq = document.getElementById('newRoutineFreq').value;
+  document.getElementById('routineWeekdayField').style.display = freq === 'weekly' ? '' : 'none';
+  document.getElementById('routineDayField').style.display = freq === 'monthly' ? '' : 'none';
+};
+
+async function loadRoutineTasks() {
+  const { data, error } = await supabase.from('routine_tasks')
+    .select('*').eq('workspace_id', currentWS.id).eq('active', true).order('sort_order');
+  if (error) { console.error(error); routineTasks = []; return; }
+  routineTasks = data || [];
+
+  // 현재 주기들의 완료 기록 조회 (주간 태스크는 이번주 키, 월간 태스크는 이번달 키)
+  const periodKeys = [...new Set(routineTasks.map(t => periodKeyFor(t)))];
+  if (periodKeys.length) {
+    const { data: comps } = await supabase.from('routine_task_completions')
+      .select('*').eq('workspace_id', currentWS.id).in('period_key', periodKeys);
+    routineCompletions = comps || [];
+  } else {
+    routineCompletions = [];
+  }
+
+  renderRoutineTaskSettingsList();
+  renderRoutineTaskDashboard();
+}
+
+function renderRoutineTaskSettingsList() {
+  const el = document.getElementById('routineTaskList');
+  if (!el) return;
+  if (!routineTasks.length) {
+    el.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0;">등록된 루틴 업무가 없습니다</div>`;
+    return;
+  }
+  el.innerHTML = routineTasks.map(t => {
+    const freqLabel = t.frequency === 'monthly' ? `매월 ${t.day_of_month}일` : `매주 ${['일','월','화','수','목','금','토'][t.weekday]}요일`;
+    return `<div class="snapshot-item" style="cursor:default;">
+      <div>
+        <div style="font-weight:700;font-size:13.5px;">${t.title}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px;">${freqLabel}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteRoutineTask('${t.id}')">삭제</button>
+    </div>`;
+  }).join('');
+}
+
+function renderRoutineTaskDashboard() {
+  const el = document.getElementById('routineTaskDashList');
+  if (!el) return;
+  if (!routineTasks.length) {
+    el.innerHTML = `<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">등록된 루틴 업무가 없습니다</div>`;
+    return;
+  }
+  el.innerHTML = routineTasks.map(t => {
+    const pk = periodKeyFor(t);
+    const done = routineCompletions.some(c => c.task_id === t.id && c.period_key === pk);
+    const freqLabel = t.frequency === 'monthly' ? `매월 ${t.day_of_month}일` : `매주 ${['일','월','화','수','목','금','토'][t.weekday]}요일`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);">
+      <input type="checkbox" ${done ? 'checked' : ''} onchange="toggleRoutineDone('${t.id}', this.checked)" style="width:17px;height:17px;cursor:pointer;flex-shrink:0;">
+      <div style="flex:1;">
+        <div style="font-size:13.5px;font-weight:600;${done ? 'text-decoration:line-through;color:var(--text3);' : ''}">${t.title}</div>
+        <div style="font-size:11.5px;color:var(--text3);">${freqLabel}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.addRoutineTask = async function() {
+  const title = document.getElementById('newRoutineTitle').value.trim();
+  const frequency = document.getElementById('newRoutineFreq').value;
+  if (!title) { toast('업무 내용을 입력하세요', 'error'); return; }
+
+  const payload = { workspace_id: currentWS.id, created_by: user.id, title, frequency };
+  if (frequency === 'weekly') {
+    payload.weekday = parseInt(document.getElementById('newRoutineWeekday').value, 10);
+  } else {
+    const dom = parseInt(document.getElementById('newRoutineDay').value, 10);
+    if (!dom || dom < 1 || dom > 31) { toast('1~31 사이 날짜를 입력하세요', 'error'); return; }
+    payload.day_of_month = dom;
+  }
+
+  const { error } = await supabase.from('routine_tasks').insert(payload);
+  if (error) { toast('추가 실패: ' + error.message, 'error'); return; }
+  document.getElementById('newRoutineTitle').value = '';
+  await loadRoutineTasks();
+  toast('루틴 업무가 추가됐습니다', 'success');
+};
+
+window.deleteRoutineTask = async function(id) {
+  if (!confirm('이 루틴 업무를 삭제하시겠습니까? (완료 기록도 함께 삭제됩니다)')) return;
+  await supabase.from('routine_tasks').delete().eq('id', id);
+  await loadRoutineTasks();
+  toast('삭제됐습니다');
+};
+
+window.toggleRoutineDone = async function(taskId, done) {
+  const task = routineTasks.find(t => t.id === taskId);
+  if (!task) return;
+  const pk = periodKeyFor(task);
+  if (done) {
+    const { error } = await supabase.from('routine_task_completions')
+      .insert({ task_id: taskId, workspace_id: currentWS.id, period_key: pk, completed_by: user.id });
+    if (error) { toast('처리 실패: ' + error.message, 'error'); return; }
+  } else {
+    await supabase.from('routine_task_completions').delete().eq('task_id', taskId).eq('period_key', pk);
+  }
+  await loadRoutineTasks();
+};
+
+// ═══════════════════════════════════════════════
+// 사업자등록증 관리
+// ═══════════════════════════════════════════════
+let businessLicenses = [];
+
+async function loadBusinessLicenses() {
+  const { data, error } = await supabase.from('business_licenses')
+    .select('*, contractor:contractor_id(name)').eq('workspace_id', currentWS.id);
+  if (error) { console.error(error); businessLicenses = []; return; }
+  businessLicenses = data || [];
+  renderBusinessLicenseStatus();
+  renderLicenseAlert();
+}
+
+function renderBusinessLicenseStatus() {
+  const statusEl = document.getElementById('businessLicenseStatus');
+  const listEl = document.getElementById('businessLicenseList');
+  if (!statusEl || !listEl) return;
+
+  const submittedIds = new Set(businessLicenses.map(l => l.contractor_id));
+  const missing = contractors.filter(c => !submittedIds.has(c.id));
+
+  statusEl.innerHTML = `<span style="color:var(--ok);">제출 ${businessLicenses.length}개</span> / 전체 ${contractors.length}개 협력사
+    ${missing.length ? `<span style="color:var(--danger);margin-left:8px;">미제출 ${missing.length}개</span>` : ''}`;
+
+  let html = '';
+  if (missing.length) {
+    html += `<div style="margin-bottom:14px;">
+      <div style="font-size:12.5px;font-weight:700;color:var(--danger);margin-bottom:6px;">⚠️ 미제출 협력사</div>
+      <div class="tag-list">${missing.map(c => `<span class="tag" style="border-color:#FECACA;color:var(--danger);background:var(--danger-light);">${c.name}
+        <button onclick="event.stopPropagation();document.getElementById('manualLicenseContractor').value='${c.id}';document.getElementById('manualLicenseInput').click()" style="background:none;border:none;color:inherit;cursor:pointer;margin-left:4px;font-weight:700;">+업로드</button>
+      </span>`).join('')}</div>
+    </div>`;
+  }
+  if (businessLicenses.length) {
+    html += `<div style="font-size:12.5px;font-weight:700;color:var(--text2);margin-bottom:6px;">✅ 제출 완료</div>`;
+    html += businessLicenses.map(l => `
+      <div class="snapshot-item" style="cursor:default;">
+        <div>
+          <div style="font-weight:700;font-size:13.5px;">${l.contractor?.name || '알 수 없음'}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px;">${l.file_name} · ${l.uploaded_by === 'contractor' ? '협력사 제출' : '관리자 업로드'} · ${new Date(l.uploaded_at).toLocaleDateString('ko-KR')}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="viewLicense('${l.id}')">보기</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteLicense('${l.id}')">삭제</button>
+        </div>
+      </div>
+    `).join('');
+  }
+  listEl.innerHTML = html || `<div style="color:var(--text3);font-size:13px;padding:8px 0;">데이터가 없습니다</div>`;
+
+  // hidden input for manual upload contractor targeting
+  if (!document.getElementById('manualLicenseContractor')) {
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.id = 'manualLicenseContractor';
+    listEl.appendChild(hidden);
+  }
+}
+
+function renderLicenseAlert() {
+  const wrap = document.getElementById('licenseAlertWrap');
+  const list = document.getElementById('licenseAlertList');
+  if (!wrap || !list) return;
+  const submittedIds = new Set(businessLicenses.map(l => l.contractor_id));
+  const missing = contractors.filter(c => !submittedIds.has(c.id));
+  if (!missing.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  list.innerHTML = `<div style="font-size:13px;color:var(--text2);">
+    ${missing.map(c => c.name).join(', ')} — 사업자등록증 미제출
+    <button class="btn btn-outline btn-sm" style="margin-left:8px;" onclick="showPage('settings')">관리</button>
+  </div>`;
+}
+
+window.handleManualLicenseUpload = async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const conId = document.getElementById('manualLicenseContractor')?.value;
+  if (!conId) { toast('업로드할 협력사를 먼저 선택하세요', 'error'); e.target.value=''; return; }
+
+  const ext = file.name.split('.').pop();
+  const path = `${currentWS.id}/${conId}_${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase.storage.from('business-licenses').upload(path, file, { contentType: file.type, upsert: true });
+  if (upErr) { toast('업로드 실패: ' + upErr.message, 'error'); e.target.value=''; return; }
+
+  const { error } = await supabase.from('business_licenses').upsert({
+    workspace_id: currentWS.id, contractor_id: conId, file_name: file.name, file_path: path, uploaded_by: 'manager',
+  }, { onConflict: 'contractor_id' });
+  if (error) { toast('저장 실패: ' + error.message, 'error'); e.target.value=''; return; }
+
+  e.target.value = '';
+  await loadBusinessLicenses();
+  toast('사업자등록증이 업로드됐습니다', 'success');
+};
+
+window.viewLicense = async function(id) {
+  const lic = businessLicenses.find(l => l.id === id);
+  if (!lic) return;
+  const { data, error } = await supabase.storage.from('business-licenses').createSignedUrl(lic.file_path, 3600);
+  if (error) { toast('파일을 열 수 없습니다: ' + error.message, 'error'); return; }
+  window.open(data.signedUrl, '_blank');
+};
+
+window.deleteLicense = async function(id) {
+  const lic = businessLicenses.find(l => l.id === id);
+  if (!lic) return;
+  if (!confirm(`${lic.contractor?.name} 사업자등록증을 삭제하시겠습니까?`)) return;
+  await supabase.storage.from('business-licenses').remove([lic.file_path]);
+  await supabase.from('business_licenses').delete().eq('id', id);
+  await loadBusinessLicenses();
+  toast('삭제됐습니다');
+};
+
+window.downloadAllLicenses = async function() {
+  if (!businessLicenses.length) { toast('다운로드할 사업자등록증이 없습니다', 'error'); return; }
+  const zip = new JSZip();
+  const folder = zip.folder(`사업자등록증_${currentWS.name}_${today()}`);
+  for (const lic of businessLicenses) {
+    const { data, error } = await supabase.storage.from('business-licenses').download(lic.file_path);
+    if (error) continue;
+    const ext = lic.file_name.split('.').pop();
+    folder.file(`${lic.contractor?.name || '알수없음'}.${ext}`, data);
+  }
+  const blob = await zip.generateAsync({ type: 'blob' });
+  downloadBlob(blob, `사업자등록증_전체_${today()}.zip`);
+};
+
+// ═══════════════════════════════════════════════
+// 사진 클라우드 (주제별 + 날짜별 증빙 사진첩, 드래그앤드롭 이동)
+// ═══════════════════════════════════════════════
+const PHOTO_PRESET_ALBUMS = ['휴게시간', '휴게실', '보냉장구', '그늘막', '식염포도당/음용수', '안전보건교육'];
+
+let photoAlbums = [];
+let photos = [];
+let activeAlbumId = null;
+let activeDateFolder = null;
+let photoThumbUrlCache = {};
+let pendingUploadFiles = [];
+let draggedPhotoId = null;
+
+async function loadPhotoAlbums() {
+  const { data, error } = await supabase.from('photo_albums')
+    .select('*').eq('workspace_id', currentWS.id).order('sort_order');
+  if (error) { console.error(error); photoAlbums = []; return; }
+  photoAlbums = data || [];
+  if (!activeAlbumId && photoAlbums.length) activeAlbumId = photoAlbums[0].id;
+}
+
+async function loadPhotos() {
+  const { data, error } = await supabase.from('photos')
+    .select('*').eq('workspace_id', currentWS.id).order('shot_date', { ascending: false });
+  if (error) { console.error(error); photos = []; return; }
+  photos = data || [];
+}
+
+function renderPhotoAlbumTabs() {
+  const wrap = document.getElementById('photoAlbumTabs');
+  const emptyEl = document.getElementById('photoAlbumEmpty');
+  if (!wrap) return;
+
+  if (!photoAlbums.length) {
+    wrap.innerHTML = '';
+    emptyEl.style.display = '';
+    document.getElementById('photoDateFolderView').style.display = 'none';
+    document.getElementById('photoFolderDetailView').style.display = 'none';
+    document.getElementById('photoUploadBtn').disabled = true;
+    return;
+  }
+  emptyEl.style.display = 'none';
+  document.getElementById('photoUploadBtn').disabled = false;
+
+  wrap.innerHTML = photoAlbums.map(a => {
+    const cnt = photos.filter(p => p.album_id === a.id).length;
+    return `<button class="album-chip ${a.id === activeAlbumId ? 'active' : ''}" id="albumChip_${a.id}"
+        onclick="switchAlbum('${a.id}')"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="handleDropOnAlbum(event,'${a.id}')">
+      ${a.name} <span class="count">${cnt}</span>
+      ${!a.is_preset ? `<span onclick="event.stopPropagation();deleteAlbum('${a.id}')" style="margin-left:4px;opacity:.6;">✕</span>` : ''}
+    </button>`;
+  }).join('');
+}
+
+window.switchAlbum = function(id) {
+  activeAlbumId = id;
+  activeDateFolder = null;
+  renderPhotoAlbumTabs();
+  renderPhotoDateFolders();
+};
+
+window.deleteAlbum = async function(id) {
+  const album = photoAlbums.find(a => a.id === id);
+  if (!album) return;
+  const cnt = photos.filter(p => p.album_id === id).length;
+  if (!confirm(`"${album.name}" 주제를 삭제하시겠습니까?${cnt ? ` (사진 ${cnt}장도 함께 삭제됩니다)` : ''}`)) return;
+
+  const toRemove = photos.filter(p => p.album_id === id);
+  if (toRemove.length) {
+    await supabase.storage.from('site-photos').remove(toRemove.map(p => p.file_path));
+  }
+  await supabase.from('photo_albums').delete().eq('id', id);
+  if (activeAlbumId === id) activeAlbumId = null;
+  await loadPhotoAlbums();
+  await loadPhotos();
+  renderPhotoAlbumTabs();
+  renderPhotoDateFolders();
+  toast('삭제됐습니다');
+};
+
+function renderPhotoDateFolders() {
+  const grid = document.getElementById('photoDateFolderGrid');
+  if (!grid) return;
+  document.getElementById('photoDateFolderView').style.display = '';
+  document.getElementById('photoFolderDetailView').style.display = 'none';
+  if (!activeAlbumId) { grid.innerHTML = ''; return; }
+
+  const albumPhotos = photos.filter(p => p.album_id === activeAlbumId);
+  if (!albumPhotos.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px 20px;color:var(--text3);">
+      <div style="font-size:36px;margin-bottom:10px;">🖼️</div>
+      <div style="font-size:14px;">이 주제에 등록된 사진이 없습니다</div>
+    </div>`;
+    return;
+  }
+
+  const byDate = {};
+  albumPhotos.forEach(p => { (byDate[p.shot_date] ||= []).push(p); });
+  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+
+  grid.innerHTML = dates.map(d => {
+    const dLabel = new Date(d + 'T00:00:00').toLocaleDateString('ko-KR', { month:'long', day:'numeric', weekday:'short' });
+    return `<div class="date-folder" id="dateFolder_${d}"
+        onclick="openDateFolder('${d}')"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="handleDropOnDateFolder(event,'${d}')">
+      <div class="date-folder-icon">📁</div>
+      <div class="date-folder-label">${dLabel}</div>
+      <div class="date-folder-count">${byDate[d].length}장</div>
+    </div>`;
+  }).join('');
+}
+
+window.openDateFolder = function(dateStr) {
+  activeDateFolder = dateStr;
+  document.getElementById('photoDateFolderView').style.display = 'none';
+  document.getElementById('photoFolderDetailView').style.display = '';
+  const album = photoAlbums.find(a => a.id === activeAlbumId);
+  const dLabel = new Date(dateStr + 'T00:00:00').toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+  document.getElementById('photoFolderDetailTitle').textContent = `${album?.name || ''} · ${dLabel}`;
+  renderPhotoFolderDetail();
+};
+
+window.closeDateFolder = function() {
+  activeDateFolder = null;
+  renderPhotoDateFolders();
+};
+
+function renderPhotoFolderDetail() {
+  const grid = document.getElementById('photoFolderDetailGrid');
+  if (!grid || !activeDateFolder) return;
+  const list = photos.filter(p => p.album_id === activeAlbumId && p.shot_date === activeDateFolder);
+
+  grid.innerHTML = list.map(p => `
+    <div class="photo-thumb" draggable="true" id="photo_${p.id}"
+        onclick="openPhotoViewer('${p.id}')"
+        ondragstart="handlePhotoDragStart(event,'${p.id}')"
+        ondragend="handlePhotoDragEnd(event)">
+      <img src="${photoThumbUrlCache[p.id] || ''}" data-photo-id="${p.id}" loading="lazy">
+    </div>
+  `).join('');
+
+  loadPhotoThumbnails(list);
+}
+
+async function loadPhotoThumbnails(list) {
+  for (const p of list) {
+    if (photoThumbUrlCache[p.id]) {
+      const img = document.querySelector(`img[data-photo-id="${p.id}"]`);
+      if (img) img.src = photoThumbUrlCache[p.id];
+      continue;
+    }
+    const { data } = await supabase.storage.from('site-photos').createSignedUrl(p.file_path, 3600);
+    if (data) {
+      photoThumbUrlCache[p.id] = data.signedUrl;
+      const img = document.querySelector(`img[data-photo-id="${p.id}"]`);
+      if (img) img.src = data.signedUrl;
+    }
+  }
+}
+
+window.handlePhotoDragStart = function(e, photoId) {
+  draggedPhotoId = photoId;
+  e.dataTransfer.effectAllowed = 'move';
+  document.getElementById(`photo_${photoId}`)?.classList.add('dragging');
+};
+window.handlePhotoDragEnd = function(e) {
+  document.getElementById(`photo_${draggedPhotoId}`)?.classList.remove('dragging');
+  draggedPhotoId = null;
+};
+
+window.handleDropOnDateFolder = async function(e, targetDate) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (!draggedPhotoId) return;
+  const p = photos.find(x => x.id === draggedPhotoId);
+  if (!p || p.shot_date === targetDate) return;
+
+  const { error } = await supabase.from('photos').update({ shot_date: targetDate }).eq('id', draggedPhotoId);
+  if (error) { toast('이동 실패: ' + error.message, 'error'); return; }
+  await loadPhotos();
+  renderPhotoAlbumTabs();
+  if (activeDateFolder) renderPhotoFolderDetail();
+  else renderPhotoDateFolders();
+  toast('날짜를 이동했습니다', 'success');
+};
+
+window.handleDropOnAlbum = async function(e, targetAlbumId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (!draggedPhotoId) return;
+  const p = photos.find(x => x.id === draggedPhotoId);
+  if (!p || p.album_id === targetAlbumId) return;
+
+  const { error } = await supabase.from('photos').update({ album_id: targetAlbumId }).eq('id', draggedPhotoId);
+  if (error) { toast('이동 실패: ' + error.message, 'error'); return; }
+  const targetName = photoAlbums.find(a => a.id === targetAlbumId)?.name || '';
+  await loadPhotos();
+  renderPhotoAlbumTabs();
+  if (activeDateFolder) renderPhotoFolderDetail();
+  else renderPhotoDateFolders();
+  toast(`"${targetName}" 주제로 이동했습니다`, 'success');
+};
+
+window.openAddAlbumModal = function() {
+  const existing = new Set(photoAlbums.map(a => a.name));
+  const chips = PHOTO_PRESET_ALBUMS.filter(n => !existing.has(n));
+  const wrap = document.getElementById('presetAlbumChips');
+  if (!chips.length) {
+    wrap.innerHTML = `<div style="font-size:12.5px;color:var(--text3);">기본 제공 주제를 모두 추가하셨습니다</div>`;
+  } else {
+    wrap.innerHTML = chips.map(n => `<span class="tag" style="cursor:pointer;" onclick="addPresetAlbum('${n}')">+ ${n}</span>`).join('');
+  }
+  document.getElementById('customAlbumName').value = '';
+  openModal('addAlbumModal');
+};
+
+window.addPresetAlbum = async function(name) {
+  const { error } = await supabase.from('photo_albums').insert({
+    workspace_id: currentWS.id, name, is_preset: true, sort_order: photoAlbums.length,
+  });
+  if (error) { toast('추가 실패: ' + error.message, 'error'); return; }
+  await loadPhotoAlbums();
+  renderPhotoAlbumTabs();
+  renderPhotoDateFolders();
+  closeModal('addAlbumModal');
+  toast(`"${name}" 주제가 추가됐습니다`, 'success');
+};
+
+window.addCustomAlbum = async function() {
+  const name = document.getElementById('customAlbumName').value.trim();
+  if (!name) { toast('주제명을 입력하세요', 'error'); return; }
+  const { error } = await supabase.from('photo_albums').insert({
+    workspace_id: currentWS.id, name, is_preset: false, sort_order: photoAlbums.length,
+  });
+  if (error) { toast('추가 실패 (중복된 이름일 수 있습니다): ' + error.message, 'error'); return; }
+  await loadPhotoAlbums();
+  renderPhotoAlbumTabs();
+  renderPhotoDateFolders();
+  closeModal('addAlbumModal');
+  toast(`"${name}" 주제가 추가됐습니다`, 'success');
+};
+
+window.openPhotoUploadModal = function() {
+  if (!activeAlbumId) { toast('먼저 주제를 선택하세요', 'error'); return; }
+  pendingUploadFiles = [];
+  document.getElementById('photoUploadDate').value = activeDateFolder || today();
+  document.getElementById('photoUploadFileList').innerHTML = '';
+  document.getElementById('photoUploadConfirmBtn').disabled = true;
+  document.getElementById('photoUploadFileInput').value = '';
+  openModal('photoUploadModal');
+  // 모달이 열리면 붙여넣기를 바로 받을 수 있도록 드롭존에 포커스
+  setTimeout(() => document.getElementById('photoUploadDropZone')?.focus(), 50);
+};
+
+function renderPendingUploadList() {
+  const listEl = document.getElementById('photoUploadFileList');
+  if (!pendingUploadFiles.length) { listEl.innerHTML = ''; document.getElementById('photoUploadConfirmBtn').disabled = true; return; }
+  listEl.innerHTML = `선택됨 ${pendingUploadFiles.length}개: ` + pendingUploadFiles.map(f => f.name).join(', ') +
+    ` <button onclick="clearPendingUploads()" style="margin-left:6px;background:none;border:none;color:var(--danger);cursor:pointer;font-weight:700;">전체 삭제</button>`;
+  document.getElementById('photoUploadConfirmBtn').disabled = false;
+}
+
+window.clearPendingUploads = function() {
+  pendingUploadFiles = [];
+  document.getElementById('photoUploadFileInput').value = '';
+  renderPendingUploadList();
+};
+
+window.handlePhotoFilesSelected = function(e) {
+  const newFiles = Array.from(e.target.files || []);
+  pendingUploadFiles = pendingUploadFiles.concat(newFiles);
+  renderPendingUploadList();
+};
+
+// 클립보드 붙여넣기 (카카오톡 등에서 복사한 이미지를 Ctrl+V로 바로 추가)
+window.handlePhotoPaste = function(e) {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  let added = 0;
+  for (const item of items) {
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) {
+        const ext = file.type.split('/')[1] || 'png';
+        const named = new File([file], `붙여넣기_${Date.now()}_${added}.${ext}`, { type: file.type });
+        pendingUploadFiles.push(named);
+        added++;
+      }
+    }
+  }
+  if (added > 0) {
+    e.preventDefault();
+    renderPendingUploadList();
+    toast(`이미지 ${added}장이 추가됐습니다`, 'success');
+  }
+};
+
+window.confirmPhotoUpload = async function() {
+  const shotDate = document.getElementById('photoUploadDate').value;
+  if (!shotDate) { toast('날짜를 선택하세요', 'error'); return; }
+  if (!pendingUploadFiles.length) { toast('파일을 선택하거나 붙여넣으세요', 'error'); return; }
+  if (!activeAlbumId) { toast('주제를 먼저 선택하세요', 'error'); return; }
+
+  const btn = document.getElementById('photoUploadConfirmBtn');
+  btn.disabled = true; btn.textContent = '업로드 중...';
+
+  let success = 0;
+  for (const file of pendingUploadFiles) {
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${currentWS.id}/${activeAlbumId}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('site-photos').upload(path, file, { contentType: file.type });
+      if (upErr) throw upErr;
+      const { error: dbErr } = await supabase.from('photos').insert({
+        workspace_id: currentWS.id, album_id: activeAlbumId, uploaded_by: user.id,
+        file_path: path, file_name: file.name, shot_date: shotDate,
+      });
+      if (dbErr) throw dbErr;
+      success++;
+    } catch (err) { console.error(err); }
+  }
+
+  btn.disabled = false; btn.textContent = '업로드';
+  closeModal('photoUploadModal');
+  await loadPhotos();
+  renderPhotoAlbumTabs();
+  if (activeDateFolder === shotDate) renderPhotoFolderDetail();
+  else renderPhotoDateFolders();
+  toast(`${success}장 업로드 완료${success < pendingUploadFiles.length ? ` (${pendingUploadFiles.length - success}장 실패)` : ''}`, success === pendingUploadFiles.length ? 'success' : 'warn');
+};
+
+let viewingPhotoId = null;
+window.openPhotoViewer = async function(photoId) {
+  const p = photos.find(x => x.id === photoId);
+  if (!p) return;
+  viewingPhotoId = photoId;
+  const album = photoAlbums.find(a => a.id === p.album_id);
+  document.getElementById('photoViewTitle').textContent = `${album?.name || ''} · ${p.shot_date}`;
+  document.getElementById('photoViewImg').src = photoThumbUrlCache[p.id] || '';
+  document.getElementById('photoViewMeta').textContent =
+    `촬영(작업)일: ${p.shot_date} · 업로드: ${new Date(p.created_at).toLocaleString('ko-KR')} · 파일명: ${p.file_name}`;
+  if (!photoThumbUrlCache[p.id]) {
+    const { data } = await supabase.storage.from('site-photos').createSignedUrl(p.file_path, 3600);
+    if (data) { photoThumbUrlCache[p.id] = data.signedUrl; document.getElementById('photoViewImg').src = data.signedUrl; }
+  }
+  openModal('photoViewModal');
+};
+
+window.deletePhotoFromViewer = async function() {
+  if (!viewingPhotoId) return;
+  const p = photos.find(x => x.id === viewingPhotoId);
+  if (!p) return;
+  if (!confirm('이 사진을 삭제하시겠습니까?')) return;
+  await supabase.storage.from('site-photos').remove([p.file_path]);
+  await supabase.from('photos').delete().eq('id', p.id);
+  closeModal('photoViewModal');
+  await loadPhotos();
+  renderPhotoAlbumTabs();
+  if (activeDateFolder) renderPhotoFolderDetail();
+  else renderPhotoDateFolders();
+  toast('삭제됐습니다');
+};
+
+// ─── 사진대지 인쇄 (Word) ───
+window.openPhotoPrintModal = function() {
+  if (!photoAlbums.length) { toast('먼저 주제를 추가하세요', 'error'); return; }
+  const sel = document.getElementById('printAlbumSelect');
+  sel.innerHTML = photoAlbums.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  if (activeAlbumId) sel.value = activeAlbumId;
+
+  // 기본 기간: 이 주제에 사진이 있는 가장 이른 날~가장 늦은 날
+  const albumId = sel.value;
+  const albumPhotos = photos.filter(p => p.album_id === albumId);
+  if (albumPhotos.length) {
+    const dates = albumPhotos.map(p => p.shot_date).sort();
+    document.getElementById('printDateFrom').value = dates[0];
+    document.getElementById('printDateTo').value = dates[dates.length - 1];
+  } else {
+    document.getElementById('printDateFrom').value = today();
+    document.getElementById('printDateTo').value = today();
+  }
+  updatePrintPreviewCount();
+  sel.onchange = updatePrintPreviewCount;
+  document.getElementById('printDateFrom').onchange = updatePrintPreviewCount;
+  document.getElementById('printDateTo').onchange = updatePrintPreviewCount;
+  openModal('photoPrintModal');
+};
+
+function getPrintTargetPhotos() {
+  const albumId = document.getElementById('printAlbumSelect').value;
+  const from = document.getElementById('printDateFrom').value;
+  const to = document.getElementById('printDateTo').value;
+  if (!albumId || !from || !to) return [];
+  return photos.filter(p => p.album_id === albumId && p.shot_date >= from && p.shot_date <= to);
+}
+
+function updatePrintPreviewCount() {
+  const list = getPrintTargetPhotos();
+  const dateCount = new Set(list.map(p => p.shot_date)).size;
+  document.getElementById('printPreviewCount').textContent =
+    list.length ? `대상: 사진 ${list.length}장 · ${dateCount}일치` : '선택한 기간에 사진이 없습니다';
+}
+
+// 이미지를 적당한 해상도로 리사이즈하여 Word 파일 용량을 줄임
+async function resizeImageForDocx(blob, maxDim = 900) {
+  const bitmap = await createImageBitmap(blob);
+  let { width, height } = bitmap;
+  if (width > maxDim || height > maxDim) {
+    const ratio = Math.min(maxDim / width, maxDim / height);
+    width = Math.round(width * ratio);
+    height = Math.round(height * ratio);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  const outBlob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
+  const buf = await outBlob.arrayBuffer();
+  return { buffer: new Uint8Array(buf), width, height };
+}
+
+window.generatePhotoLedgerDocx = async function() {
+  const list = getPrintTargetPhotos();
+  if (!list.length) { toast('선택한 기간에 사진이 없습니다', 'error'); return; }
+
+  const layout = document.querySelector('input[name="printLayout"]:checked').value; // '2x3' | '2x4'
+  const cols = 2;
+  const rows = layout === '2x4' ? 4 : 3;
+  const perPage = cols * rows;
+
+  const album = photoAlbums.find(a => a.id === document.getElementById('printAlbumSelect').value);
+  const btn = document.getElementById('photoPrintConfirmBtn');
+  btn.disabled = true; btn.textContent = '생성 중... (0%)';
+
+  try {
+    const docx = await import('https://esm.sh/docx@9');
+    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, ImageRun,
+            AlignmentType, WidthType, HeadingLevel, BorderStyle, ShadingType, PageBreak } = docx;
+
+    // 날짜별 그룹화, 오름차순 정렬
+    const byDate = {};
+    list.forEach(p => { (byDate[p.shot_date] ||= []).push(p); });
+    const dates = Object.keys(byDate).sort();
+
+    // 이미지 다운로드 + 리사이즈 (진행률 표시)
+    const imageCache = {};
+    let done = 0;
+    for (const p of list) {
+      const { data, error } = await supabase.storage.from('site-photos').download(p.file_path);
+      if (!error && data) {
+        try { imageCache[p.id] = await resizeImageForDocx(data); }
+        catch (e) { console.error('이미지 처리 실패', p.id, e); }
+      }
+      done++;
+      btn.textContent = `생성 중... (${Math.round(done / list.length * 90)}%)`;
+    }
+
+    const contentWidthDxa = 9360; // US Letter, 1인치 여백 기준
+    const cellWidthDxa = Math.floor(contentWidthDxa / cols);
+    const imgMaxWidthPx = layout === '2x4' ? 220 : 260;
+
+    const children = [];
+    children.push(new Paragraph({
+      heading: HeadingLevel.HEADING_1,
+      children: [new TextRun(`${currentWS.name} — ${album?.name || ''} 사진대지`)],
+    }));
+    children.push(new Paragraph({
+      children: [new TextRun({
+        text: `기간: ${document.getElementById('printDateFrom').value} ~ ${document.getElementById('printDateTo').value}  ·  생성일: ${today()}`,
+        size: 20, color: '64748B',
+      })],
+      spacing: { after: 300 },
+    }));
+
+    dates.forEach((d, dIdx) => {
+      if (dIdx > 0) children.push(new Paragraph({ children: [new PageBreak()] }));
+      const dLabel = new Date(d + 'T00:00:00').toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+      children.push(new Paragraph({
+        heading: HeadingLevel.HEADING_2,
+        children: [new TextRun(`${dLabel}`)],
+        spacing: { before: dIdx > 0 ? 0 : 100, after: 200 },
+      }));
+
+      const dayPhotos = byDate[d];
+      for (let pageStart = 0; pageStart < dayPhotos.length; pageStart += perPage) {
+        if (pageStart > 0) children.push(new Paragraph({ children: [new PageBreak()] }));
+        const pagePhotos = dayPhotos.slice(pageStart, pageStart + perPage);
+
+        const tableRows = [];
+        for (let r = 0; r < rows; r++) {
+          const rowCells = [];
+          for (let c = 0; c < cols; c++) {
+            const idx = r * cols + c;
+            const p = pagePhotos[idx];
+            const img = p ? imageCache[p.id] : null;
+            const cellChildren = [];
+            if (img) {
+              const dispW = imgMaxWidthPx;
+              const dispH = Math.round(img.height * (dispW / img.width));
+              cellChildren.push(new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new ImageRun({ data: img.buffer, transformation: { width: dispW, height: dispH }, type: 'jpg' })],
+              }));
+              cellChildren.push(new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: p.file_name, size: 14, color: '94A3B8' })],
+              }));
+            } else {
+              cellChildren.push(new Paragraph({ children: [new TextRun('')] }));
+            }
+            rowCells.push(new TableCell({
+              width: { size: cellWidthDxa, type: WidthType.DXA },
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' },
+                bottom: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' },
+                left: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' },
+                right: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' },
+              },
+              margins: { top: 120, bottom: 120, left: 100, right: 100 },
+              shading: { fill: 'FFFFFF', type: ShadingType.CLEAR },
+              children: cellChildren,
+            }));
+          }
+          tableRows.push(new TableRow({ children: rowCells }));
+        }
+
+        children.push(new Table({
+          width: { size: contentWidthDxa, type: WidthType.DXA },
+          columnWidths: Array(cols).fill(cellWidthDxa),
+          rows: tableRows,
+        }));
+      }
+    });
+
+    const doc = new Document({
+      styles: {
+        default: { document: { run: { font: 'Arial', size: 24 } } },
+        paragraphStyles: [
+          { id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', quickFormat: true,
+            run: { size: 32, bold: true, font: 'Arial' },
+            paragraph: { spacing: { before: 0, after: 120 }, outlineLevel: 0 } },
+          { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', quickFormat: true,
+            run: { size: 26, bold: true, font: 'Arial', color: '1D4ED8' },
+            paragraph: { spacing: { before: 200, after: 160 }, outlineLevel: 1 } },
+        ],
+      },
+      sections: [{
+        properties: {
+          page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } },
+        },
+        children,
+      }],
+    });
+
+    btn.textContent = '생성 중... (95%)';
+    const blob = await Packer.toBlob(doc);
+    downloadBlob(blob, `사진대지_${album?.name || ''}_${document.getElementById('printDateFrom').value}~${document.getElementById('printDateTo').value}.docx`);
+    closeModal('photoPrintModal');
+    toast('Word 파일이 생성됐습니다', 'success');
+  } catch (err) {
+    console.error(err);
+    toast('생성 실패: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '📄 Word 생성';
+  }
+};
+
+
+// ═══════════════════════════════════════════════
+// 작업환경측정 연간 체크리스트 (상/하반기)
+// ═══════════════════════════════════════════════
+let measureRounds = [];
+
+async function loadMeasureRounds() {
+  const year = new Date().getFullYear();
+  const { data, error } = await supabase.from('measure_rounds')
+    .select('*').eq('workspace_id', currentWS.id).eq('year', year);
+  if (error) { console.error(error); measureRounds = []; return; }
+  measureRounds = data || [];
+  renderMeasureRoundsChecklist();
+}
+
+function renderMeasureRoundsChecklist() {
+  const el = document.getElementById('measureRoundsChecklist');
+  if (!el) return;
+  const year = new Date().getFullYear();
+  const h1 = measureRounds.find(r => r.half === 'H1');
+  const h2 = measureRounds.find(r => r.half === 'H2');
+
+  const row = (half, label, rec) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border);">
+      <input type="checkbox" ${rec?.done ? 'checked' : ''} onchange="toggleMeasureRound('${half}', this.checked)" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;">
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:700;${rec?.done ? 'color:var(--ok);' : ''}">${year}년 ${label} 작업환경측정</div>
+        ${rec?.done && rec.done_date ? `<div style="font-size:12px;color:var(--text3);margin-top:2px;">완료일: ${rec.done_date}</div>` : `<div style="font-size:12px;color:var(--text3);margin-top:2px;">미완료</div>`}
+      </div>
+    </div>`;
+
+  el.innerHTML = row('H1', '상반기', h1) + row('H2', '하반기', h2);
+}
+
+window.toggleMeasureRound = async function(half, done) {
+  const year = new Date().getFullYear();
+  const payload = {
+    workspace_id: currentWS.id, year, half, done,
+    done_date: done ? today() : null,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from('measure_rounds').upsert(payload, { onConflict: 'workspace_id,year,half' });
+  if (error) { toast('저장 실패: ' + error.message, 'error'); return; }
+  await loadMeasureRounds();
+  toast(done ? '완료 처리됐습니다' : '미완료로 변경됐습니다', 'success');
+};
+
+// ═══════════════════════════════════════════════
+// 전체 협력사용 공용 업로드 링크
+// ═══════════════════════════════════════════════
+let publicLink = null;
+
+async function loadPublicLink() {
+  const { data, error } = await supabase.from('public_upload_links')
+    .select('*').eq('workspace_id', currentWS.id).maybeSingle();
+  if (error) { console.error(error); publicLink = null; return; }
+  publicLink = data || null;
+}
+
+function renderPublicLinkUI() {
+  const emptyEl = document.getElementById('publicLinkEmptyState');
+  const activeEl = document.getElementById('publicLinkActiveState');
+  if (!emptyEl || !activeEl) return;
+
+  if (!publicLink) {
+    emptyEl.style.display = '';
+    activeEl.style.display = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  activeEl.style.display = '';
+
+  const url = `${window.location.origin}/upload.html?ptoken=${publicLink.token}`;
+  document.getElementById('publicLinkUrl').textContent = url;
+  document.getElementById('publicLinkMeta').textContent = `발급일: ${new Date(publicLink.created_at).toLocaleDateString('ko-KR')}`;
+  document.getElementById('publicLinkAllowMsdsEdit').checked = publicLink.allow_msds;
+  document.getElementById('publicLinkAllowLicenseEdit').checked = publicLink.allow_license;
+}
+
+window.generatePublicUploadLink = async function() {
+  const allowMsds = document.getElementById('publicLinkAllowMsds').checked;
+  const allowLicense = document.getElementById('publicLinkAllowLicense').checked;
+  if (!allowMsds && !allowLicense) { toast('최소 하나는 선택해야 합니다', 'error'); return; }
+
+  const token = generateToken();
+  const { data, error } = await supabase.from('public_upload_links').insert({
+    workspace_id: currentWS.id, token, allow_msds: allowMsds, allow_license: allowLicense, created_by: user.id,
+  }).select().single();
+  if (error) { toast('발급 실패: ' + error.message, 'error'); return; }
+  publicLink = data;
+  renderPublicLinkUI();
+  toast('공용 링크가 발급됐습니다', 'success');
+};
+
+window.copyPublicLink = function() {
+  if (!publicLink) return;
+  const url = `${window.location.origin}/upload.html?ptoken=${publicLink.token}`;
+  copyLink(url);
+};
+
+window.revokePublicLink = async function() {
+  if (!publicLink) return;
+  if (!confirm('공용 링크를 삭제하면 더 이상 사용할 수 없습니다. 계속하시겠습니까?')) return;
+  await supabase.from('public_upload_links').delete().eq('id', publicLink.id);
+  publicLink = null;
+  renderPublicLinkUI();
+  toast('공용 링크가 삭제됐습니다');
+};
+
+window.updatePublicLinkSettings = async function() {
+  if (!publicLink) return;
+  const allowMsds = document.getElementById('publicLinkAllowMsdsEdit').checked;
+  const allowLicense = document.getElementById('publicLinkAllowLicenseEdit').checked;
+  if (!allowMsds && !allowLicense) {
+    toast('최소 하나는 선택해야 합니다', 'error');
+    document.getElementById('publicLinkAllowMsdsEdit').checked = publicLink.allow_msds;
+    document.getElementById('publicLinkAllowLicenseEdit').checked = publicLink.allow_license;
+    return;
+  }
+  const { error } = await supabase.from('public_upload_links')
+    .update({ allow_msds: allowMsds, allow_license: allowLicense }).eq('id', publicLink.id);
+  if (error) { toast('설정 변경 실패: ' + error.message, 'error'); return; }
+  publicLink.allow_msds = allowMsds;
+  publicLink.allow_license = allowLicense;
+  toast('설정이 변경됐습니다', 'success');
 };
