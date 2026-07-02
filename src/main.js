@@ -201,7 +201,7 @@ window.enterWorkspace = async function(wsId) {
   await Promise.all([loadContractors(), loadWorkTypes(), loadMembers(), loadTokens(), loadPublicLink()]);
   await loadMsdsRecords();
   await Promise.all([loadPlacementSnapshots(), loadTodos(), loadRoutineTasks(), loadBusinessLicenses(), loadMeasureRounds(), loadMeasureResults()]);
-  await loadPhotoAlbums();
+  await loadPhotoFolders();
   await loadPhotos();
   showPage('home');
 }
@@ -242,7 +242,7 @@ window.showPage = function(id) {
   if (id === 'upload-link') { renderTokenList(); renderPublicLinkUI(); }
   if (id === 'health') switchHealthSub('result');
   if (id === 'calendar') { loadCalendarEvents().then(renderCalendar); }
-  if (id === 'photos') { renderPhotoAlbumTabs(); renderPhotoDateFolders(); activeDateFolder = null; }
+  if (id === 'photos') { renderPhotoFolderTree(); renderPhotoMain(); }
   if (id === 'measure') { renderMeasureRoundsChecklist(); renderMeasureList(); }
   if (id === 'settings') { renderContractorTags(); loadMembers(); }
   document.getElementById('mainContent')?.scrollTo(0, 0);
@@ -521,45 +521,71 @@ function updateStats() {
 }
 
 function renderHomeDashboard() {
-  // MSDS 제출번호 확인 필요 알림
-  const subNoIssues = msdsRecords.filter(r => r.submission_no_valid === 'N');
-  const subWrap = document.getElementById('submissionNoAlertWrap');
-  const subList = document.getElementById('submissionNoAlertList');
-  if (subWrap && subList) {
-    if (subNoIssues.length > 0) {
-      subWrap.style.display = 'block';
-      subList.innerHTML = subNoIssues.slice(0, 8).map(r => `
-        <div class="alert-item">
-          <span><b>${r.product_name}</b> · ${r.contractor}${r.submission_no ? ` · 입력값: ${r.submission_no}` : ' · 제출번호 없음'}</span>
-          <button class="btn btn-warn btn-sm" onclick="showMsdsDetail('${r.id}')">확인하기</button>
-        </div>
-      `).join('') + (subNoIssues.length > 8 ? `<div style="font-size:12px;color:var(--text3);margin-top:6px;">외 ${subNoIssues.length - 8}건 더 — MSDS 대장에서 확인</div>` : '');
-    } else {
-      subWrap.style.display = 'none';
-    }
-  }
-
-  // 미수령 알림
+  // ① 경고 배너 — PDF 있고 재분석 안 한 것 + 사업자등록증 미제출 + MSDS 미수령
+  const subNoIssues = msdsRecords.filter(r => r.submission_no_valid === 'N' && r.has_pdf);
+  const licenseMissing = contractors.filter(c => !businessLicenses.some(l => l.contractor_id === c.id));
   const pending = msdsRecords.filter(r => r.receipt_status === 'pending');
-  const pendingAlert = document.getElementById('pendingAlert');
-  const pendingList = document.getElementById('pendingList');
-  if (pending.length > 0) {
-    pendingAlert.style.display = 'block';
-    const grouped = {};
-    pending.forEach(r => { if (!grouped[r.contractor]) grouped[r.contractor] = 0; grouped[r.contractor]++; });
-    pendingList.innerHTML = Object.entries(grouped).map(([con, cnt]) => {
-      const token = tokens.find(t => t.contractor?.name === con);
-      const url = token ? `${window.location.origin}/upload.html?token=${token.token}` : null;
-      return `<div class="alert-item">
-        <span><b>${con}</b> · ${cnt}건</span>
-        ${url ? `<button class="btn btn-warn btn-sm" onclick="copyLink('${url}')">링크 복사</button>` : '<span style="font-size:11px;color:var(--text3)">링크 없음</span>'}
-      </div>`;
-    }).join('');
+
+  const alertWrap = document.getElementById('dashAlertWrap');
+  const alertSummary = document.getElementById('dashAlertSummary');
+
+  const alerts = [];
+  if (subNoIssues.length) alerts.push(`MSDS 제출번호 미확인 ${subNoIssues.length}건`);
+  if (licenseMissing.length) alerts.push(`사업자등록증 미제출 ${licenseMissing.length}개사`);
+  if (pending.length) alerts.push(`MSDS 미수령 ${pending.length}건`);
+
+  if (alerts.length) {
+    alertWrap.style.display = 'block';
+    alertSummary.textContent = '⚠️ ' + alerts.join(' · ');
+
+    // MSDS 제출번호
+    const subInner = document.getElementById('submissionNoAlertInner');
+    const subList = document.getElementById('submissionNoAlertList');
+    if (subNoIssues.length) {
+      subInner.style.display = 'block';
+      subList.innerHTML = subNoIssues.slice(0, 6).map(r => `
+        <div class="alert-item">
+          <span><b>${r.product_name}</b> · ${r.contractor}</span>
+          <button class="btn btn-warn btn-sm" onclick="showMsdsDetail('${r.id}')">확인</button>
+        </div>`).join('') + (subNoIssues.length > 6 ? `<div style="font-size:12px;color:var(--warn);margin-top:4px;">외 ${subNoIssues.length-6}건</div>` : '');
+    } else { subInner.style.display = 'none'; }
+
+    // 사업자등록증
+    const licInner = document.getElementById('licenseAlertInner');
+    const licList = document.getElementById('licenseAlertList');
+    if (licenseMissing.length) {
+      licInner.style.display = 'block';
+      licList.innerHTML = licenseMissing.slice(0, 6).map(c => `
+        <div class="alert-item">
+          <span><b>${c.name}</b></span>
+          <button class="btn btn-warn btn-sm" onclick="showPage('settings')">관리</button>
+        </div>`).join('') + (licenseMissing.length > 6 ? `<div style="font-size:12px;color:var(--warn);margin-top:4px;">외 ${licenseMissing.length-6}개사</div>` : '');
+    } else { licInner.style.display = 'none'; }
+
+    // MSDS 미수령
+    const pendingInner = document.getElementById('pendingAlertInner');
+    const pendingList = document.getElementById('pendingList');
+    if (pending.length) {
+      pendingInner.style.display = 'block';
+      const grouped = {};
+      pending.forEach(r => { grouped[r.contractor] = (grouped[r.contractor]||0)+1; });
+      pendingList.innerHTML = Object.entries(grouped).slice(0,6).map(([con, cnt]) => {
+        const token = tokens.find(t => t.contractor?.name === con);
+        const url = token ? `${window.location.origin}/upload.html?token=${token.token}` : null;
+        return `<div class="alert-item">
+          <span><b>${con}</b> · ${cnt}건</span>
+          ${url ? `<button class="btn btn-warn btn-sm" onclick="copyLink('${url}')">링크 복사</button>` : '<span style="font-size:11px;color:var(--text3)">링크 없음</span>'}
+        </div>`;
+      }).join('') + (Object.keys(grouped).length > 6 ? `<div style="font-size:12px;color:var(--warn);margin-top:4px;">외 ${Object.keys(grouped).length-6}개사</div>` : '');
+    } else { pendingInner.style.display = 'none'; }
   } else {
-    pendingAlert.style.display = 'none';
+    alertWrap.style.display = 'none';
   }
 
-  // 최근 등록
+  // ② 이번 주 일정 (월~일 7칸)
+  renderDashWeekSchedule();
+
+  // ③ 최근 등록 MSDS
   const recent = msdsRecords.slice(0, 5);
   document.getElementById('recentMsdsList').innerHTML = recent.length === 0
     ? '<div style="color:var(--text3);font-size:13px;text-align:center;padding:20px;">등록된 물질이 없습니다</div>'
@@ -567,10 +593,52 @@ function renderHomeDashboard() {
         <div class="recent-icon">🧪</div>
         <div>
           <div class="recent-name">${r.product_name}</div>
-          <div class="recent-meta">${r.contractor} ${r.work_type ? '/ ' + r.work_type : ''} · ${r.legal_special === 'Y' ? '<span style="color:var(--danger)">특별관리물질</span>' : '일반'}</div>
+          <div class="recent-meta">${r.contractor} ${r.work_type ? '/ '+r.work_type : ''} · ${r.legal_special==='Y' ? '<span style="color:var(--danger)">특별관리물질</span>' : '일반'}</div>
         </div>
       </div>`).join('');
 }
+
+function renderDashWeekSchedule() {
+  const el = document.getElementById('dashWeekSchedule');
+  if (!el) return;
+  const now = new Date();
+  const dow = now.getDay(); // 0=일
+  const monday = new Date(now); monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
+  const days = Array.from({length: 7}, (_, i) => {
+    const d = new Date(monday); d.setDate(monday.getDate() + i);
+    return d;
+  });
+  const todayStr = today();
+  const dayLabels = ['월','화','수','목','금','토','일'];
+
+  el.innerHTML = `<div class="dash-week-row">${days.map((d, i) => {
+    const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const isToday = dStr === todayStr;
+    const isSun = i === 6;
+    const isSat = i === 5;
+    const dayEvs = calendarEvents.filter(e => e.event_date === dStr)
+      .sort((a,b)=>(a.start_time||'').localeCompare(b.start_time||''));
+
+    const numEl = isToday
+      ? `<div class="dash-day-today-marker">${d.getDate()}</div>`
+      : `<div style="text-align:center;font-size:11px;color:${isSun?'#DC2626':isSat?'#2563EB':'var(--text3)'};margin-bottom:4px;">${d.getDate()}</div>`;
+
+    return `<div class="dash-day-col">
+      <div class="dash-day-label ${isToday?'today':''} ${isSun?'sun':''} ${isSat?'sat':''}">${dayLabels[i]}</div>
+      ${numEl}
+      ${dayEvs.slice(0,3).map(ev=>`<div class="dash-day-event" style="background:${ev.color||'#EFF6FF'};color:${ev.color?'#fff':'var(--primary)'};" onclick="showPage('calendar')" title="${ev.title}">${ev.start_time?ev.start_time.slice(0,5)+' ':''}${ev.title}</div>`).join('')}
+      ${dayEvs.length>3?`<div style="font-size:10px;color:var(--text3);text-align:center;">+${dayEvs.length-3}</div>`:''}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+let dashAlertsOpen = false;
+window.toggleDashAlerts = function() {
+  dashAlertsOpen = !dashAlertsOpen;
+  document.getElementById('dashAlertDetail').style.display = dashAlertsOpen ? 'block' : 'none';
+  document.getElementById('dashAlertToggleIcon').textContent = dashAlertsOpen ? '▴ 접기' : '▾ 펼치기';
+};
+
 
 // ═══════════════════════════════════════════════
 // MSDS Table
@@ -2932,24 +3000,24 @@ window.downloadAllLicenses = async function() {
 };
 
 // ═══════════════════════════════════════════════
-// 사진 클라우드 (주제별 + 날짜별 증빙 사진첩, 드래그앤드롭 이동)
+// 사진 클라우드 (폴더 트리 + 무한 뎁스)
 // ═══════════════════════════════════════════════
-const PHOTO_PRESET_ALBUMS = ['휴게시간', '휴게실', '보냉장구', '그늘막', '식염포도당/음용수', '안전보건교육'];
+const PHOTO_FOLDER_PRESETS = ['혹서기', '휴게시간', '휴게실', '보냉장구', '그늘막', '식염포도당/음용수', '안전보건교육', '추락방지', '안전보건교육'];
 
-let photoAlbums = [];
-let photos = [];
-let activeAlbumId = null;
-let activeDateFolder = null;
+let photoFolders = [];      // 전체 폴더 목록 (flat)
+let photos = [];            // 전체 사진 목록
+let activeFolderId = null;  // 현재 선택된 폴더
+let openFolderIds = new Set(); // 펼쳐진 폴더 집합
 let photoThumbUrlCache = {};
 let pendingUploadFiles = [];
 let draggedPhotoId = null;
+let addFolderParentId = null; // 폴더 추가 시 부모 폴더
 
-async function loadPhotoAlbums() {
-  const { data, error } = await supabase.from('photo_albums')
+async function loadPhotoFolders() {
+  const { data, error } = await supabase.from('photo_folders')
     .select('*').eq('workspace_id', currentWS.id).order('sort_order');
-  if (error) { console.error(error); photoAlbums = []; return; }
-  photoAlbums = data || [];
-  if (!activeAlbumId && photoAlbums.length) activeAlbumId = photoAlbums[0].id;
+  if (error) { console.error(error); photoFolders = []; return; }
+  photoFolders = data || [];
 }
 
 async function loadPhotos() {
@@ -2959,125 +3027,127 @@ async function loadPhotos() {
   photos = data || [];
 }
 
-function renderPhotoAlbumTabs() {
-  const wrap = document.getElementById('photoAlbumTabs');
-  const emptyEl = document.getElementById('photoAlbumEmpty');
-  if (!wrap) return;
-
-  if (!photoAlbums.length) {
-    wrap.innerHTML = '';
-    emptyEl.style.display = '';
-    document.getElementById('photoDateFolderView').style.display = 'none';
-    document.getElementById('photoFolderDetailView').style.display = 'none';
+// ─── 폴더 트리 렌더링 ───
+function renderPhotoFolderTree() {
+  const el = document.getElementById('photoFolderTree');
+  if (!el) return;
+  const roots = photoFolders.filter(f => !f.parent_id);
+  if (!roots.length) {
+    el.innerHTML = `<div style="padding:20px 14px;font-size:12.5px;color:var(--text3);text-align:center;">폴더가 없습니다<br>위 + 버튼으로 만들어보세요</div>`;
+    document.getElementById('photoMainEmpty').style.display = '';
+    document.getElementById('photoMainContent').style.display = 'none';
     document.getElementById('photoUploadBtn').disabled = true;
     return;
   }
-  emptyEl.style.display = 'none';
-  document.getElementById('photoUploadBtn').disabled = false;
+  document.getElementById('photoUploadBtn').disabled = !activeFolderId;
+  el.innerHTML = `<div class="photo-folder-tree">${renderFolderItems(roots, 0)}</div>`;
+}
 
-  wrap.innerHTML = photoAlbums.map(a => {
-    const cnt = photos.filter(p => p.album_id === a.id).length;
-    return `<button class="album-chip ${a.id === activeAlbumId ? 'active' : ''}" id="albumChip_${a.id}"
-        onclick="switchAlbum('${a.id}')"
-        ondragover="event.preventDefault();this.classList.add('drag-over')"
-        ondragleave="this.classList.remove('drag-over')"
-        ondrop="handleDropOnAlbum(event,'${a.id}')">
-      ${a.name} <span class="count">${cnt}</span>
-      ${!a.is_preset ? `<span onclick="event.stopPropagation();deleteAlbum('${a.id}')" style="margin-left:4px;opacity:.6;">✕</span>` : ''}
-    </button>`;
+function renderFolderItems(items, depth) {
+  return items.map(f => {
+    const children = photoFolders.filter(c => c.parent_id === f.id);
+    const hasChildren = children.length > 0;
+    const isOpen = openFolderIds.has(f.id);
+    const isActive = f.id === activeFolderId;
+    const photoCount = getDescendantPhotoCount(f.id);
+    const indent = depth * 14;
+    return `<div>
+      <div class="tree-item ${isActive ? 'active' : ''}" style="padding-left:${12 + indent}px;"
+          onclick="selectPhotoFolder('${f.id}')"
+          ondragover="event.preventDefault();this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="handleDropOnFolder(event,'${f.id}')">
+        <span class="tree-toggle" onclick="event.stopPropagation();toggleFolderOpen('${f.id}')">
+          ${hasChildren ? (isOpen ? '▾' : '▸') : ''}
+        </span>
+        <span style="margin-right:4px;">📁</span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span>
+        <span style="font-size:11px;color:var(--text3);margin-left:4px;">${photoCount||''}</span>
+      </div>
+      <div class="tree-children ${isOpen ? 'open' : ''}">
+        ${hasChildren ? renderFolderItems(children, depth + 1) : ''}
+      </div>
+    </div>`;
   }).join('');
 }
 
-window.switchAlbum = function(id) {
-  activeAlbumId = id;
-  activeDateFolder = null;
-  renderPhotoAlbumTabs();
-  renderPhotoDateFolders();
+function getDescendantPhotoCount(folderId) {
+  const childIds = getAllDescendantIds(folderId);
+  childIds.push(folderId);
+  return photos.filter(p => childIds.includes(p.folder_id)).length;
+}
+
+function getAllDescendantIds(folderId) {
+  const children = photoFolders.filter(f => f.parent_id === folderId);
+  let ids = children.map(f => f.id);
+  children.forEach(c => { ids = ids.concat(getAllDescendantIds(c.id)); });
+  return ids;
+}
+
+window.toggleFolderOpen = function(id) {
+  if (openFolderIds.has(id)) openFolderIds.delete(id);
+  else openFolderIds.add(id);
+  renderPhotoFolderTree();
 };
 
-window.deleteAlbum = async function(id) {
-  const album = photoAlbums.find(a => a.id === id);
-  if (!album) return;
-  const cnt = photos.filter(p => p.album_id === id).length;
-  if (!confirm(`"${album.name}" 주제를 삭제하시겠습니까?${cnt ? ` (사진 ${cnt}장도 함께 삭제됩니다)` : ''}`)) return;
+window.selectPhotoFolder = function(id) {
+  activeFolderId = id;
+  openFolderIds.add(id);
+  document.getElementById('photoUploadBtn').disabled = false;
+  renderPhotoFolderTree();
+  renderPhotoMain();
+};
 
-  const toRemove = photos.filter(p => p.album_id === id);
-  if (toRemove.length) {
-    await supabase.storage.from('site-photos').remove(toRemove.map(p => p.file_path));
+function renderPhotoMain() {
+  const emptyEl = document.getElementById('photoMainEmpty');
+  const contentEl = document.getElementById('photoMainContent');
+  if (!activeFolderId) {
+    emptyEl.style.display = '';
+    contentEl.style.display = 'none';
+    return;
   }
-  await supabase.from('photo_albums').delete().eq('id', id);
-  if (activeAlbumId === id) activeAlbumId = null;
-  await loadPhotoAlbums();
-  await loadPhotos();
-  renderPhotoAlbumTabs();
-  renderPhotoDateFolders();
-  toast('삭제됐습니다');
-};
+  emptyEl.style.display = 'none';
+  contentEl.style.display = '';
 
-function renderPhotoDateFolders() {
-  const grid = document.getElementById('photoDateFolderGrid');
-  if (!grid) return;
-  document.getElementById('photoDateFolderView').style.display = '';
-  document.getElementById('photoFolderDetailView').style.display = 'none';
-  if (!activeAlbumId) { grid.innerHTML = ''; return; }
+  const folder = photoFolders.find(f => f.id === activeFolderId);
+  const breadcrumb = getFolderBreadcrumb(activeFolderId).join(' / ');
+  document.getElementById('photoMainTitle').textContent = breadcrumb;
 
-  const albumPhotos = photos.filter(p => p.album_id === activeAlbumId);
-  if (!albumPhotos.length) {
-    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px 20px;color:var(--text3);">
-      <div style="font-size:36px;margin-bottom:10px;">🖼️</div>
-      <div style="font-size:14px;">이 주제에 등록된 사진이 없습니다</div>
+  // 날짜별 그룹
+  const folderPhotos = photos.filter(p => p.folder_id === activeFolderId);
+  const dateGroups = document.getElementById('photoDateGroups');
+  if (!folderPhotos.length) {
+    dateGroups.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text3);">
+      <div style="font-size:32px;margin-bottom:8px;">🖼️</div>
+      <div style="font-size:14px;">이 폴더에 사진이 없습니다</div>
     </div>`;
     return;
   }
-
   const byDate = {};
-  albumPhotos.forEach(p => { (byDate[p.shot_date] ||= []).push(p); });
-  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
-
-  grid.innerHTML = dates.map(d => {
-    const dLabel = new Date(d + 'T00:00:00').toLocaleDateString('ko-KR', { month:'long', day:'numeric', weekday:'short' });
-    return `<div class="date-folder" id="dateFolder_${d}"
-        onclick="openDateFolder('${d}')"
-        ondragover="event.preventDefault();this.classList.add('drag-over')"
-        ondragleave="this.classList.remove('drag-over')"
-        ondrop="handleDropOnDateFolder(event,'${d}')">
-      <div class="date-folder-icon">📁</div>
-      <div class="date-folder-label">${dLabel}</div>
-      <div class="date-folder-count">${byDate[d].length}장</div>
+  folderPhotos.forEach(p => { (byDate[p.shot_date] ||= []).push(p); });
+  const dates = Object.keys(byDate).sort((a,b) => b.localeCompare(a));
+  dateGroups.innerHTML = dates.map(d => {
+    const dLabel = new Date(d + 'T00:00:00').toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+    return `<div class="photo-date-group">
+      <div class="photo-date-label">${dLabel} <span style="font-weight:500;color:var(--text3);">(${byDate[d].length}장)</span></div>
+      <div class="photo-grid">${byDate[d].map(p => `
+        <div class="photo-thumb" draggable="true" id="photo_${p.id}"
+            onclick="openPhotoViewer('${p.id}')"
+            ondragstart="handlePhotoDragStart(event,'${p.id}')"
+            ondragend="handlePhotoDragEnd(event)">
+          <img src="${photoThumbUrlCache[p.id]||''}" data-photo-id="${p.id}" loading="lazy">
+        </div>`).join('')}
+      </div>
     </div>`;
   }).join('');
+  loadPhotoThumbnails(folderPhotos);
 }
 
-window.openDateFolder = function(dateStr) {
-  activeDateFolder = dateStr;
-  document.getElementById('photoDateFolderView').style.display = 'none';
-  document.getElementById('photoFolderDetailView').style.display = '';
-  const album = photoAlbums.find(a => a.id === activeAlbumId);
-  const dLabel = new Date(dateStr + 'T00:00:00').toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
-  document.getElementById('photoFolderDetailTitle').textContent = `${album?.name || ''} · ${dLabel}`;
-  renderPhotoFolderDetail();
-};
-
-window.closeDateFolder = function() {
-  activeDateFolder = null;
-  renderPhotoDateFolders();
-};
-
-function renderPhotoFolderDetail() {
-  const grid = document.getElementById('photoFolderDetailGrid');
-  if (!grid || !activeDateFolder) return;
-  const list = photos.filter(p => p.album_id === activeAlbumId && p.shot_date === activeDateFolder);
-
-  grid.innerHTML = list.map(p => `
-    <div class="photo-thumb" draggable="true" id="photo_${p.id}"
-        onclick="openPhotoViewer('${p.id}')"
-        ondragstart="handlePhotoDragStart(event,'${p.id}')"
-        ondragend="handlePhotoDragEnd(event)">
-      <img src="${photoThumbUrlCache[p.id] || ''}" data-photo-id="${p.id}" loading="lazy">
-    </div>
-  `).join('');
-
-  loadPhotoThumbnails(list);
+function getFolderBreadcrumb(folderId) {
+  const f = photoFolders.find(x => x.id === folderId);
+  if (!f) return [];
+  if (!f.parent_id) return [f.name];
+  return [...getFolderBreadcrumb(f.parent_id), f.name];
 }
 
 async function loadPhotoThumbnails(list) {
@@ -3096,97 +3166,92 @@ async function loadPhotoThumbnails(list) {
   }
 }
 
+// ─── 드래그앤드롭 ───
 window.handlePhotoDragStart = function(e, photoId) {
   draggedPhotoId = photoId;
   e.dataTransfer.effectAllowed = 'move';
   document.getElementById(`photo_${photoId}`)?.classList.add('dragging');
 };
-window.handlePhotoDragEnd = function(e) {
+window.handlePhotoDragEnd = function() {
   document.getElementById(`photo_${draggedPhotoId}`)?.classList.remove('dragging');
   draggedPhotoId = null;
 };
 
-window.handleDropOnDateFolder = async function(e, targetDate) {
+window.handleDropOnFolder = async function(e, targetFolderId) {
   e.preventDefault();
   e.currentTarget.classList.remove('drag-over');
   if (!draggedPhotoId) return;
   const p = photos.find(x => x.id === draggedPhotoId);
-  if (!p || p.shot_date === targetDate) return;
-
-  const { error } = await supabase.from('photos').update({ shot_date: targetDate }).eq('id', draggedPhotoId);
-  if (error) { toast('이동 실패: ' + error.message, 'error'); return; }
+  if (!p || p.folder_id === targetFolderId) return;
+  await supabase.from('photos').update({ folder_id: targetFolderId }).eq('id', draggedPhotoId);
   await loadPhotos();
-  renderPhotoAlbumTabs();
-  if (activeDateFolder) renderPhotoFolderDetail();
-  else renderPhotoDateFolders();
-  toast('날짜를 이동했습니다', 'success');
+  renderPhotoFolderTree();
+  renderPhotoMain();
+  toast('사진을 이동했습니다', 'success');
 };
 
-window.handleDropOnAlbum = async function(e, targetAlbumId) {
-  e.preventDefault();
-  e.currentTarget.classList.remove('drag-over');
-  if (!draggedPhotoId) return;
-  const p = photos.find(x => x.id === draggedPhotoId);
-  if (!p || p.album_id === targetAlbumId) return;
+// ─── 폴더 추가/삭제 ───
+window.openAddFolderModal = function(parentId) {
+  addFolderParentId = parentId;
+  const parent = parentId ? photoFolders.find(f => f.id === parentId) : null;
+  document.getElementById('addFolderModalTitle').textContent = parent ? `"${parent.name}" 안에 새 폴더` : '새 폴더';
+  document.getElementById('newFolderName').value = '';
 
-  const { error } = await supabase.from('photos').update({ album_id: targetAlbumId }).eq('id', draggedPhotoId);
-  if (error) { toast('이동 실패: ' + error.message, 'error'); return; }
-  const targetName = photoAlbums.find(a => a.id === targetAlbumId)?.name || '';
-  await loadPhotos();
-  renderPhotoAlbumTabs();
-  if (activeDateFolder) renderPhotoFolderDetail();
-  else renderPhotoDateFolders();
-  toast(`"${targetName}" 주제로 이동했습니다`, 'success');
+  // 사전 정의 폴더 칩 (이미 있는 것 제외)
+  const existing = new Set(photoFolders.filter(f => f.parent_id === parentId).map(f => f.name));
+  const chips = PHOTO_FOLDER_PRESETS.filter(n => !existing.has(n));
+  document.getElementById('folderPresetChips').innerHTML = chips.map(n =>
+    `<span class="tag" style="cursor:pointer;" onclick="document.getElementById('newFolderName').value='${n}'">${n}</span>`
+  ).join('');
+  openModal('addFolderModal');
 };
 
-window.openAddAlbumModal = function() {
-  const existing = new Set(photoAlbums.map(a => a.name));
-  const chips = PHOTO_PRESET_ALBUMS.filter(n => !existing.has(n));
-  const wrap = document.getElementById('presetAlbumChips');
-  if (!chips.length) {
-    wrap.innerHTML = `<div style="font-size:12.5px;color:var(--text3);">기본 제공 주제를 모두 추가하셨습니다</div>`;
-  } else {
-    wrap.innerHTML = chips.map(n => `<span class="tag" style="cursor:pointer;" onclick="addPresetAlbum('${n}')">+ ${n}</span>`).join('');
-  }
-  document.getElementById('customAlbumName').value = '';
-  openModal('addAlbumModal');
-};
-
-window.addPresetAlbum = async function(name) {
-  const { error } = await supabase.from('photo_albums').insert({
-    workspace_id: currentWS.id, name, is_preset: true, sort_order: photoAlbums.length,
+window.confirmAddFolder = async function() {
+  const name = document.getElementById('newFolderName').value.trim();
+  if (!name) { toast('폴더 이름을 입력하세요', 'error'); return; }
+  const { error } = await supabase.from('photo_folders').insert({
+    workspace_id: currentWS.id, name, parent_id: addFolderParentId || null,
+    sort_order: photoFolders.filter(f => f.parent_id === (addFolderParentId || null)).length,
   });
   if (error) { toast('추가 실패: ' + error.message, 'error'); return; }
-  await loadPhotoAlbums();
-  renderPhotoAlbumTabs();
-  renderPhotoDateFolders();
-  closeModal('addAlbumModal');
-  toast(`"${name}" 주제가 추가됐습니다`, 'success');
+  if (addFolderParentId) openFolderIds.add(addFolderParentId);
+  await loadPhotoFolders();
+  renderPhotoFolderTree();
+  closeModal('addFolderModal');
+  toast(`"${name}" 폴더가 추가됐습니다`, 'success');
 };
 
-window.addCustomAlbum = async function() {
-  const name = document.getElementById('customAlbumName').value.trim();
-  if (!name) { toast('주제명을 입력하세요', 'error'); return; }
-  const { error } = await supabase.from('photo_albums').insert({
-    workspace_id: currentWS.id, name, is_preset: false, sort_order: photoAlbums.length,
-  });
-  if (error) { toast('추가 실패 (중복된 이름일 수 있습니다): ' + error.message, 'error'); return; }
-  await loadPhotoAlbums();
-  renderPhotoAlbumTabs();
-  renderPhotoDateFolders();
-  closeModal('addAlbumModal');
-  toast(`"${name}" 주제가 추가됐습니다`, 'success');
+window.deleteCurrentFolder = async function() {
+  if (!activeFolderId) return;
+  const f = photoFolders.find(x => x.id === activeFolderId);
+  if (!f) return;
+  const descIds = getAllDescendantIds(activeFolderId);
+  descIds.push(activeFolderId);
+  const totalPhotos = photos.filter(p => descIds.includes(p.folder_id)).length;
+  if (!confirm(`"${f.name}" 폴더${descIds.length > 1 ? ` (하위 폴더 ${descIds.length - 1}개 포함)` : ''}를 삭제하시겠습니까?${totalPhotos ? ` 사진 ${totalPhotos}장도 함께 삭제됩니다.` : ''}`)) return;
+
+  // 사진 스토리지 삭제
+  const toDelete = photos.filter(p => descIds.includes(p.folder_id));
+  if (toDelete.length) await supabase.storage.from('site-photos').remove(toDelete.map(p => p.file_path));
+  // 폴더 삭제 (cascade로 하위 폴더+사진 DB 레코드도 삭제됨)
+  await supabase.from('photo_folders').delete().eq('id', activeFolderId);
+  activeFolderId = null;
+  await loadPhotoFolders();
+  await loadPhotos();
+  renderPhotoFolderTree();
+  renderPhotoMain();
+  toast('폴더가 삭제됐습니다');
 };
 
+// ─── 사진 업로드 (날짜 지정) ───
 window.openPhotoUploadModal = function() {
-  if (!activeAlbumId) { toast('먼저 주제를 선택하세요', 'error'); return; }
+  if (!activeFolderId) { toast('먼저 폴더를 선택하세요', 'error'); return; }
   pendingUploadFiles = [];
-  document.getElementById('photoUploadDate').value = activeDateFolder || today();
+  document.getElementById('photoUploadDate').value = today();
   document.getElementById('photoUploadFileList').innerHTML = '';
   document.getElementById('photoUploadConfirmBtn').disabled = true;
   document.getElementById('photoUploadFileInput').value = '';
   openModal('photoUploadModal');
-  // 모달이 열리면 붙여넣기를 바로 받을 수 있도록 드롭존에 포커스
   setTimeout(() => document.getElementById('photoUploadDropZone')?.focus(), 50);
 };
 
@@ -3210,7 +3275,6 @@ window.handlePhotoFilesSelected = function(e) {
   renderPendingUploadList();
 };
 
-// 클립보드 붙여넣기 (카카오톡 등에서 복사한 이미지를 Ctrl+V로 바로 추가)
 window.handlePhotoPaste = function(e) {
   const items = e.clipboardData?.items;
   if (!items) return;
@@ -3226,18 +3290,14 @@ window.handlePhotoPaste = function(e) {
       }
     }
   }
-  if (added > 0) {
-    e.preventDefault();
-    renderPendingUploadList();
-    toast(`이미지 ${added}장이 추가됐습니다`, 'success');
-  }
+  if (added > 0) { e.preventDefault(); renderPendingUploadList(); toast(`이미지 ${added}장이 추가됐습니다`, 'success'); }
 };
 
 window.confirmPhotoUpload = async function() {
   const shotDate = document.getElementById('photoUploadDate').value;
   if (!shotDate) { toast('날짜를 선택하세요', 'error'); return; }
   if (!pendingUploadFiles.length) { toast('파일을 선택하거나 붙여넣으세요', 'error'); return; }
-  if (!activeAlbumId) { toast('주제를 먼저 선택하세요', 'error'); return; }
+  if (!activeFolderId) { toast('폴더를 먼저 선택하세요', 'error'); return; }
 
   const btn = document.getElementById('photoUploadConfirmBtn');
   btn.disabled = true; btn.textContent = '업로드 중...';
@@ -3246,11 +3306,11 @@ window.confirmPhotoUpload = async function() {
   for (const file of pendingUploadFiles) {
     try {
       const ext = file.name.split('.').pop();
-      const path = `${currentWS.id}/${activeAlbumId}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+      const path = `${currentWS.id}/${activeFolderId}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
       const { error: upErr } = await supabase.storage.from('site-photos').upload(path, file, { contentType: file.type });
       if (upErr) throw upErr;
       const { error: dbErr } = await supabase.from('photos').insert({
-        workspace_id: currentWS.id, album_id: activeAlbumId, uploaded_by: user.id,
+        workspace_id: currentWS.id, folder_id: activeFolderId, uploaded_by: user.id,
         file_path: path, file_name: file.name, shot_date: shotDate,
       });
       if (dbErr) throw dbErr;
@@ -3261,22 +3321,21 @@ window.confirmPhotoUpload = async function() {
   btn.disabled = false; btn.textContent = '업로드';
   closeModal('photoUploadModal');
   await loadPhotos();
-  renderPhotoAlbumTabs();
-  if (activeDateFolder === shotDate) renderPhotoFolderDetail();
-  else renderPhotoDateFolders();
-  toast(`${success}장 업로드 완료${success < pendingUploadFiles.length ? ` (${pendingUploadFiles.length - success}장 실패)` : ''}`, success === pendingUploadFiles.length ? 'success' : 'warn');
+  renderPhotoFolderTree();
+  renderPhotoMain();
+  toast(`${success}장 업로드 완료`, success === pendingUploadFiles.length ? 'success' : 'warn');
 };
 
+// ─── 사진 뷰어 ───
 let viewingPhotoId = null;
 window.openPhotoViewer = async function(photoId) {
   const p = photos.find(x => x.id === photoId);
   if (!p) return;
   viewingPhotoId = photoId;
-  const album = photoAlbums.find(a => a.id === p.album_id);
-  document.getElementById('photoViewTitle').textContent = `${album?.name || ''} · ${p.shot_date}`;
+  const folder = photoFolders.find(f => f.id === p.folder_id);
+  document.getElementById('photoViewTitle').textContent = `${folder?.name || ''} · ${p.shot_date}`;
   document.getElementById('photoViewImg').src = photoThumbUrlCache[p.id] || '';
-  document.getElementById('photoViewMeta').textContent =
-    `촬영(작업)일: ${p.shot_date} · 업로드: ${new Date(p.created_at).toLocaleString('ko-KR')} · 파일명: ${p.file_name}`;
+  document.getElementById('photoViewMeta').textContent = `촬영일: ${p.shot_date} · 업로드: ${new Date(p.created_at).toLocaleString('ko-KR')} · ${p.file_name}`;
   if (!photoThumbUrlCache[p.id]) {
     const { data } = await supabase.storage.from('site-photos').createSignedUrl(p.file_path, 3600);
     if (data) { photoThumbUrlCache[p.id] = data.signedUrl; document.getElementById('photoViewImg').src = data.signedUrl; }
@@ -3293,24 +3352,24 @@ window.deletePhotoFromViewer = async function() {
   await supabase.from('photos').delete().eq('id', p.id);
   closeModal('photoViewModal');
   await loadPhotos();
-  renderPhotoAlbumTabs();
-  if (activeDateFolder) renderPhotoFolderDetail();
-  else renderPhotoDateFolders();
+  renderPhotoFolderTree();
+  renderPhotoMain();
   toast('삭제됐습니다');
 };
 
-// ─── 사진대지 인쇄 (Word) ───
+// ─── 사진대지 인쇄 ───
 window.openPhotoPrintModal = function() {
-  if (!photoAlbums.length) { toast('먼저 주제를 추가하세요', 'error'); return; }
+  if (!photoFolders.length) { toast('먼저 폴더를 추가하세요', 'error'); return; }
   const sel = document.getElementById('printAlbumSelect');
-  sel.innerHTML = photoAlbums.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
-  if (activeAlbumId) sel.value = activeAlbumId;
+  sel.innerHTML = photoFolders.map(f => {
+    const breadcrumb = getFolderBreadcrumb(f.id).join(' / ');
+    return `<option value="${f.id}">${breadcrumb}</option>`;
+  }).join('');
+  if (activeFolderId) sel.value = activeFolderId;
 
-  // 기본 기간: 이 주제에 사진이 있는 가장 이른 날~가장 늦은 날
-  const albumId = sel.value;
-  const albumPhotos = photos.filter(p => p.album_id === albumId);
-  if (albumPhotos.length) {
-    const dates = albumPhotos.map(p => p.shot_date).sort();
+  const fPhotos = photos.filter(p => p.folder_id === sel.value);
+  if (fPhotos.length) {
+    const dates = fPhotos.map(p => p.shot_date).sort();
     document.getElementById('printDateFrom').value = dates[0];
     document.getElementById('printDateTo').value = dates[dates.length - 1];
   } else {
@@ -3325,11 +3384,11 @@ window.openPhotoPrintModal = function() {
 };
 
 function getPrintTargetPhotos() {
-  const albumId = document.getElementById('printAlbumSelect').value;
+  const folderId = document.getElementById('printAlbumSelect').value;
   const from = document.getElementById('printDateFrom').value;
   const to = document.getElementById('printDateTo').value;
-  if (!albumId || !from || !to) return [];
-  return photos.filter(p => p.album_id === albumId && p.shot_date >= from && p.shot_date <= to);
+  if (!folderId || !from || !to) return [];
+  return photos.filter(p => p.folder_id === folderId && p.shot_date >= from && p.shot_date <= to);
 }
 
 function updatePrintPreviewCount() {
@@ -3339,19 +3398,16 @@ function updatePrintPreviewCount() {
     list.length ? `대상: 사진 ${list.length}장 · ${dateCount}일치` : '선택한 기간에 사진이 없습니다';
 }
 
-// 이미지를 적당한 해상도로 리사이즈하여 Word 파일 용량을 줄임
 async function resizeImageForDocx(blob, maxDim = 900) {
   const bitmap = await createImageBitmap(blob);
   let { width, height } = bitmap;
   if (width > maxDim || height > maxDim) {
     const ratio = Math.min(maxDim / width, maxDim / height);
-    width = Math.round(width * ratio);
-    height = Math.round(height * ratio);
+    width = Math.round(width * ratio); height = Math.round(height * ratio);
   }
   const canvas = document.createElement('canvas');
   canvas.width = width; canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(bitmap, 0, 0, width, height);
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
   const outBlob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
   const buf = await outBlob.arrayBuffer();
   return { buffer: new Uint8Array(buf), width, height };
@@ -3360,149 +3416,73 @@ async function resizeImageForDocx(blob, maxDim = 900) {
 window.generatePhotoLedgerDocx = async function() {
   const list = getPrintTargetPhotos();
   if (!list.length) { toast('선택한 기간에 사진이 없습니다', 'error'); return; }
-
-  const layout = document.querySelector('input[name="printLayout"]:checked').value; // '2x3' | '2x4'
-  const cols = 2;
-  const rows = layout === '2x4' ? 4 : 3;
-  const perPage = cols * rows;
-
-  const album = photoAlbums.find(a => a.id === document.getElementById('printAlbumSelect').value);
+  const layout = document.querySelector('input[name="printLayout"]:checked').value;
+  const cols = 2, rows = layout === '2x4' ? 4 : 3, perPage = cols * rows;
+  const folderId = document.getElementById('printAlbumSelect').value;
+  const folderName = getFolderBreadcrumb(folderId).join(' / ');
   const btn = document.getElementById('photoPrintConfirmBtn');
   btn.disabled = true; btn.textContent = '생성 중... (0%)';
-
   try {
     const docx = await import('https://esm.sh/docx@9');
     const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, ImageRun,
             AlignmentType, WidthType, HeadingLevel, BorderStyle, ShadingType, PageBreak } = docx;
-
-    // 날짜별 그룹화, 오름차순 정렬
     const byDate = {};
     list.forEach(p => { (byDate[p.shot_date] ||= []).push(p); });
     const dates = Object.keys(byDate).sort();
-
-    // 이미지 다운로드 + 리사이즈 (진행률 표시)
     const imageCache = {};
     let done = 0;
     for (const p of list) {
       const { data, error } = await supabase.storage.from('site-photos').download(p.file_path);
-      if (!error && data) {
-        try { imageCache[p.id] = await resizeImageForDocx(data); }
-        catch (e) { console.error('이미지 처리 실패', p.id, e); }
-      }
+      if (!error && data) { try { imageCache[p.id] = await resizeImageForDocx(data); } catch(e) { console.error(e); } }
       done++;
-      btn.textContent = `생성 중... (${Math.round(done / list.length * 90)}%)`;
+      btn.textContent = `생성 중... (${Math.round(done/list.length*90)}%)`;
     }
-
-    const contentWidthDxa = 9360; // US Letter, 1인치 여백 기준
-    const cellWidthDxa = Math.floor(contentWidthDxa / cols);
+    const contentWidthDxa = 9360, cellWidthDxa = Math.floor(contentWidthDxa/cols);
     const imgMaxWidthPx = layout === '2x4' ? 220 : 260;
-
     const children = [];
-    children.push(new Paragraph({
-      heading: HeadingLevel.HEADING_1,
-      children: [new TextRun(`${currentWS.name} — ${album?.name || ''} 사진대지`)],
-    }));
-    children.push(new Paragraph({
-      children: [new TextRun({
-        text: `기간: ${document.getElementById('printDateFrom').value} ~ ${document.getElementById('printDateTo').value}  ·  생성일: ${today()}`,
-        size: 20, color: '64748B',
-      })],
-      spacing: { after: 300 },
-    }));
-
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(`${currentWS.name} — ${folderName} 사진대지`)] }));
+    children.push(new Paragraph({ children: [new TextRun({ text: `기간: ${document.getElementById('printDateFrom').value} ~ ${document.getElementById('printDateTo').value}  ·  생성일: ${today()}`, size: 20, color: '64748B' })], spacing: { after: 300 } }));
     dates.forEach((d, dIdx) => {
       if (dIdx > 0) children.push(new Paragraph({ children: [new PageBreak()] }));
       const dLabel = new Date(d + 'T00:00:00').toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
-      children.push(new Paragraph({
-        heading: HeadingLevel.HEADING_2,
-        children: [new TextRun(`${dLabel}`)],
-        spacing: { before: dIdx > 0 ? 0 : 100, after: 200 },
-      }));
-
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun(dLabel)], spacing: { before: dIdx > 0 ? 0 : 100, after: 200 } }));
       const dayPhotos = byDate[d];
       for (let pageStart = 0; pageStart < dayPhotos.length; pageStart += perPage) {
         if (pageStart > 0) children.push(new Paragraph({ children: [new PageBreak()] }));
         const pagePhotos = dayPhotos.slice(pageStart, pageStart + perPage);
-
         const tableRows = [];
         for (let r = 0; r < rows; r++) {
           const rowCells = [];
           for (let c = 0; c < cols; c++) {
-            const idx = r * cols + c;
-            const p = pagePhotos[idx];
-            const img = p ? imageCache[p.id] : null;
+            const idx = r*cols+c; const p = pagePhotos[idx]; const img = p ? imageCache[p.id] : null;
             const cellChildren = [];
             if (img) {
-              const dispW = imgMaxWidthPx;
-              const dispH = Math.round(img.height * (dispW / img.width));
-              cellChildren.push(new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [new ImageRun({ data: img.buffer, transformation: { width: dispW, height: dispH }, type: 'jpg' })],
-              }));
-              cellChildren.push(new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: p.file_name, size: 14, color: '94A3B8' })],
-              }));
-            } else {
-              cellChildren.push(new Paragraph({ children: [new TextRun('')] }));
-            }
-            rowCells.push(new TableCell({
-              width: { size: cellWidthDxa, type: WidthType.DXA },
-              borders: {
-                top: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' },
-                bottom: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' },
-                left: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' },
-                right: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' },
-              },
-              margins: { top: 120, bottom: 120, left: 100, right: 100 },
-              shading: { fill: 'FFFFFF', type: ShadingType.CLEAR },
-              children: cellChildren,
-            }));
+              const dispW = imgMaxWidthPx, dispH = Math.round(img.height*(dispW/img.width));
+              cellChildren.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new ImageRun({ data: img.buffer, transformation: { width: dispW, height: dispH }, type: 'jpg' })] }));
+              cellChildren.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: p.file_name, size: 14, color: '94A3B8' })] }));
+            } else { cellChildren.push(new Paragraph({ children: [new TextRun('')] })); }
+            rowCells.push(new TableCell({ width: { size: cellWidthDxa, type: WidthType.DXA }, borders: { top:{style:BorderStyle.SINGLE,size:4,color:'E2E8F0'}, bottom:{style:BorderStyle.SINGLE,size:4,color:'E2E8F0'}, left:{style:BorderStyle.SINGLE,size:4,color:'E2E8F0'}, right:{style:BorderStyle.SINGLE,size:4,color:'E2E8F0'} }, margins: { top:120, bottom:120, left:100, right:100 }, shading: { fill:'FFFFFF', type:ShadingType.CLEAR }, children: cellChildren }));
           }
           tableRows.push(new TableRow({ children: rowCells }));
         }
-
-        children.push(new Table({
-          width: { size: contentWidthDxa, type: WidthType.DXA },
-          columnWidths: Array(cols).fill(cellWidthDxa),
-          rows: tableRows,
-        }));
+        children.push(new Table({ width: { size: contentWidthDxa, type: WidthType.DXA }, columnWidths: Array(cols).fill(cellWidthDxa), rows: tableRows }));
       }
     });
-
     const doc = new Document({
-      styles: {
-        default: { document: { run: { font: 'Arial', size: 24 } } },
-        paragraphStyles: [
-          { id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', quickFormat: true,
-            run: { size: 32, bold: true, font: 'Arial' },
-            paragraph: { spacing: { before: 0, after: 120 }, outlineLevel: 0 } },
-          { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', quickFormat: true,
-            run: { size: 26, bold: true, font: 'Arial', color: '1D4ED8' },
-            paragraph: { spacing: { before: 200, after: 160 }, outlineLevel: 1 } },
-        ],
-      },
-      sections: [{
-        properties: {
-          page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } },
-        },
-        children,
-      }],
+      styles: { default: { document: { run: { font: 'Arial', size: 24 } } }, paragraphStyles: [
+        { id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { size: 32, bold: true, font: 'Arial' }, paragraph: { spacing: { before: 0, after: 120 }, outlineLevel: 0 } },
+        { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { size: 26, bold: true, font: 'Arial', color: '1D4ED8' }, paragraph: { spacing: { before: 200, after: 160 }, outlineLevel: 1 } },
+      ] },
+      sections: [{ properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children }],
     });
-
     btn.textContent = '생성 중... (95%)';
     const blob = await Packer.toBlob(doc);
-    downloadBlob(blob, `사진대지_${album?.name || ''}_${document.getElementById('printDateFrom').value}~${document.getElementById('printDateTo').value}.docx`);
+    downloadBlob(blob, `사진대지_${folderName.replace(/\//g,'_')}_${document.getElementById('printDateFrom').value}~${document.getElementById('printDateTo').value}.docx`);
     closeModal('photoPrintModal');
     toast('Word 파일이 생성됐습니다', 'success');
-  } catch (err) {
-    console.error(err);
-    toast('생성 실패: ' + err.message, 'error');
-  } finally {
-    btn.disabled = false; btn.textContent = '📄 Word 생성';
-  }
+  } catch (err) { console.error(err); toast('생성 실패: ' + err.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '📄 Word 생성'; }
 };
-
 
 // ═══════════════════════════════════════════════
 // 작업환경측정 연간 체크리스트 (상/하반기)
