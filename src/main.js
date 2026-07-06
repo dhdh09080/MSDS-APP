@@ -1345,6 +1345,84 @@ w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고
 };
 
 // ═══════════════════════════════════════════════
+// 저장된 전체 물질 인쇄 (협력사별 표지 포함, 양면인쇄 대응)
+// ═══════════════════════════════════════════════
+window.printAllWarningsByContractor = function() {
+  if (msdsRecords.length === 0) { toast('인쇄할 물질이 없습니다', 'error'); return; }
+  const site = document.getElementById('warningSite')?.value || currentWS?.name || '현장명';
+
+  const sorted = [...msdsRecords].sort((a,b) => {
+    const c = (a.contractor||'').localeCompare(b.contractor||'', 'ko');
+    if (c !== 0) return c;
+    return (a.product_name||'').localeCompare(b.product_name||'', 'ko');
+  });
+
+  // 협력사별로 그룹핑
+  const groups = [];
+  sorted.forEach(r => {
+    const last = groups[groups.length-1];
+    if (last && last.contractor === r.contractor) last.items.push(r);
+    else groups.push({ contractor: r.contractor, items: [r] });
+  });
+
+  // 표지가 항상 앞면(홀수 페이지)에 오도록 페이지를 구성.
+  // 양면인쇄 시 앞면=홀수 페이지, 뒷면=짝수 페이지이므로,
+  // 필요하면 빈 페이지를 하나 끼워서 표지를 홀수 페이지로 맞춘다.
+  let pageCount = 0;
+  const htmlPages = [];
+  groups.forEach(g => {
+    if (pageCount % 2 === 1) { // 다음 페이지가 짝수(뒷면)가 되는 상황 → 빈 페이지 하나 삽입해 홀수로 맞춤
+      htmlPages.push(`<div class="page-a4 blank-page"></div>`);
+      pageCount++;
+    }
+    htmlPages.push(`<div class="page-a4 cover-page"><div class="cover-inner">
+      <div class="cover-label">협력사</div>
+      <div class="cover-name">${g.contractor}</div>
+      <div class="cover-sub">${site}</div>
+    </div></div>`);
+    pageCount++;
+    g.items.forEach(r => {
+      htmlPages.push(`<div class="page-a4">${buildWarnLabel(r, site)}</div>`);
+      pageCount++;
+    });
+  });
+
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지 전체 인쇄</title><style>
+    @page{size:A4;margin:6mm;}
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;}
+    .page-a4{width:100%;page-break-after:always;display:flex;align-items:flex-start;justify-content:center;}
+    .page-a4:last-child{page-break-after:auto;}
+    .blank-page{min-height:270mm;}
+    .cover-page{align-items:center;justify-content:center;min-height:270mm;}
+    .cover-inner{text-align:center;}
+    .cover-label{font-size:16px;letter-spacing:6px;color:#888;font-weight:700;margin-bottom:18px;}
+    .cover-name{font-size:48px;font-weight:900;color:#111;border:4px solid #111;border-radius:10px;padding:30px 50px;letter-spacing:2px;}
+    .cover-sub{font-size:15px;color:#555;margin-top:20px;font-weight:600;}
+    .wlabel{border:3px solid #111;border-radius:6px;padding:14px;width:100%;font-family:'Malgun Gothic',sans-serif;color:#111;background:#fff;}
+    .wl-top{text-align:center;font-size:11px;font-weight:700;margin-bottom:6px;}
+    .wl-name-box{border:2.5px solid #E30613;border-radius:5px;text-align:center;font-size:24px;font-weight:900;padding:8px;margin-bottom:10px;letter-spacing:3px;}
+    .wl-picto-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end;}
+    .wl-signal-bar{text-align:center;font-size:15px;font-weight:900;color:#fff;padding:6px;border-radius:5px;margin-bottom:10px;}
+    .wl-signal-bar.danger{background:#C0392B;} .wl-signal-bar.warning{background:#E67E22;}
+    .wl-two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:7px;}
+    .wl-block{margin-bottom:7px;border:1px solid #ccc;border-radius:4px;overflow:hidden;}
+    .wl-block.full{margin-bottom:7px;}
+    .wl-block-head{background:#C0392B;color:#fff;font-size:10px;font-weight:800;padding:3px 10px;}
+    .wl-list{margin:0;padding:5px 10px 5px 22px;font-size:9px;line-height:1.7;columns:2;column-gap:12px;}
+    .wl-list li{break-inside:avoid;}
+    .wl-pe{padding:5px 10px;font-size:9px;font-weight:600;columns:2;column-gap:12px;}
+    .wl-special{background:#FFF3CD;border:1.5px solid #FFC107;border-radius:4px;padding:6px;margin:6px 0;font-size:9px;font-weight:800;color:#856404;text-align:center;}
+    .wl-foot{border-top:1px solid #ddd;padding-top:6px;margin-top:8px;font-size:9px;color:#555;line-height:1.7;}
+    .wl-foot b{color:#333;margin-right:3px;}
+  </style></head><body>${htmlPages.join('')}<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
+  w.document.close();
+  toast(`협력사 ${groups.length}곳 · 물질 ${sorted.length}건 인쇄 준비 완료 (양면인쇄 설정을 켜주세요)`, 'success');
+};
+
+
+// ═══════════════════════════════════════════════
 // Excel Export
 // ═══════════════════════════════════════════════
 function splitComponents(r) {
