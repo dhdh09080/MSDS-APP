@@ -323,6 +323,16 @@
                   <label class="form-label">현장명</label>
                   <input class="form-input" id="warningSite" placeholder="예) 성동자이리버뷰 신축공사" oninput="updateWarningPreview()">
                 </div>
+                <div class="form-field" style="margin-bottom:10px;">
+                  <label class="form-label">검색 (물질명 · CAS No. · 협력사명 · 공급업체)</label>
+                  <input class="form-input" id="warnSearchInput" placeholder="예) 벤젠, 71-43-2, 또는 협력사명" oninput="renderWarnPickList()">
+                </div>
+                <div class="form-field" style="margin-bottom:10px;">
+                  <label class="form-label">협력사 선택</label>
+                  <select class="form-input" id="warnFilterContractor" onchange="renderWarnPickList()">
+                    <option value="">전체 협력사</option>
+                  </select>
+                </div>
                 <div style="display:flex;gap:8px;margin-bottom:10px;">
                   <button class="btn btn-secondary btn-sm" onclick="selectAllWarn(true)">전체 선택</button>
                   <button class="btn btn-secondary btn-sm" onclick="selectAllWarn(false)">전체 해제</button>
@@ -330,7 +340,7 @@
                   <button class="btn btn-primary btn-sm" onclick="printWarnings()">🖨️ 인쇄</button>
                 </div>
               </div>
-              <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;letter-spacing:.5px;">물질 선택</div>
+              <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;letter-spacing:.5px;" id="warnPickCountLabel">물질 선택</div>
               <div class="warn-pick-list" id="warnPickList">
                 <div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">등록된 물질이 없습니다</div>
               </div>
@@ -397,6 +407,12 @@
 
           <div class="card">
             <div class="card-title"><span class="card-title-icon">🔗</span> 협력사별 링크 발급</div>
+            <div style="flex:1;min-width:180px;">
+              <div class="contractor-search-row">
+                <input class="form-input" id="linkContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('linkContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('linkContractor');}">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('linkContractor')">검색</button>
+              </div>
+            </div>
             <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
               <select class="form-input" id="linkContractor" style="flex:1;min-width:180px;"><option value="">협력사 선택</option></select>
               <button class="btn btn-primary" onclick="generateUploadLink()">링크 발급</button>
@@ -745,6 +761,10 @@
             <div class="card-title"><span class="card-title-icon">🏗️</span> 공종 관리 (협력사별)</div>
             <div class="form-note" style="margin-bottom:12px;">협력사를 선택하면 해당 협력사의 공종을 관리할 수 있습니다.</div>
             <div style="margin-bottom:12px;">
+              <div class="contractor-search-row">
+                <input class="form-input" id="workTypeContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('workTypeContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('workTypeContractor');}">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('workTypeContractor')">검색</button>
+              </div>
               <select class="form-input" id="workTypeContractor" onchange="renderWorkTypeTags()">
                 <option value="">협력사를 선택하세요</option>
               </select>
@@ -844,6 +864,10 @@
         <div class="form-grid" style="margin-bottom:14px;">
           <div class="form-field">
             <label class="form-label">사용 협력사 <span class="required">*</span></label>
+            <div class="contractor-search-row">
+              <input class="form-input" id="batchContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('batchContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('batchContractor');}">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('batchContractor')">검색</button>
+            </div>
             <select class="form-input" id="batchContractor" onchange="updateBatchWorkTypes()"><option value="">선택하세요</option></select>
           </div>
           <div class="form-field">
@@ -894,6 +918,10 @@
             </div>
             <div class="form-field">
               <label class="form-label">사용 협력사 <span class="required">*</span></label>
+              <div class="contractor-search-row">
+                <input class="form-input" id="f_contractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('f_contractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('f_contractor');}">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('f_contractor')">검색</button>
+              </div>
               <select class="form-input" id="f_contractor" onchange="updateManualWorkTypes()"><option value="">선택</option></select>
             </div>
             <div class="form-field">
@@ -1036,6 +1064,10 @@
     <div class="modal-body">
       <div class="form-field" style="margin-bottom:14px;">
         <label class="form-label">협력사 선택</label>
+        <div class="contractor-search-row">
+          <input class="form-input" id="pkgContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('pkgContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('pkgContractor');}">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('pkgContractor')">검색</button>
+        </div>
         <select class="form-input" id="pkgContractor" onchange="updatePkgCount()"><option value="">선택하세요</option></select>
       </div>
       <div class="form-field" style="margin-bottom:14px;">
@@ -1209,7 +1241,7 @@
       <button class="modal-close" onclick="closeModal('inviteModal')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-note" style="margin-bottom:14px;">초대할 팀원이 먼저 회원가입을 완료해야 합니다.</div>
+      <div class="form-note" style="margin-bottom:14px;">아직 가입하지 않은 이메일이면 가입 안내 메일이 자동으로 발송되고, 가입 완료 시 이 현장에 자동으로 합류합니다.</div>
       <div class="form-field" style="margin-bottom:12px;">
         <label class="form-label">이메일 <span class="required">*</span></label>
         <input class="form-input" id="inviteEmail" placeholder="team@example.com" type="email">
@@ -1225,7 +1257,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('inviteModal')">취소</button>
-      <button class="btn btn-primary" onclick="handleInvite()">초대</button>
+      <button class="btn btn-primary" id="inviteBtn" onclick="handleInvite()">초대</button>
     </div>
   </div>
 </div>

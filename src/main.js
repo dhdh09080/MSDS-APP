@@ -12,6 +12,7 @@ let tokens = [], members = [];
 let msdsFileQueue = [], healthFileQueue = [];
 let editingMsdsId = null, currentDetailId = null, receiptEditId = null;
 let warnSelected = new Set();
+let pendingInvites = [];
 let measureFileData = null, measureFileName_val = null;
 
 // 전역 붙여넣기 캐치: 사진 업로드 모달이 열려있을 때 어디서 Ctrl+V를 눌러도 잡히도록 보강
@@ -272,13 +273,19 @@ async function loadWorkTypes() {
 }
 
 function populateContractorSelects() {
-  const opts = '<option value="">선택하세요</option>' + contractors.map(c => `<option value="${c.id}" data-name="${c.name}">${c.name}</option>`).join('');
   ['batchContractor','f_contractor','pkgContractor','linkContractor','workTypeContractor'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    const cur = el.value; el.innerHTML = opts; el.value = cur;
+    const q = (document.getElementById(id + 'Search')?.value || '').trim().toLowerCase();
+    const list = !q ? contractors : contractors.filter(c => c.name.toLowerCase().includes(q));
+    const cur = el.value;
+    el.innerHTML = '<option value="">' + (q ? `검색결과 ${list.length}건` : '선택하세요') + '</option>' +
+      list.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    el.value = list.some(c => c.id === cur) ? cur : '';
   });
 }
+
+window.searchContractorSelect = function(id) { populateContractorSelects(); };
 
 function getWorkTypesForContractor(contractorId) {
   return workTypes.filter(w => w.contractor_id === contractorId);
@@ -379,13 +386,17 @@ async function loadMembers() {
     .select('*, user:user_id(email, raw_user_meta_data)')
     .eq('workspace_id', currentWS.id);
   members = data || [];
+  const { data: inviteData } = await supabase.from('workspace_invites')
+    .select('*').eq('workspace_id', currentWS.id).is('accepted_at', null).order('created_at');
+  pendingInvites = inviteData || [];
   renderMemberList();
 }
 
 function renderMemberList() {
   const el = document.getElementById('memberList');
   if (!el) return;
-  el.innerHTML = members.map(m => {
+  const canManage = currentWS.owner_id === user.id || members.find(m => m.user_id === user.id)?.role === 'admin';
+  const memberHtml = members.map(m => {
     const email = m.user?.email || '알 수 없음';
     const name = m.user?.raw_user_meta_data?.name || email.split('@')[0];
     const isMe = m.user_id === user.id;
@@ -397,23 +408,85 @@ function renderMemberList() {
         <div class="member-email">${email}</div>
       </div>
       <span class="member-role ${m.role}">${isOwner ? '소유자' : m.role === 'admin' ? '관리자' : '멤버'}</span>
-      ${!isMe && !isOwner && currentWS.owner_id === user.id ? `<button class="btn btn-danger btn-sm" onclick="removeMember('${m.id}')">제거</button>` : ''}
+      ${!isMe && !isOwner && canManage ? `<button class="btn btn-danger btn-sm" onclick="removeMember('${m.id}')">제거</button>` : ''}
     </div>`;
   }).join('');
+  const inviteHtml = pendingInvites.map(inv => `
+    <div class="member-item">
+      <div class="member-avatar" style="background:var(--text3);">✉️</div>
+      <div class="member-info">
+        <div class="member-name">${inv.email}</div>
+        <div class="member-email">초대 대기 중 · 가입 시 자동 합류</div>
+      </div>
+      <span class="member-role ${inv.role}">${inv.role === 'admin' ? '관리자' : '멤버'}</span>
+      ${canManage ? `
+        <button class="btn btn-secondary btn-sm" onclick="resendInvite('${inv.email.replace(/'/g,"\\'")}')">재전송</button>
+        <button class="btn btn-danger btn-sm" onclick="cancelInvite('${inv.id}')">취소</button>` : ''}
+    </div>`).join('');
+  el.innerHTML = memberHtml + inviteHtml;
 }
 
 window.handleInvite = async function() {
-  const email = document.getElementById('inviteEmail').value.trim();
+  const emailInput = document.getElementById('inviteEmail');
+  const email = emailInput.value.trim().toLowerCase();
   const role = document.getElementById('inviteRole').value;
   const msg = document.getElementById('inviteMsg');
+  const btn = document.getElementById('inviteBtn');
   if (!email) { msg.className='auth-msg error'; msg.textContent='이메일을 입력하세요'; return; }
-  const { data: users, error } = await supabase.from('auth.users').select('id').eq('email', email).single().catch(() => ({ data: null }));
-  if (!users) {
-    // Try via RPC or profiles
-    const { data: profile } = await supabase.rpc('get_user_id_by_email', { email_input: email }).catch(() => ({ data: null }));
-    if (!profile) { msg.className='auth-msg error'; msg.textContent='해당 이메일로 가입된 계정이 없습니다'; return; }
+  if (email === user.email.toLowerCase()) { msg.className='auth-msg error'; msg.textContent='본인은 이미 팀원입니다'; return; }
+  if (members.some(m => (m.user?.email||'').toLowerCase() === email)) { msg.className='auth-msg error'; msg.textContent='이미 팀원으로 등록되어 있습니다'; return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = '처리 중...'; }
+  msg.className='auth-msg'; msg.textContent='';
+
+  try {
+    // 1) 이미 가입된 사용자인지 확인
+    const { data: existingUserId, error: rpcErr } = await supabase.rpc('get_user_id_by_email', { email_input: email });
+    if (rpcErr) throw rpcErr;
+
+    if (existingUserId) {
+      const { error } = await supabase.from('workspace_members').insert({ workspace_id: currentWS.id, user_id: existingUserId, role });
+      if (error) throw error;
+      msg.className='auth-msg success'; msg.textContent='팀원으로 추가되었습니다!';
+      emailInput.value = '';
+      await loadMembers();
+      return;
+    }
+
+    // 2) 미가입자 → 초대 대기 등록 + 가입 유도 메일 발송
+    const { error: inviteErr } = await supabase.from('workspace_invites')
+      .upsert({ workspace_id: currentWS.id, email, role, invited_by: user.id, accepted_at: null }, { onConflict: 'workspace_id,email' });
+    if (inviteErr) throw inviteErr;
+
+    const { error: otpErr } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: true, emailRedirectTo: window.location.origin }
+    });
+    if (otpErr) throw otpErr;
+
+    msg.className='auth-msg success'; msg.textContent='초대 메일을 보냈습니다. 상대방이 메일의 링크로 가입하면 자동으로 팀에 합류합니다.';
+    emailInput.value = '';
+    await loadMembers();
+  } catch (error) {
+    msg.className='auth-msg error'; msg.textContent='초대 실패: ' + (error?.message || '알 수 없는 오류');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '초대'; }
   }
-  msg.className='auth-msg success'; msg.textContent='초대 완료! 해당 사용자가 로그인하면 현장이 보입니다.';
+};
+
+window.resendInvite = async function(email) {
+  const { error } = await supabase.auth.signInWithOtp({
+    email, options: { shouldCreateUser: true, emailRedirectTo: window.location.origin }
+  });
+  if (error) { toast('재전송 실패: ' + error.message, 'error'); return; }
+  toast('초대 메일을 다시 보냈습니다', 'success');
+};
+
+window.cancelInvite = async function(id) {
+  if (!confirm('초대를 취소하시겠습니까?')) return;
+  await supabase.from('workspace_invites').delete().eq('id', id);
+  await loadMembers();
+  toast('초대가 취소됐습니다');
 };
 
 window.removeMember = async function(memberId) {
@@ -1143,25 +1216,58 @@ window.closeFileViewer = function() {
 // ═══════════════════════════════════════════════
 // Warning Labels
 // ═══════════════════════════════════════════════
+function populateWarnContractorFilter() {
+  const sel = document.getElementById('warnFilterContractor');
+  if (!sel) return;
+  const cur = sel.value;
+  const sorted = [...contractors].sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+  sel.innerHTML = '<option value="">전체 협력사</option>' + sorted.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+  sel.value = sorted.some(c => c.name === cur) ? cur : '';
+}
+
+function getFilteredWarnRecords() {
+  const q = (document.getElementById('warnSearchInput')?.value||'').trim().toLowerCase();
+  const fCon = document.getElementById('warnFilterContractor')?.value || '';
+  return msdsRecords.filter(r => {
+    const mq = !q || [r.product_name, r.cas_no, r.supplier, r.contractor, r.work_type].join(' ').toLowerCase().includes(q);
+    const mc = !fCon || r.contractor === fCon;
+    return mq && mc;
+  });
+}
+
 function renderWarnPickList() {
   const el = document.getElementById('warnPickList');
   if (!el) return;
+  populateWarnContractorFilter();
+  const filtered = getFilteredWarnRecords();
+  const countLabel = document.getElementById('warnPickCountLabel');
+  if (countLabel) countLabel.textContent = `물질 선택 (${filtered.length}건 표시 중 · ${warnSelected.size}건 선택됨)`;
   if (msdsRecords.length === 0) { el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">등록된 물질이 없습니다</div>'; return; }
-  el.innerHTML = msdsRecords.map(r => `
+  if (filtered.length === 0) { el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">검색/필터 조건에 맞는 물질이 없습니다</div>'; return; }
+  el.innerHTML = filtered.map(r => `
     <label class="warn-pick-item">
       <input type="checkbox" class="warn-check" value="${r.id}" onchange="onWarnCheck('${r.id}',this.checked)" ${warnSelected.has(r.id)?'checked':''}>
       <div style="flex:1;min-width:0;">
         <div class="wp-name">${r.product_name}</div>
-        <div class="wp-sub">${r.contractor} ${r.work_type?'/ '+r.work_type:''} ${r.signal_word?'· '+r.signal_word:''}</div>
+        <div class="wp-sub">${r.contractor} ${r.work_type?'/ '+r.work_type:''} ${r.signal_word?'· '+r.signal_word:''} ${r.cas_no?'· CAS '+r.cas_no:''}</div>
       </div>
       ${r.legal_special==='Y'?'<span class="badge badge-danger">특별</span>':''}
     </label>`).join('');
 }
+window.renderWarnPickList = renderWarnPickList;
 
-window.onWarnCheck = function(id, checked) { if(checked) warnSelected.add(id); else warnSelected.delete(id); updateWarningPreview(); };
+window.onWarnCheck = function(id, checked) {
+  if(checked) warnSelected.add(id); else warnSelected.delete(id);
+  const countLabel = document.getElementById('warnPickCountLabel');
+  if (countLabel) countLabel.textContent = countLabel.textContent.replace(/\d+건 선택됨/, `${warnSelected.size}건 선택됨`);
+  updateWarningPreview();
+};
 window.selectAllWarn = function(v) {
-  warnSelected = v ? new Set(msdsRecords.map(r => r.id)) : new Set();
-  document.querySelectorAll('.warn-check').forEach(c => c.checked = v);
+  // 현재 검색/필터 조건에 맞는 물질만 대상으로 전체 선택·해제 (다른 필터의 기존 선택은 유지)
+  const filtered = getFilteredWarnRecords();
+  if (v) filtered.forEach(r => warnSelected.add(r.id));
+  else filtered.forEach(r => warnSelected.delete(r.id));
+  renderWarnPickList();
   updateWarningPreview();
 };
 
