@@ -2109,8 +2109,10 @@ let placementFiltered = [];  // 추출 결과
 window.switchHealthSub = function(which) {
   document.getElementById('hsub-result').classList.toggle('active', which === 'result');
   document.getElementById('hsub-placement').classList.toggle('active', which === 'placement');
+  document.getElementById('hsub-sorting').classList.toggle('active', which === 'sorting');
   document.getElementById('healthSubResult').style.display = which === 'result' ? '' : 'none';
   document.getElementById('healthSubPlacement').style.display = which === 'placement' ? '' : 'none';
+  document.getElementById('healthSubSorting').style.display = which === 'sorting' ? '' : 'none';
   const headerActions = document.getElementById('healthHeaderActions');
   if (headerActions) headerActions.style.display = which === 'result' ? '' : 'none';
 };
@@ -3608,4 +3610,195 @@ window.updatePublicLinkSettings = async function() {
   publicLink.allow_msds = allowMsds;
   publicLink.allow_license = allowLicense;
   toast('설정이 변경됐습니다', 'success');
+};
+// ═══════════════════════════════════════════════
+// 검진 대상자 소팅
+// ═══════════════════════════════════════════════
+let sortingRows = [];
+
+function parseSortingDate(val) {
+  if (!val && val !== 0) return null;
+  const s = String(val).trim();
+  const m = s.match(/(\d{4})\.(\d{2})\.(\d{2})/);
+  if (!m) return null;
+  return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function addMonths(d, n) {
+  const r = new Date(d); r.setMonth(r.getMonth() + n); return r;
+}
+
+function diffDays(a, b) {
+  return Math.round((a - b) / (1000 * 60 * 60 * 24));
+}
+
+window.handleSortingExcel = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('sortingFileName').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const wb = XLSX.read(ev.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!raw.length) { toast('데이터가 없습니다', 'error'); return; }
+
+      const hKeys = Object.keys(raw[0]);
+      const findKey = (...cands) => hKeys.find(h => cands.some(c => h.includes(c)));
+      const kCon     = findKey('협력회사','협력사','업체');
+      const kJob     = findKey('직종');
+      const kName    = findKey('성명','이름');
+      const kStatus  = findKey('재직상태','재직');
+      const kJoin    = findKey('최초전입일','전입일','입사');
+      const kGeneral = findKey('일반');
+      const kSpecial = findKey('특수');
+      const kPlace   = findKey('배치전');
+
+      if (!kCon || !kName || !kStatus) { toast('필수 컬럼(협력회사/성명/재직상태)을 찾을 수 없습니다', 'error'); return; }
+
+      const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+      const SPEC_ORDER = {'배치전검진 필요':0,'특수검진 기한초과':1,'특수검진 임박':2,'특수검진 주의':3,'정상':4};
+      sortingRows = [];
+
+      for (const r of raw) {
+        const status = String(r[kStatus]||'').trim();
+        if (status !== '재직') continue;
+        const name = String(r[kName]||'').trim();
+        if (!name) continue;
+
+        const company   = String(r[kCon]||'').trim();
+        const job       = String(r[kJob]||'').trim();
+        const joinDate  = parseSortingDate(r[kJoin]);
+        const generalD  = parseSortingDate(r[kGeneral]);
+        const specialD  = parseSortingDate(r[kSpecial]);
+        const placeD    = parseSortingDate(r[kPlace]);
+
+        let basisD, nextD, basisLabel, specStatus, specRemain;
+        if (specialD) { basisD=specialD; nextD=addMonths(basisD,12); basisLabel='특수(정기)'; }
+        else if (placeD) { basisD=placeD; nextD=addMonths(basisD,6); basisLabel='배치전'; }
+        else { basisD=null; nextD=null; basisLabel='-'; }
+
+        if (!basisD) {
+          specStatus='배치전검진 필요'; specRemain=null;
+        } else {
+          specRemain=diffDays(nextD,TODAY);
+          if (specRemain<0) specStatus='특수검진 기한초과';
+          else if (specRemain<=30) specStatus='특수검진 임박';
+          else if (specRemain<=60) specStatus='특수검진 주의';
+          else specStatus='정상';
+        }
+
+        let genStatus;
+        if (generalD) {
+          genStatus=(TODAY.getFullYear()-generalD.getFullYear())<=1?'정상':'일반검진 필요';
+        } else {
+          const daysIn=joinDate?diffDays(TODAY,joinDate):0;
+          genStatus=daysIn>365?'일반검진 필요':'해당없음(입사 1년 미만)';
+        }
+
+        const needs=[];
+        if (specStatus!=='정상') needs.push(specStatus==='배치전검진 필요'?'배치전검진':'특수검진');
+        if (genStatus==='일반검진 필요') needs.push('일반검진');
+        const action=needs.length?needs.join(' + '):'없음 (정상)';
+
+        const descs=[];
+        if (specStatus==='배치전검진 필요') descs.push('배치전검진을 아직 받지 않았습니다. 배치전검진부터 받아야 합니다.');
+        else if (specStatus!=='정상'&&nextD) {
+          const kw=specRemain<0?`기한이 ${Math.abs(specRemain)}일 지났습니다`:`예정일이 ${specRemain}일 남았습니다`;
+          descs.push(`특수검진 ${kw}. (예정일 ${fmtDate(nextD)})`);
+        }
+        if (genStatus==='일반검진 필요') descs.push('일반건강검진이 필요합니다.'+(generalD?` (최근: ${fmtDate(generalD)})`:''));
+
+        sortingRows.push({
+          company, name, job, action,
+          description: descs.join(' / ')||'정상',
+          specStatus, basisDate:fmtDate(basisD), basisLabel,
+          nextDate:fmtDate(nextD)||'-',
+          specRemain:specRemain!==null?specRemain:'',
+          generalDate:fmtDate(generalD), genStatus,
+          _so:SPEC_ORDER[specStatus]??5,
+          _sr:specRemain!==null?specRemain:9999,
+        });
+      }
+
+      sortingRows.sort((a,b)=>
+        a.company.localeCompare(b.company,'ko')||a._so-b._so||a._sr-b._sr||a.name.localeCompare(b.name,'ko')
+      );
+
+      renderSortingResult();
+      toast(`${sortingRows.length}명 분석 완료`, 'success');
+    } catch(err) { console.error(err); toast('파싱 실패: '+err.message,'error'); }
+  };
+  reader.readAsBinaryString(file);
+};
+
+function renderSortingResult() {
+  const cnt=s=>sortingRows.filter(r=>r.specStatus===s).length;
+  document.getElementById('sortStat0').textContent=cnt('배치전검진 필요');
+  document.getElementById('sortStat1').textContent=cnt('특수검진 기한초과');
+  document.getElementById('sortStat2').textContent=cnt('특수검진 임박');
+  document.getElementById('sortStat3').textContent=cnt('특수검진 주의');
+  document.getElementById('sortStat4').textContent=sortingRows.filter(r=>r.genStatus==='일반검진 필요').length;
+  document.getElementById('sortingResultTitle').textContent=
+    `재직자 ${sortingRows.length}명 분석 완료 (기준일: ${new Date().toLocaleDateString('ko-KR')})`;
+
+  const SC={'배치전검진 필요':'#FF6B6B','특수검진 기한초과':'#FFC7CE','특수검진 임박':'#FFEB9C','특수검진 주의':'#FFF2CC','정상':'#C6EFCE'};
+  const GC={'일반검진 필요':'#FFC7CE','정상':'#C6EFCE','해당없음(입사 1년 미만)':'#F2F2F2'};
+
+  document.getElementById('sortingResultBody').innerHTML=sortingRows.map(r=>`<tr>
+    <td>${r.company}</td><td>${r.name}</td><td>${r.job||'-'}</td>
+    <td style="${r.action!=='없음 (정상)'?'font-weight:700;color:var(--danger);':'color:var(--text3);'}">${r.action}</td>
+    <td style="background:${SC[r.specStatus]||''};">${r.specStatus}</td>
+    <td>${r.basisDate||'-'}</td><td>${r.nextDate}</td>
+    <td>${r.specRemain!==''?r.specRemain+'일':'-'}</td>
+    <td>${r.generalDate||'-'}</td>
+    <td style="background:${GC[r.genStatus]||''};">${r.genStatus}</td>
+  </tr>`).join('');
+
+  document.getElementById('sortingSummaryArea').style.display='';
+}
+
+window.downloadSortingExcel = function() {
+  if (!sortingRows.length) { toast('분석된 데이터가 없습니다','error'); return; }
+  const headers=['협력회사','성명','직종','지금 수검해야 할 것','설명',
+    '특수검진 상태','특수검진 기준일','특수검진 기준구분',
+    '특수검진 다음 예정일','특수검진 잔여일','일반검진 최근일','일반검진 상태'];
+  const data=sortingRows.map(r=>[
+    r.company,r.name,r.job,r.action,r.description,
+    r.specStatus,r.basisDate,r.basisLabel,
+    r.nextDate,r.specRemain!==''?r.specRemain:'',r.generalDate,r.genStatus,
+  ]);
+
+  const ws=XLSX.utils.aoa_to_sheet([headers,...data]);
+  ws['!cols']=[18,10,18,26,52,18,13,12,16,10,13,18].map(w=>({wch:w}));
+  ws['!autofilter']={ref:'A1:L1'};
+
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'검진대상자 소팅');
+
+  const cnt=s=>sortingRows.filter(r=>r.specStatus===s).length;
+  const sumData=[
+    ['검진 현황 요약',''],['',''],['특수검진','건수'],
+    ['배치전검진 필요',cnt('배치전검진 필요')],
+    ['특수검진 기한초과',cnt('특수검진 기한초과')],
+    ['특수검진 임박',cnt('특수검진 임박')],
+    ['특수검진 주의',cnt('특수검진 주의')],
+    ['정상',cnt('정상')],['',''],['일반건강검진','건수'],
+    ['일반검진 필요',sortingRows.filter(r=>r.genStatus==='일반검진 필요').length],
+    ['정상',sortingRows.filter(r=>r.genStatus==='정상').length],
+    ['해당없음(입사 1년 미만)',sortingRows.filter(r=>r.genStatus==='해당없음(입사 1년 미만)').length],
+    ['',''],
+    [`총 재직자: ${sortingRows.length}명 / 기준일: ${new Date().toLocaleDateString('ko-KR')}`,''],
+  ];
+  const ws2=XLSX.utils.aoa_to_sheet(sumData);
+  ws2['!cols']=[{wch:28},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws2,'요약');
+
+  XLSX.writeFile(wb,`검진대상자_소팅_${today()}.xlsx`);
 };

@@ -452,6 +452,7 @@
           <div class="health-subtabs" style="display:flex;gap:8px;margin-bottom:18px;border-bottom:1.5px solid var(--border);">
             <button class="health-subtab active" id="hsub-result" onclick="switchHealthSub('result')">결과지 AI 분석</button>
             <button class="health-subtab" id="hsub-placement" onclick="switchHealthSub('placement')">배치전 확인서 추적</button>
+            <button class="health-subtab" id="hsub-sorting" onclick="switchHealthSub('sorting')">검진 대상자 소팅</button>
           </div>
 
           <!-- 서브: 결과지 AI 분석 -->
@@ -515,6 +516,70 @@
               <div class="form-note" style="margin-bottom:12px;">저장된 스냅샷 날짜를 클릭하면 그 시점 명단을 다시 다운로드할 수 있습니다.</div>
               <div id="placementSnapshotList">
                 <div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">저장된 스냅샷이 없습니다</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 서브: 검진 대상자 소팅 -->
+          <div id="healthSubSorting" style="display:none;">
+            <div class="card" style="margin-bottom:16px;">
+              <div class="card-title"><span class="card-title-icon">📋</span> 근로자 명단 업로드</div>
+              <div class="form-note" style="margin-bottom:12px;">
+                회사 양식 건강진단 목록 엑셀을 업로드하면 특수검진/일반검진/배치전검진 대상자를 자동 판정하고 정렬된 엑셀로 다운로드합니다.
+              </div>
+              <input type="file" id="sortingExcelInput" accept=".xlsx,.xls" style="display:none" onchange="handleSortingExcel(event)">
+              <button class="btn btn-primary" onclick="document.getElementById('sortingExcelInput').click()">📤 엑셀 업로드</button>
+              <span id="sortingFileName" style="font-size:13px;color:var(--text2);margin-left:10px;"></span>
+            </div>
+
+            <div id="sortingSummaryArea" style="display:none;">
+              <div class="stats-row" style="margin-bottom:16px;">
+                <div class="stat-card" style="border-top:3px solid #FF6B6B;">
+                  <div class="stat-label">배치전검진 필요</div>
+                  <div class="stat-value danger" id="sortStat0">0</div>
+                  <div class="stat-sub">명</div>
+                </div>
+                <div class="stat-card" style="border-top:3px solid #FFC7CE;">
+                  <div class="stat-label">특수검진 기한초과</div>
+                  <div class="stat-value danger" id="sortStat1">0</div>
+                  <div class="stat-sub">명</div>
+                </div>
+                <div class="stat-card" style="border-top:3px solid #FFEB9C;">
+                  <div class="stat-label">특수검진 임박</div>
+                  <div class="stat-value warn" id="sortStat2">0</div>
+                  <div class="stat-sub">30일 이내</div>
+                </div>
+                <div class="stat-card" style="border-top:3px solid #FFF2CC;">
+                  <div class="stat-label">특수검진 주의</div>
+                  <div class="stat-value warn" id="sortStat3">0</div>
+                  <div class="stat-sub">60일 이내</div>
+                </div>
+                <div class="stat-card" style="border-top:3px solid #FFC7CE;">
+                  <div class="stat-label">일반검진 필요</div>
+                  <div class="stat-value danger" id="sortStat4">0</div>
+                  <div class="stat-sub">명</div>
+                </div>
+              </div>
+
+              <div class="page-header" style="padding:0;margin-bottom:12px;">
+                <div style="font-size:14px;font-weight:700;" id="sortingResultTitle"></div>
+                <button class="btn btn-primary" onclick="downloadSortingExcel()">📥 엑셀 다운로드</button>
+              </div>
+
+              <div class="table-wrap">
+                <div class="table-wrap-scroll">
+                  <table id="sortingResultTable">
+                    <thead>
+                      <tr>
+                        <th>협력회사</th><th>성명</th><th>직종</th>
+                        <th>수검 필요</th><th>특수검진 상태</th>
+                        <th>기준일</th><th>다음 예정일</th><th>잔여일</th>
+                        <th>일반검진</th><th>일반검진 상태</th>
+                      </tr>
+                    </thead>
+                    <tbody id="sortingResultBody"></tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
