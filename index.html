@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/src/style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 </head>
 <body>
 
@@ -263,6 +264,7 @@
     </div>
     <div class="header-actions">
       <button class="btn btn-secondary" onclick="printMsdsList()">🖨️ 인쇄</button>
+      <button class="btn btn-secondary" onclick="openMsdsFullPrintModal()">📄 전문 인쇄</button>
       <button class="btn btn-secondary" onclick="exportMsdsExcel()">📊 엑셀</button>
       <button class="btn btn-secondary" onclick="openPackageModal()">📦 패키지</button>
       <button class="btn btn-primary" id="msdsRegisterBtn" onclick="openMsdsRegister()">+ 등록</button>
@@ -1092,6 +1094,39 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('packageModal')">취소</button>
       <button class="btn btn-primary" onclick="exportPackage()">📦 패키지 생성</button>
+    </div>
+  </div>
+</div>
+
+<!-- MSDS 전문 인쇄 (협력사별 표지 포함) -->
+<div class="modal-backdrop" id="msdsFullPrintModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">📄 MSDS 전문 인쇄</div>
+      <button class="modal-close" onclick="closeModal('msdsFullPrintModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-note" style="margin-bottom:12px;">인쇄할 협력사를 선택하세요. 협력사가 바뀌는 지점마다 표지가 삽입되고, 양면인쇄 시 표지가 항상 앞면에 오도록 자동 정렬됩니다.</div>
+      <label style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:10px;cursor:pointer;background:var(--surface2);">
+        <input type="checkbox" id="fullPrintSelectAll" onchange="toggleAllFullPrintContractors(this.checked)">
+        <div style="font-size:13px;font-weight:700;">전체 선택</div>
+      </label>
+      <div id="fullPrintContractorList" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px;">
+      </div>
+      <div id="fullPrintCount" style="font-size:13px;color:var(--primary);font-weight:600;margin-top:14px;"></div>
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin:16px 0 8px;">인쇄 레이아웃</div>
+      <div style="display:flex;gap:10px;">
+        <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;">
+          <input type="radio" name="fullPrintLayout" value="1" checked> <div style="font-size:13px;">한 면에 1페이지</div>
+        </label>
+        <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;">
+          <input type="radio" name="fullPrintLayout" value="2"> <div style="font-size:13px;">한 면에 2페이지</div>
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('msdsFullPrintModal')">취소</button>
+      <button class="btn btn-primary" id="fullPrintGoBtn" onclick="printMsdsFullDocs()">📄 인쇄</button>
     </div>
   </div>
 </div>

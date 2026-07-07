@@ -1620,9 +1620,180 @@ window.exportPackage = async function() {
   closeModal('packageModal');
 };
 // ═══════════════════════════════════════════════
-// MSDS 협력사 사이드바
+// MSDS 전문 인쇄 (협력사별 표지 포함, 양면인쇄 대응)
 // ═══════════════════════════════════════════════
-window.selectedContractor = '';
+window.openMsdsFullPrintModal = function() {
+  const el = document.getElementById('fullPrintContractorList');
+  const sorted = [...contractors].sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+  el.innerHTML = sorted.map(c => {
+    const items = msdsRecords.filter(r => r.contractor === c.name);
+    const withPdf = items.filter(r => r.has_pdf && r.pdf_path).length;
+    return `<label style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:6px;cursor:pointer;">
+      <input type="checkbox" class="fpc-check" value="${c.name}" onchange="updateFullPrintCount()">
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;">${c.name}</div>
+        <div style="font-size:11px;color:var(--text3);">물질 ${items.length}건 · 원본 파일 ${withPdf}건</div>
+      </div>
+    </label>`;
+  }).join('') || '<div style="padding:14px;text-align:center;color:var(--text3);font-size:13px;">등록된 협력사가 없습니다</div>';
+  document.getElementById('fullPrintSelectAll').checked = false;
+  updateFullPrintCount();
+  openModal('msdsFullPrintModal');
+};
+
+window.toggleAllFullPrintContractors = function(checked) {
+  document.querySelectorAll('.fpc-check').forEach(cb => cb.checked = checked);
+  updateFullPrintCount();
+};
+
+window.updateFullPrintCount = function() {
+  const selected = [...document.querySelectorAll('.fpc-check:checked')].map(cb => cb.value);
+  const targets = msdsRecords.filter(r => selected.includes(r.contractor));
+  const withPdf = targets.filter(r => r.has_pdf && r.pdf_path);
+  const el = document.getElementById('fullPrintCount');
+  el.textContent = selected.length === 0 ? '' : `협력사 ${selected.length}곳 · 물질 ${targets.length}건 (원본 파일 ${withPdf.length}건 인쇄됨)`;
+};
+
+function renderContractorCoverImage(contractorName, siteName) {
+  const W = 1240, H = 1754; // A4 @ ~150dpi
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#888888';
+  ctx.font = '700 38px "Malgun Gothic","Apple SD Gothic Neo",sans-serif';
+  ctx.fillText('협      력      사', W/2, H/2 - 170);
+  ctx.font = '900 96px "Malgun Gothic","Apple SD Gothic Neo",sans-serif';
+  const boxW = Math.min(W - 140, Math.max(600, ctx.measureText(contractorName).width + 140));
+  ctx.strokeStyle = '#111111'; ctx.lineWidth = 6;
+  ctx.strokeRect(W/2 - boxW/2, H/2 - 110, boxW, 210);
+  ctx.fillStyle = '#111111';
+  ctx.fillText(contractorName, W/2, H/2 - 2);
+  ctx.fillStyle = '#555555';
+  ctx.font = '600 34px "Malgun Gothic","Apple SD Gothic Neo",sans-serif';
+  ctx.fillText(siteName || '', W/2, H/2 + 170);
+  return canvas.toDataURL('image/png');
+}
+
+function dataUrlToBytes(dataUrl) {
+  const bin = atob(dataUrl.split(',')[1]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function drawItemFitted(page, item, box, marginPt) {
+  const m = marginPt || 0;
+  const availW = box.w - m*2, availH = box.h - m*2;
+  const scale = Math.min(availW / item.width, availH / item.height);
+  const w = item.width * scale, h = item.height * scale;
+  const x = box.x + (box.w - w) / 2, y = box.y + (box.h - h) / 2;
+  if (item.kind === 'pdf') page.drawPage(item.obj, { x, y, width: w, height: h });
+  else page.drawImage(item.obj, { x, y, width: w, height: h });
+}
+
+window.printMsdsFullDocs = async function() {
+  const selected = [...document.querySelectorAll('.fpc-check:checked')].map(cb => cb.value);
+  if (selected.length === 0) { toast('협력사를 선택하세요', 'error'); return; }
+  const targets = msdsRecords.filter(r => selected.includes(r.contractor) && r.has_pdf && r.pdf_path);
+  if (targets.length === 0) { toast('선택한 협력사에 원본 파일이 없습니다', 'error'); return; }
+  const layout = document.querySelector('input[name="fullPrintLayout"]:checked')?.value || '1';
+
+  const sorted = [...targets].sort((a,b) => {
+    const c = a.contractor.localeCompare(b.contractor, 'ko');
+    return c !== 0 ? c : a.product_name.localeCompare(b.product_name, 'ko');
+  });
+  const groups = [];
+  sorted.forEach(r => {
+    const last = groups[groups.length-1];
+    if (last && last.contractor === r.contractor) last.items.push(r);
+    else groups.push({ contractor: r.contractor, items: [r] });
+  });
+
+  const btn = document.getElementById('fullPrintGoBtn');
+  btn.disabled = true;
+  const site = currentWS?.name || '현장명';
+  const A4W = 595.28, A4H = 841.89;
+  const failed = [];
+  let processed = 0;
+  let printedGroups = 0;
+
+  try {
+    const { PDFDocument, rgb } = PDFLib;
+    const merged = await PDFDocument.create();
+    let pageCount = 0;
+
+    for (const g of groups) {
+      // 1) 협력사의 원본 파일들을 먼저 전부 불러와서 페이지 항목으로 변환
+      const renderItems = [];
+      for (const r of g.items) {
+        processed++;
+        btn.textContent = `불러오는 중... (${processed}/${targets.length})`;
+        try {
+          const { data, error } = await supabase.storage.from('msds-pdfs').download(r.pdf_path);
+          if (error || !data) { failed.push(r.product_name); continue; }
+          const bytes = new Uint8Array(await data.arrayBuffer());
+          const ext = (r.pdf_path.split('.').pop() || '').toLowerCase();
+          if (ext === 'pdf') {
+            const srcDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+            for (const srcPage of srcDoc.getPages()) {
+              const embedded = await merged.embedPage(srcPage);
+              renderItems.push({ kind: 'pdf', obj: embedded, width: embedded.width, height: embedded.height });
+            }
+          } else if (['jpg','jpeg','png'].includes(ext)) {
+            const img = ext === 'png' ? await merged.embedPng(bytes) : await merged.embedJpg(bytes);
+            renderItems.push({ kind: 'image', obj: img, width: img.width, height: img.height });
+          } else { failed.push(r.product_name); }
+        } catch (e) { failed.push(r.product_name); }
+      }
+      if (renderItems.length === 0) continue; // 실제로 실을 내용이 없으면 표지도 생략
+
+      // 2) 표지가 항상 홀수(앞면) 페이지가 되도록 필요하면 빈 페이지로 보정
+      if (pageCount % 2 === 1) { merged.addPage([A4W, A4H]); pageCount++; }
+      const coverPage = merged.addPage([A4W, A4H]);
+      const pngBytes = dataUrlToBytes(renderContractorCoverImage(g.contractor, site));
+      const pngImage = await merged.embedPng(pngBytes);
+      coverPage.drawImage(pngImage, { x: 0, y: 0, width: A4W, height: A4H });
+      pageCount++;
+      printedGroups++;
+
+      // 3) 내용 페이지 배치 (1페이지씩 / 2페이지씩)
+      if (layout === '2') {
+        for (let i = 0; i < renderItems.length; i += 2) {
+          const page = merged.addPage([A4W, A4H]);
+          drawItemFitted(page, renderItems[i], { x:0, y:A4H/2, w:A4W, h:A4H/2 }, 10);
+          if (renderItems[i+1]) {
+            drawItemFitted(page, renderItems[i+1], { x:0, y:0, w:A4W, h:A4H/2 }, 10);
+            page.drawLine({ start:{x:20,y:A4H/2}, end:{x:A4W-20,y:A4H/2}, thickness:0.5, dashArray:[3,3], color: rgb(0.7,0.7,0.7) });
+          }
+          pageCount++;
+        }
+      } else {
+        for (const item of renderItems) {
+          const page = merged.addPage([A4W, A4H]);
+          drawItemFitted(page, item, { x:0, y:0, w:A4W, h:A4H }, 0);
+          pageCount++;
+        }
+      }
+    }
+
+    if (pageCount === 0) { toast('인쇄할 원본 파일을 하나도 열지 못했습니다', 'error'); return; }
+
+    const pdfBytes = await merged.save();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    closeModal('msdsFullPrintModal');
+    toast(`협력사 ${printedGroups}곳 · 총 ${pageCount}페이지 준비 완료${failed.length ? ` (원본 열기 실패 ${failed.length}건)` : ''}`, failed.length ? 'error' : 'success');
+  } catch (e) {
+    toast('인쇄 파일 생성 실패: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📄 인쇄';
+  }
+};
+
 
 window.selectContractorSidebar = function(name) {
   window.selectedContractor = name;
