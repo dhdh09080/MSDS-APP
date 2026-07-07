@@ -1738,8 +1738,11 @@ window.printMsdsFullDocs = async function() {
           if (ext === 'pdf') {
             const srcDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
             for (const srcPage of srcDoc.getPages()) {
-              const embedded = await merged.embedPage(srcPage);
-              renderItems.push({ kind: 'pdf', obj: embedded, width: embedded.width, height: embedded.height });
+              if (!srcPage.node.Contents()) continue; // 내용 없는 빈 페이지는 embed 시 저장 단계에서 에러가 나므로 건너뜀
+              try {
+                const embedded = await merged.embedPage(srcPage);
+                renderItems.push({ kind: 'pdf', obj: embedded, width: embedded.width, height: embedded.height });
+              } catch (pageErr) { /* 이 페이지만 건너뜀 */ }
             }
           } else if (['jpg','jpeg','png'].includes(ext)) {
             const img = ext === 'png' ? await merged.embedPng(bytes) : await merged.embedJpg(bytes);
