@@ -1764,11 +1764,11 @@ window.printMsdsFullDocs = async function() {
       // 3) 내용 페이지 배치 (1페이지씩 / 2페이지씩)
       if (layout === '2') {
         for (let i = 0; i < renderItems.length; i += 2) {
-          const page = merged.addPage([A4W, A4H]);
-          drawItemFitted(page, renderItems[i], { x:0, y:A4H/2, w:A4W, h:A4H/2 }, 10);
+          const page = merged.addPage([A4H, A4W]); // 가로(landscape)로 눕혀서 좌/우로 배치
+          drawItemFitted(page, renderItems[i], { x:0, y:0, w:A4H/2, h:A4W }, 12);
           if (renderItems[i+1]) {
-            drawItemFitted(page, renderItems[i+1], { x:0, y:0, w:A4W, h:A4H/2 }, 10);
-            page.drawLine({ start:{x:20,y:A4H/2}, end:{x:A4W-20,y:A4H/2}, thickness:0.5, dashArray:[3,3], color: rgb(0.7,0.7,0.7) });
+            drawItemFitted(page, renderItems[i+1], { x:A4H/2, y:0, w:A4H/2, h:A4W }, 12);
+            page.drawLine({ start:{x:A4H/2,y:20}, end:{x:A4H/2,y:A4W-20}, thickness:0.5, dashArray:[3,3], color: rgb(0.7,0.7,0.7) });
           }
           pageCount++;
         }
