@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -37,8 +38,12 @@
       <!-- 로그인 -->
       <div id="loginForm" class="auth-form">
         <input type="email" id="loginEmail" class="auth-input" placeholder="이메일" autocomplete="email">
-        <input type="password" id="loginPassword" class="auth-input" placeholder="비밀번호" autocomplete="current-password">
+        <input type="password" id="loginPassword" class="auth-input" placeholder="비밀번호" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()">
+        <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text2);cursor:pointer;user-select:none;">
+          <input type="checkbox" id="autoLoginChk" style="width:16px;height:16px;cursor:pointer;"> 자동 로그인 (이 기기에 로그인 정보 저장)
+        </label>
         <button class="auth-btn" onclick="handleLogin()" id="loginBtn">로그인</button>
+        <button class="auth-btn" id="savedLoginBtn" style="display:none;background:var(--surface2);color:var(--text);border:1.5px solid var(--border2);" onclick="loginWithSaved()">⚡ 저장된 계정으로 바로 로그인</button>
         <button class="auth-link" onclick="switchTab('forgot')">비밀번호를 잊으셨나요?</button>
         <div class="auth-msg" id="loginMsg"></div>
       </div>
@@ -135,6 +140,25 @@
           <span class="nav-icon">📷</span> 사진 클라우드
         </div>
 
+        <div class="nav-section">인력</div>
+        <div class="nav-item" id="nav-manpower" onclick="showPage('manpower')">
+          <span class="nav-icon">👷</span> 투입인원
+        </div>
+        <div class="nav-item" id="nav-weather" onclick="showPage('weather')">
+          <span class="nav-icon">☀️</span> 혹서기 날씨
+        </div>
+        <div class="nav-item" id="nav-vulnerable" onclick="showPage('vulnerable')">
+          <span class="nav-icon">🧓</span> 취약자 명단
+        </div>
+        <div class="nav-item" id="nav-bp" onclick="showPage('bp')">
+          <span class="nav-icon">🩺</span> 고령자 혈압
+        </div>
+
+        <div class="nav-section">자료실</div>
+        <div class="nav-item" id="nav-library" onclick="showPage('library')">
+          <span class="nav-icon">📚</span> 법령 · 지침
+        </div>
+
         <div class="nav-section">관리</div>
         <div class="nav-item" id="nav-settings" onclick="showPage('settings')">
           <span class="nav-icon">⚙️</span> 설정
@@ -175,6 +199,10 @@
               <span class="dash-alert-toggle" id="dashAlertToggleIcon">▾ 펼치기</span>
             </div>
             <div id="dashAlertDetail" style="display:none;">
+              <div id="notifAlertInner" style="display:none;">
+                <div class="dash-alert-section-title">🔁 협력사 재업로드 도착</div>
+                <div id="notifAlertList"></div>
+              </div>
               <div id="licenseAlertInner" style="display:none;">
                 <div class="dash-alert-section-title">📑 사업자등록증 미제출</div>
                 <div id="licenseAlertList"></div>
@@ -188,6 +216,11 @@
                 <div id="pendingList"></div>
               </div>
             </div>
+          </div>
+
+          <!-- ①.5 체감온도 (혹서기) -->
+          <div class="card" id="dashWeatherCard" style="display:none;margin-bottom:18px;cursor:pointer;" onclick="showPage('weather')">
+            <div id="dashWeatherBody"></div>
           </div>
 
           <!-- ② 이번 주 일정 (가장 크게) -->
@@ -266,6 +299,7 @@
       <button class="btn btn-secondary" onclick="printMsdsList()">🖨️ 인쇄</button>
       <button class="btn btn-secondary" onclick="openMsdsFullPrintModal()">📄 전문 인쇄</button>
       <button class="btn btn-secondary" onclick="exportMsdsExcel()">📊 엑셀</button>
+      <button class="btn btn-secondary" onclick="openKoshaSearch()">🔍 물질 검색</button>
       <button class="btn btn-secondary" onclick="openPackageModal()">📦 패키지</button>
       <button class="btn btn-primary" id="msdsRegisterBtn" onclick="openMsdsRegister()">+ 등록</button>
     </div>
@@ -652,6 +686,232 @@
       </div>
 
 
+      <!-- ═══ 투입인원 ═══ -->
+      <div class="page" id="page-manpower">
+        <div class="page-header">
+          <div>
+            <div class="page-title">투입인원</div>
+            <div class="page-subtitle">출력일보 엑셀 업로드 → 자동 저장 · 같은 날짜는 새 데이터로 병합</div>
+          </div>
+          <div class="header-actions">
+            <input type="month" id="mpUploadMonth" class="filter-select" style="padding:8px 10px;" title="업로드할 파일의 해당 월">
+            <button class="btn btn-primary" onclick="document.getElementById('mpFileInput').click()">📤 엑셀 업로드</button>
+            <input type="file" id="mpFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleMpFile(this.files[0]);this.value=''">
+          </div>
+        </div>
+        <div class="content-scroll">
+
+          <!-- 월 이동 + 요약 -->
+          <div class="card" style="margin-bottom:14px;">
+            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <button class="btn btn-outline btn-sm" onclick="mpShiftMonth(-1)">◀</button>
+                <div id="mpMonthLabel" style="font-weight:700;font-size:16px;min-width:110px;text-align:center;"></div>
+                <button class="btn btn-outline btn-sm" onclick="mpShiftMonth(1)">▶</button>
+              </div>
+              <div class="stats-row" style="flex:1;margin:0;">
+                <div class="stat-card" style="cursor:default;">
+                  <div class="stat-label">선택 협력사</div>
+                  <div class="stat-value primary" id="mpSumCount">0</div>
+                </div>
+                <div class="stat-card" style="cursor:default;">
+                  <div class="stat-label">총 공수</div>
+                  <div class="stat-value ok" id="mpSumTotal">0</div>
+                </div>
+                <div class="stat-card" style="cursor:default;">
+                  <div class="stat-label" id="mpSumAvgLabel">일평균</div>
+                  <div class="stat-value warn" id="mpSumAvg">0</div>
+                </div>
+              </div>
+              <button class="btn btn-danger btn-sm" onclick="deleteMpMonth()" title="이 달 데이터 전체 삭제">🗑 이 달 삭제</button>
+            </div>
+          </div>
+
+          <div class="mp-grid">
+            <!-- 왼쪽: 협력사 선택 -->
+            <div class="card" style="align-self:start;">
+              <div class="dash-section-header">
+                <div class="dash-section-title">협력사 <span id="mpSelCount" style="color:var(--text3);font-weight:400;font-size:12px;"></span></div>
+              </div>
+              <input type="text" id="mpSearchInput" class="auth-input" placeholder="협력사 검색" style="margin-bottom:8px;" oninput="renderMpCompanyList()">
+              <div id="mpTypeFilters" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+              <div style="display:flex;gap:6px;margin-bottom:8px;">
+                <button class="btn btn-outline btn-sm" style="flex:1;" onclick="mpSelectAll()">전체 선택</button>
+                <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="mpClearSel()">해제</button>
+              </div>
+              <div id="mpCompanyList" style="max-height:420px;overflow-y:auto;"></div>
+            </div>
+
+            <!-- 오른쪽: 차트 + 상세 -->
+            <div style="min-width:0;">
+              <div class="card" style="margin-bottom:14px;">
+                <div class="dash-section-header"><div class="dash-section-title">일별 출력 인원</div></div>
+                <div id="mpChartArea"><div class="mp-empty">이 달에 저장된 데이터가 없습니다. 오른쪽 위에서 월을 선택하고 엑셀을 업로드하세요.</div></div>
+              </div>
+              <div class="card" id="mpDetailCard" style="display:none;">
+                <div class="dash-section-header"><div class="dash-section-title">일별 상세</div></div>
+                <div id="mpDetailGrid" class="mp-detail-grid"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ═══ 혹서기 날씨 ═══ -->
+      <div class="page" id="page-weather">
+        <div class="page-header">
+          <div>
+            <div class="page-title">혹서기 날씨</div>
+            <div class="page-subtitle">체감온도 실측 기록 · 예보 포스터 아카이브 (seongdongxi 자동 수집)</div>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-outline btn-sm" onclick="loadWeatherPage(true)">새로고침</button>
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div class="card" style="margin-bottom:14px;">
+            <div class="dash-section-header"><div class="dash-section-title">최신 예보 포스터</div></div>
+            <div id="wxLatestPoster" style="text-align:center;"><div class="mp-empty">불러오는 중...</div></div>
+          </div>
+          <div class="card" style="margin-bottom:14px;" id="wxHourlyCard">
+            <div class="dash-section-header"><div class="dash-section-title">오늘 시간별 체감온도 예보</div></div>
+            <div id="wxTodayBody"><div class="mp-empty">불러오는 중...</div></div>
+          </div>
+          <div class="card">
+            <div class="dash-section-header">
+              <div class="dash-section-title">포스터 아카이브</div>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-primary btn-sm" id="wxTabForecast" onclick="wxSetTab('forecast')">예보 포스터</button>
+                <button class="btn btn-secondary btn-sm" id="wxTabDaily" onclick="wxSetTab('daily')">실황 스냅샷</button>
+              </div>
+            </div>
+            <div class="form-note" style="margin-bottom:10px;">매일 06:10 / 18:10 / 22:10에 자동 생성된 포스터가 쌓입니다. 클릭하면 원본이 열립니다 — 길게 눌러 카톡으로 공유하세요.</div>
+            <div id="wxPosterGrid" class="wx-grid"><div class="mp-empty">불러오는 중...</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ 취약자 명단 ═══ -->
+      <div class="page" id="page-vulnerable">
+        <div class="page-header">
+          <div>
+            <div class="page-title">취약자 명단</div>
+            <div class="page-subtitle">건강진단 목록 엑셀 → 전입 5일 이내 · 혈압 소견자 · 고령자 자동 분류</div>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-outline btn-sm" id="vulExcelBtn" style="display:none" onclick="downloadVulSignSheet()">📝 서명대지 엑셀</button>
+            <button class="btn btn-primary" onclick="document.getElementById('vulFileInput').click()">📤 건강진단 목록 업로드</button>
+            <input type="file" id="vulFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleVulFile(this.files[0]);this.value=''">
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div id="vulEmpty" class="card"><div class="mp-empty">회사 시스템에서 내려받은 건강진단 목록 엑셀을 올리면<br>관리 대상 3개 그룹을 자동으로 분류합니다.<br><span style="font-size:12px;">각 그룹은 카톡 공지용 이미지(PNG)와 서명대지 엑셀로 내보낼 수 있어요.</span></div></div>
+          <div id="vulResult" style="display:none;">
+            <div class="stats-row" style="margin-bottom:14px;">
+              <div class="stat-card" style="cursor:default;"><div class="stat-label">전입 5일 이내</div><div class="stat-value primary" id="vulCnt1">0</div></div>
+              <div class="stat-card" style="cursor:default;"><div class="stat-label">혈압 소견자</div><div class="stat-value warn" id="vulCnt2">0</div></div>
+              <div class="stat-card" style="cursor:default;"><div class="stat-label">고령 근로자</div><div class="stat-value danger" id="vulCnt3">0</div></div>
+            </div>
+            <div id="vulGroups"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ 고령자 혈압측정 ═══ -->
+      <div class="page" id="page-bp">
+        <div class="page-header">
+          <div>
+            <div class="page-title">고령자 혈압측정</div>
+            <div class="page-subtitle">매주 월·화 혈압측정 대상 고령근로자 (만 60세 이상)</div>
+          </div>
+          <div class="header-actions">
+            <input type="date" id="bpMonday" class="filter-select" style="padding:8px 10px;" title="측정 주간의 월요일">
+            <button class="btn btn-outline btn-sm" id="bpSheetBtn" style="display:none" onclick="downloadBpSheet()">📝 측정 기록지 엑셀</button>
+            <button class="btn btn-primary" onclick="document.getElementById('bpFileInput').click()">📤 건강진단 목록 업로드</button>
+            <input type="file" id="bpFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleBpFile(this.files[0]);this.value=''">
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div id="bpEmpty" class="card"><div class="mp-empty">건강진단 목록 엑셀을 올리면 고령근로자만 추려서 보여줍니다.<br><span style="font-size:12px;">취약자 명단에서 이미 올렸다면 자동으로 이어받아요.</span></div></div>
+          <div id="bpResult" style="display:none;">
+            <div class="card vul-card" style="border-top-color:#6d28d9;">
+              <div class="dash-section-header">
+                <div>
+                  <div class="dash-section-title" style="color:#6d28d9;">고령근로자 <span id="bpCount" style="color:var(--text3);font-weight:400;font-size:13px;"></span></div>
+                  <div style="font-size:12px;color:var(--text3);margin-top:2px;">폭염·중량물 작업 우선 보호 · 매주 월·화 혈압측정</div>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="downloadBpImage()">📷 카톡용 이미지</button>
+              </div>
+              <div id="bpCapture" style="background:#fff;padding:6px 2px;">
+                <div style="display:none;font-weight:800;font-size:16px;color:#6d28d9;padding:8px 6px;" id="bpCapTitle"></div>
+                <table class="vul-table">
+                  <thead><tr><th style="width:30px;">No</th><th>협력회사</th><th>성명</th><th>직종</th><th>나이</th><th>국적</th><th>혈압관리</th><th>메모</th></tr></thead>
+                  <tbody id="bpTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ 자료실: 법령 · KOSHA GUIDE ═══ -->
+      <div class="page" id="page-library">
+        <div class="page-header">
+          <div>
+            <div class="page-title">법령 · 지침</div>
+            <div class="page-subtitle">법제처 국가법령정보 검색 · KOSHA GUIDE 기술지침 카탈로그</div>
+          </div>
+        </div>
+        <div class="content-scroll">
+
+          <!-- 법령 검색 -->
+          <div class="card" style="margin-bottom:14px;">
+            <div class="dash-section-header"><div class="dash-section-title">⚖️ 법령 검색 (법제처)</div></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+              <button class="btn btn-outline btn-sm" onclick="lawQuick('산업안전보건법')">산업안전보건법</button>
+              <button class="btn btn-outline btn-sm" onclick="lawQuick('산업안전보건법 시행령')">시행령</button>
+              <button class="btn btn-outline btn-sm" onclick="lawQuick('산업안전보건법 시행규칙')">시행규칙</button>
+              <button class="btn btn-outline btn-sm" onclick="lawQuick('산업안전보건기준에 관한 규칙')">안전보건규칙</button>
+              <button class="btn btn-outline btn-sm" onclick="lawQuick('중대재해 처벌 등에 관한 법률')">중대재해처벌법</button>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:10px;">
+              <input class="form-input" id="lawQuery" placeholder="법령명 검색 (예: 화학물질관리법)" style="flex:1;" onkeydown="if(event.key==='Enter')runLawSearch()">
+              <button class="btn btn-primary" id="lawSearchBtn" onclick="runLawSearch()">검색</button>
+            </div>
+            <div id="lawResults"><div class="mp-empty" style="padding:16px;">자주 찾는 법령 버튼을 누르거나 법령명을 검색하세요. 최신 시행일 순으로 나와서 개정 여부를 바로 확인할 수 있어요.</div></div>
+          </div>
+
+          <!-- KOSHA GUIDE -->
+          <div class="card">
+            <div class="dash-section-header">
+              <div class="dash-section-title">📘 KOSHA GUIDE 기술지침 <span id="kgCount" style="color:var(--text3);font-weight:400;font-size:12px;"></span></div>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-outline btn-sm" onclick="document.getElementById('kgFileInput').click()">📤 목록 CSV 업로드</button>
+                <input type="file" id="kgFileInput" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleKgFile(this.files[0]);this.value=''">
+              </div>
+            </div>
+            <div id="kgSetup" class="form-note" style="margin-bottom:10px;">
+              공공데이터포털의 <a href="https://www.data.go.kr/data/15116595/fileData.do" target="_blank" style="color:var(--primary);font-weight:700;">공식 KOSHA Guide 목록 CSV</a>를 한 번 올려두면 (1,352건, 로그인 없이 다운로드) 팀 전체가 앱에서 지침번호·명칭으로 바로 검색할 수 있어요.
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:10px;">
+              <input class="form-input" id="kgQuery" placeholder="지침번호·명칭·분류 검색 (예: 온열, 밀폐공간, H-)" style="flex:1;" oninput="renderKgResults()">
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;" id="kgTopics">
+              <button class="btn btn-outline btn-sm" onclick="kgQuick('온열')">🌡 온열질환</button>
+              <button class="btn btn-outline btn-sm" onclick="kgQuick('근골격계')">💪 근골격계</button>
+              <button class="btn btn-outline btn-sm" onclick="kgQuick('밀폐공간')">🕳 밀폐공간</button>
+              <button class="btn btn-outline btn-sm" onclick="kgQuick('호흡보호구')">😷 호흡보호구</button>
+              <button class="btn btn-outline btn-sm" onclick="kgQuick('소음')">🔊 소음</button>
+              <button class="btn btn-outline btn-sm" onclick="kgQuick('석면')">⚠️ 석면</button>
+              <button class="btn btn-outline btn-sm" onclick="kgQuick('국소배기')">🌀 국소배기</button>
+            </div>
+            <div id="kgResults" style="max-height:420px;overflow-y:auto;"></div>
+          </div>
+
+        </div>
+      </div>
+
       <!-- ═══ 일정관리 ═══ -->
       <div class="page" id="page-calendar">
         <div class="page-header">
@@ -703,10 +963,16 @@
           </div>
 
           <div class="card">
-            <div class="card-title"><span class="card-title-icon">👷</span> 협력사 목록</div>
-            <div class="tag-list" id="contractorTags"></div>
-            <div class="add-tag-row">
-              <input type="text" id="newContractor" placeholder="협력사명 입력 후 Enter" onkeydown="if(event.key==='Enter')addContractor()">
+            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+              <span><span class="card-title-icon">👷</span> 협력사 관리 <span id="conMgrCount" style="color:var(--text3);font-weight:400;font-size:13px;"></span></span>
+            </div>
+            <div class="form-note" style="margin-bottom:10px;">이름을 바꾸면 MSDS 대장의 협력사명도 함께 바뀝니다. 공종은 각 행에서 바로 추가/삭제하세요.</div>
+            <div style="display:flex;gap:8px;margin-bottom:10px;">
+              <input type="text" class="form-input" id="conMgrSearch" placeholder="협력사 검색" oninput="renderContractorTags()" style="flex:1;">
+            </div>
+            <div id="conMgrList" style="max-height:440px;overflow-y:auto;"></div>
+            <div class="add-tag-row" style="margin-top:10px;">
+              <input type="text" id="newContractor" placeholder="새 협력사명 입력 후 Enter" onkeydown="if(event.key==='Enter')addContractor()">
               <button class="btn btn-primary btn-sm" onclick="addContractor()">추가</button>
             </div>
           </div>
@@ -762,23 +1028,6 @@
             <div id="businessLicenseList"></div>
           </div>
 
-          <div class="card">
-            <div class="card-title"><span class="card-title-icon">🏗️</span> 공종 관리 (협력사별)</div>
-            <div class="form-note" style="margin-bottom:12px;">협력사를 선택하면 해당 협력사의 공종을 관리할 수 있습니다.</div>
-            <div style="margin-bottom:12px;">
-              <div class="contractor-search-row">
-                <input class="form-input" id="workTypeContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('workTypeContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('workTypeContractor');}">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('workTypeContractor')">검색</button>
-              </div>
-              <select class="form-input" id="workTypeContractor" onchange="renderWorkTypeTags()">
-                <option value="">협력사를 선택하세요</option>
-              </select>
-            </div>
-            <div class="tag-list" id="workTypeTags"><div style="color:var(--text3);font-size:13px;">협력사를 먼저 선택하세요</div></div>
-            <div class="add-tag-row" id="workTypeAddRow" style="display:none">
-              <input type="text" id="newWorkType" placeholder="공종명 입력 후 Enter" onkeydown="if(event.key==='Enter')addWorkType()">
-              <button class="btn btn-primary btn-sm" onclick="addWorkType()">추가</button>
-            </div>
           </div>
 
           <div class="card">
@@ -806,6 +1055,28 @@
     </div><!-- /main -->
   </div><!-- /app -->
 
+  <!-- KOSHA 물질 검색 모달 -->
+  <div class="modal-backdrop" id="koshaModal">
+    <div class="modal" style="max-width:640px;">
+      <div class="modal-header">
+        <div class="modal-title">🔍 화학물질 검색 (KOSHA)</div>
+        <button class="modal-close" onclick="closeModal('koshaModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-note" style="margin-bottom:10px;">MSDS 없이 반입된 물질도 이름이나 CAS 번호로 KOSHA 데이터베이스(2만여 종)에서 찾을 수 있습니다.</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <select class="form-input" id="koshaMode" style="width:110px;flex-shrink:0;">
+            <option value="name">물질명</option>
+            <option value="cas">CAS No.</option>
+          </select>
+          <input class="form-input" id="koshaQuery" placeholder="예) 톨루엔 또는 108-88-3" style="flex:1;" onkeydown="if(event.key==='Enter')runKoshaSearch()">
+          <button class="btn btn-primary" id="koshaSearchBtn" onclick="runKoshaSearch()">검색</button>
+        </div>
+        <div id="koshaResults"><div class="mp-empty" style="padding:20px;">검색어를 입력하세요</div></div>
+      </div>
+    </div>
+  </div>
+
   <!-- 모바일 하단 탭바 -->
   <div class="mobile-tabbar">
     <div class="mobile-tabs">
@@ -826,10 +1097,34 @@
         <span class="mobile-tab-icon">🏥</span>
         <span class="mobile-tab-label">건강</span>
       </button>
-      <button class="mobile-tab" id="mtab-settings" onclick="showPage('settings')">
-        <span class="mobile-tab-icon">⚙️</span>
-        <span class="mobile-tab-label">설정</span>
+      <button class="mobile-tab" id="mtab-more" onclick="openModal('moreSheet')">
+        <span class="mobile-tab-icon">☰</span>
+        <span class="mobile-tab-label">더보기</span>
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- 모바일 더보기 시트 -->
+<div class="modal-backdrop" id="moreSheet">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">전체 메뉴</div>
+      <button class="modal-close" onclick="closeModal('moreSheet')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+        <button class="more-item" onclick="showPage('warning');closeModal('moreSheet')">⚠️<span>경고표지</span></button>
+        <button class="more-item" onclick="showPage('upload-link');closeModal('moreSheet')">🔗<span>협력사 링크</span></button>
+        <button class="more-item" onclick="showPage('measure');closeModal('moreSheet')">📊<span>작업환경측정</span></button>
+        <button class="more-item" onclick="showPage('photos');closeModal('moreSheet')">📷<span>사진 클라우드</span></button>
+        <button class="more-item" onclick="showPage('manpower');closeModal('moreSheet')">👷<span>투입인원</span></button>
+        <button class="more-item" onclick="showPage('weather');closeModal('moreSheet')">☀️<span>혹서기 날씨</span></button>
+        <button class="more-item" onclick="showPage('vulnerable');closeModal('moreSheet')">🧓<span>취약자 명단</span></button>
+        <button class="more-item" onclick="showPage('bp');closeModal('moreSheet')">🩺<span>고령자 혈압</span></button>
+        <button class="more-item" onclick="showPage('library');closeModal('moreSheet')">📚<span>법령·지침</span></button>
+        <button class="more-item" onclick="showPage('settings');closeModal('moreSheet')">⚙️<span>설정</span></button>
+      </div>
     </div>
   </div>
 </div>
