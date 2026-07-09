@@ -1475,14 +1475,50 @@ function buildWarnLabel(r, site) {
   </div>`;
 }
 
+// ═══════════════════════════════════════════════
+// 인쇄 공통 유틸 — 팝업 차단에 안전한 숨김 iframe 방식
+// (기존 window.open 방식은 팝업 차단 시 조용히 실패해 "인쇄가 안 됨"으로 보이는 문제가 있었음)
+// ═══════════════════════════════════════════════
+function openPrintWindow(html) {
+  const old = document.getElementById('__printFrame');
+  if (old) old.remove();
+  const iframe = document.createElement('iframe');
+  iframe.id = '__printFrame';
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
+  const cleanup = () => { try { iframe.remove(); } catch {} };
+  try { iframe.contentWindow.onafterprint = cleanup; } catch {}
+  setTimeout(() => {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (e) {
+      toast('인쇄 창을 열지 못했습니다: ' + (e?.message || e), 'error');
+      cleanup();
+      return;
+    }
+    setTimeout(cleanup, 60000); // afterprint 미지원 브라우저 대비 안전장치
+  }, 350);
+}
+
+function buildPrintHtml(title, pageSize, bodyStyle, bodyHtml) {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>
+    @page{size:${pageSize};margin:6mm;}
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;color:#111;}
+    ${bodyStyle}
+  </style></head><body>${bodyHtml}</body></html>`;
+}
+
 window.printWarnings = function() {
   const ids = [...warnSelected];
   if (ids.length === 0) { toast('인쇄할 물질을 선택하세요', 'error'); return; }
   const site = document.getElementById('warningSite')?.value || currentWS?.name || '현장명';
   const labels = ids.map(id => msdsRecords.find(r => r.id === id)).filter(Boolean);
-  const w = window.open('', '_blank');
   const pages = labels.map(r => `<div class="page-a4">${buildWarnLabel(r, site)}</div>`).join('');
-w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지</title><style>
+  openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지</title><style>
     @page{size:A4;margin:6mm;}
     *{box-sizing:border-box;}
     body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;}
@@ -1504,8 +1540,7 @@ w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고
     .wl-special{background:#FFF3CD;border:1.5px solid #FFC107;border-radius:4px;padding:6px;margin:6px 0;font-size:9px;font-weight:800;color:#856404;text-align:center;}
     .wl-foot{border-top:1px solid #ddd;padding-top:6px;margin-top:8px;font-size:9px;color:#555;line-height:1.7;}
     .wl-foot b{color:#333;margin-right:3px;}
-  </style></head><body>${pages}<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
-  w.document.close();
+  </style></head><body>${pages}</body></html>`);
   toast(`${labels.length}건 인쇄 준비 완료`, 'success');
 };
 
@@ -1552,8 +1587,7 @@ window.printAllWarningsByContractor = function() {
     });
   });
 
-  const w = window.open('', '_blank');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지 전체 인쇄</title><style>
+  openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지 전체 인쇄</title><style>
     @page{size:A4;margin:6mm;}
     *{box-sizing:border-box;}
     body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;}
@@ -1581,8 +1615,7 @@ window.printAllWarningsByContractor = function() {
     .wl-special{background:#FFF3CD;border:1.5px solid #FFC107;border-radius:4px;padding:6px;margin:6px 0;font-size:9px;font-weight:800;color:#856404;text-align:center;}
     .wl-foot{border-top:1px solid #ddd;padding-top:6px;margin-top:8px;font-size:9px;color:#555;line-height:1.7;}
     .wl-foot b{color:#333;margin-right:3px;}
-  </style></head><body>${htmlPages.join('')}<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
-  w.document.close();
+  </style></head><body>${htmlPages.join('')}</body></html>`);
   toast(`협력사 ${groups.length}곳 · 물질 ${sorted.length}건 인쇄 준비 완료 (양면인쇄 설정을 켜주세요)`, 'success');
 };
 
@@ -1674,8 +1707,7 @@ window.printMsdsList = function() {
       </tr>`);
     });
   });
-  const w = window.open('', '_blank');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>
+  openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>
     @page{size:A4 landscape;margin:8mm;}*{box-sizing:border-box;}
     body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;color:#111;}
     .doc-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:6px;border-bottom:3px solid #111;padding-bottom:6px;}
@@ -1692,8 +1724,7 @@ window.printMsdsList = function() {
     <thead><tr><th>No</th><th>협력사</th><th>공종</th><th>제품명</th><th>공급업체</th><th>연락처</th><th>개정일</th><th>CAS No.</th><th>구성성분명</th><th>측정</th><th>특수검진</th><th>관리</th><th>허가</th><th>특별</th><th>위험</th><th>보호구</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
-  <script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
-  w.document.close();
+  </body></html>`);
 };
 
 // ═══════════════════════════════════════════════
