@@ -354,7 +354,20 @@ function populateContractorSelects() {
   });
 }
 
-window.searchContractorSelect = function(id) { populateContractorSelects(); };
+window.searchContractorSelect = function(id) {
+  const isNameBased = id === 'warnFilterContractor'; // 경고표지 필터는 값이 이름 기반
+  isNameBased ? populateWarnContractorFilter() : populateContractorSelects();
+  // 검색 결과가 정확히 1곳이면 자동 선택 + 연동 로직(공종 목록·목록 필터 등)까지 발동
+  const q = (document.getElementById(id + 'Search')?.value || '').trim().toLowerCase();
+  if (!q) return;
+  const matches = contractors.filter(c => c.name.toLowerCase().includes(q));
+  const el = document.getElementById(id);
+  const val = isNameBased ? matches[0]?.name : matches[0]?.id;
+  if (matches.length === 1 && el && el.value !== val) {
+    el.value = val;
+    el.dispatchEvent(new Event('change'));
+  }
+};
 
 function getWorkTypesForContractor(contractorId) {
   return workTypes.filter(w => w.contractor_id === contractorId);
@@ -1371,8 +1384,9 @@ function populateWarnContractorFilter() {
   const sel = document.getElementById('warnFilterContractor');
   if (!sel) return;
   const cur = sel.value;
-  const sorted = [...contractors].sort((a,b) => a.name.localeCompare(b.name, 'ko'));
-  sel.innerHTML = '<option value="">전체 협력사</option>' + sorted.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+  const q = (document.getElementById('warnFilterContractorSearch')?.value || '').trim().toLowerCase();
+  const sorted = [...contractors].filter(c => !q || c.name.toLowerCase().includes(q)).sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+  sel.innerHTML = `<option value="">${q ? `검색결과 ${sorted.length}건 (전체 보기)` : '전체 협력사'}</option>` + sorted.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
   sel.value = sorted.some(c => c.name === cur) ? cur : '';
 }
 

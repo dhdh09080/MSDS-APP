@@ -365,6 +365,9 @@
                 </div>
                 <div class="form-field" style="margin-bottom:10px;">
                   <label class="form-label">협력사 선택</label>
+                  <div class="contractor-search-row">
+                    <input class="form-input" id="warnFilterContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('warnFilterContractor')">
+                  </div>
                   <select class="form-input" id="warnFilterContractor" onchange="renderWarnPickList()">
                     <option value="">전체 협력사</option>
                   </select>
@@ -451,6 +454,9 @@
                 <input class="form-input" id="linkContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('linkContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('linkContractor');}">
                 <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('linkContractor')">검색</button>
               </div>
+            </div>
+            <div class="contractor-search-row">
+              <input class="form-input" id="linkContractorSearch" placeholder="협력사명 검색 (1곳만 남으면 자동 선택)" oninput="searchContractorSelect('linkContractor')">
             </div>
             <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
               <select class="form-input" id="linkContractor" style="flex:1;min-width:180px;"><option value="">협력사 선택</option></select>
