@@ -1,0 +1,240 @@
+diff --git a/index.html b/index.html
+index b8eb5b7..2e7833d 100644
+--- a/index.html
++++ b/index.html
+@@ -329,6 +329,10 @@
+                 </div>
+                 <div class="form-field" style="margin-bottom:10px;">
+                   <label class="form-label">협력사</label>
++                  <div class="contractor-search-row">
++                    <input class="form-input" id="warnFilterContractorSearch" placeholder="협력사명 검색" onkeydown="if(event.key==='Enter'){event.preventDefault();renderWarnPickList();}">
++                    <button type="button" class="btn btn-secondary btn-sm" onclick="renderWarnPickList()">검색</button>
++                  </div>
+                   <select class="form-input" id="warnFilterContractor" onchange="renderWarnPickList()">
+                     <option value="">전체 협력사</option>
+                   </select>
+@@ -407,6 +411,12 @@
+ 
+           <div class="card">
+             <div class="card-title"><span class="card-title-icon">🔗</span> 협력사별 링크 발급</div>
++            <div style="flex:1;min-width:180px;">
++              <div class="contractor-search-row">
++                <input class="form-input" id="linkContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('linkContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('linkContractor');}">
++                <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('linkContractor')">검색</button>
++              </div>
++            </div>
+             <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+               <select class="form-input" id="linkContractor" style="flex:1;min-width:180px;"><option value="">협력사 선택</option></select>
+               <button class="btn btn-primary" onclick="generateUploadLink()">링크 발급</button>
+@@ -755,6 +765,10 @@
+             <div class="card-title"><span class="card-title-icon">🏗️</span> 공종 관리 (협력사별)</div>
+             <div class="form-note" style="margin-bottom:12px;">협력사를 선택하면 해당 협력사의 공종을 관리할 수 있습니다.</div>
+             <div style="margin-bottom:12px;">
++              <div class="contractor-search-row">
++                <input class="form-input" id="workTypeContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('workTypeContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('workTypeContractor');}">
++                <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('workTypeContractor')">검색</button>
++              </div>
+               <select class="form-input" id="workTypeContractor" onchange="renderWorkTypeTags()">
+                 <option value="">협력사를 선택하세요</option>
+               </select>
+@@ -854,6 +868,10 @@
+         <div class="form-grid" style="margin-bottom:14px;">
+           <div class="form-field">
+             <label class="form-label">사용 협력사 <span class="required">*</span></label>
++            <div class="contractor-search-row">
++              <input class="form-input" id="batchContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('batchContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('batchContractor');}">
++              <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('batchContractor')">검색</button>
++            </div>
+             <select class="form-input" id="batchContractor" onchange="updateBatchWorkTypes()"><option value="">선택하세요</option></select>
+           </div>
+           <div class="form-field">
+@@ -904,6 +922,10 @@
+             </div>
+             <div class="form-field">
+               <label class="form-label">사용 협력사 <span class="required">*</span></label>
++              <div class="contractor-search-row">
++                <input class="form-input" id="f_contractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('f_contractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('f_contractor');}">
++                <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('f_contractor')">검색</button>
++              </div>
+               <select class="form-input" id="f_contractor" onchange="updateManualWorkTypes()"><option value="">선택</option></select>
+             </div>
+             <div class="form-field">
+@@ -1046,6 +1068,10 @@
+     <div class="modal-body">
+       <div class="form-field" style="margin-bottom:14px;">
+         <label class="form-label">협력사 선택</label>
++        <div class="contractor-search-row">
++          <input class="form-input" id="pkgContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('pkgContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('pkgContractor');}">
++          <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('pkgContractor')">검색</button>
++        </div>
+         <select class="form-input" id="pkgContractor" onchange="updatePkgCount()"><option value="">선택하세요</option></select>
+       </div>
+       <div class="form-field" style="margin-bottom:14px;">
+diff --git a/src/main.js b/src/main.js
+index 1d887f8..0c1427a 100644
+--- a/src/main.js
++++ b/src/main.js
+@@ -273,112 +273,19 @@ async function loadWorkTypes() {
+ }
+ 
+ function populateContractorSelects() {
+-  const opts = '<option value="">선택하세요</option>' + contractors.map(c => `<option value="${c.id}" data-name="${c.name}">${c.name}</option>`).join('');
+   ['batchContractor','f_contractor','pkgContractor','linkContractor','workTypeContractor'].forEach(id => {
+     const el = document.getElementById(id);
+     if (!el) return;
+-    const cur = el.value; el.innerHTML = opts; el.value = cur;
+-    el._searchSync && el._searchSync();
++    const q = (document.getElementById(id + 'Search')?.value || '').trim().toLowerCase();
++    const list = !q ? contractors : contractors.filter(c => c.name.toLowerCase().includes(q));
++    const cur = el.value;
++    el.innerHTML = '<option value="">' + (q ? `검색결과 ${list.length}건` : '선택하세요') + '</option>' +
++      list.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
++    el.value = list.some(c => c.id === cur) ? cur : '';
+   });
+ }
+ 
+-// ═══════════════════════════════════════════════
+-// 검색 가능한 드롭다운 (협력사 선택 등)
+-// 기존 <select>는 숨겨서 값 저장용으로 유지하고, 위에 검색창 UI를 덧씌운다.
+-// ═══════════════════════════════════════════════
+-function enhanceSearchableSelect(selectId, placeholder) {
+-  const select = document.getElementById(selectId);
+-  if (!select || select.dataset.searchEnhanced) return;
+-  select.dataset.searchEnhanced = '1';
+-  const wrap = document.createElement('div');
+-  wrap.className = 'searchable-select-wrap';
+-  wrap.style.cssText = select.getAttribute('style') || '';
+-  select.style.display = 'none';
+-  select.parentNode.insertBefore(wrap, select);
+-  wrap.appendChild(select);
+-
+-  const input = document.createElement('input');
+-  input.type = 'text';
+-  input.className = 'form-input searchable-select-input';
+-  input.placeholder = placeholder || '입력해서 검색';
+-  input.autocomplete = 'off';
+-  wrap.appendChild(input);
+-
+-  const list = document.createElement('div');
+-  list.className = 'searchable-select-list';
+-  wrap.appendChild(list);
+-
+-  function syncDisplay() {
+-    const opt = select.options[select.selectedIndex];
+-    input.value = (opt && opt.value) ? opt.textContent : '';
+-  }
+-
+-  function currentItems() { return [...list.querySelectorAll('.ss-item')]; }
+-
+-  function setActive(idx) {
+-    const items = currentItems();
+-    items.forEach(it => it.classList.remove('active'));
+-    if (items[idx]) { items[idx].classList.add('active'); items[idx].scrollIntoView({ block: 'nearest' }); }
+-  }
+-
+-  function selectItem(item) {
+-    if (!item) return;
+-    select.value = item.dataset.value;
+-    select.dispatchEvent(new Event('change', { bubbles: true }));
+-    syncDisplay();
+-    list.classList.remove('open');
+-  }
+-
+-  function renderList(filterText) {
+-    const q = (filterText || '').trim().toLowerCase();
+-    const opts = [...select.options].filter(o => o.value);
+-    const matched = !q ? opts : opts.filter(o => o.textContent.toLowerCase().includes(q));
+-    list.innerHTML = matched.length
+-      ? matched.map(o => `<div class="ss-item" data-value="${o.value}">${o.textContent}</div>`).join('')
+-      : '<div class="ss-empty">일치하는 항목이 없습니다</div>';
+-    list.classList.add('open');
+-    if (matched.length) setActive(0);
+-  }
+-
+-  list.addEventListener('mousedown', (e) => {
+-    const item = e.target.closest('.ss-item');
+-    if (!item) return;
+-    e.preventDefault();
+-    selectItem(item);
+-  });
+-  list.addEventListener('mouseover', (e) => {
+-    const item = e.target.closest('.ss-item');
+-    if (!item) return;
+-    setActive(currentItems().indexOf(item));
+-  });
+-
+-  input.addEventListener('focus', () => renderList(''));
+-  input.addEventListener('input', () => renderList(input.value));
+-  input.addEventListener('keydown', (e) => {
+-    if (!list.classList.contains('open') && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { renderList(input.value); return; }
+-    const items = currentItems();
+-    const activeIdx = items.findIndex(it => it.classList.contains('active'));
+-    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(items.length - 1, activeIdx + 1)); }
+-    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, activeIdx - 1)); }
+-    else if (e.key === 'Enter') { e.preventDefault(); selectItem(items[activeIdx] || items[0]); }
+-    else if (e.key === 'Escape') { list.classList.remove('open'); syncDisplay(); input.blur(); }
+-  });
+-  input.addEventListener('blur', () => setTimeout(() => { list.classList.remove('open'); syncDisplay(); }, 150));
+-  select.addEventListener('change', syncDisplay);
+-
+-  select._searchSync = syncDisplay;
+-  syncDisplay();
+-}
+-
+-function enhanceContractorSearchSelects() {
+-  enhanceSearchableSelect('batchContractor', '협력사 검색');
+-  enhanceSearchableSelect('f_contractor', '협력사 검색');
+-  enhanceSearchableSelect('pkgContractor', '협력사 검색');
+-  enhanceSearchableSelect('linkContractor', '협력사 검색');
+-  enhanceSearchableSelect('workTypeContractor', '협력사 검색');
+-  enhanceSearchableSelect('warnFilterContractor', '협력사 검색');
+-}
+-enhanceContractorSearchSelects();
++window.searchContractorSelect = function(id) { populateContractorSelects(); };
+ 
+ function getWorkTypesForContractor(contractorId) {
+   return workTypes.filter(w => w.contractor_id === contractorId);
+@@ -1224,7 +1131,6 @@ window.startMsdsEdit = function(id) {
+     setV('f_productName', r.product_name); setV('f_supplier', r.supplier); setV('f_supplierContact', r.supplier_contact);
+     const con = contractors.find(c => c.name === r.contractor);
+     setV('f_contractor', con?.id||'');
+-    document.getElementById('f_contractor')?._searchSync?.();
+     setTimeout(() => {
+       updateManualWorkTypes();
+       setTimeout(() => setV('f_workType', r.work_type), 50);
+@@ -1313,11 +1219,12 @@ window.closeFileViewer = function() {
+ function populateWarnContractorFilter() {
+   const sel = document.getElementById('warnFilterContractor');
+   if (!sel) return;
++  const q = (document.getElementById('warnFilterContractorSearch')?.value || '').trim().toLowerCase();
+   const cur = sel.value;
+   const sorted = [...contractors].sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+-  sel.innerHTML = '<option value="">전체 협력사</option>' + sorted.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+-  if (sorted.some(c => c.name === cur)) sel.value = cur;
+-  sel._searchSync && sel._searchSync();
++  const filtered = !q ? sorted : sorted.filter(c => c.name.toLowerCase().includes(q));
++  sel.innerHTML = '<option value="">' + (q ? `검색결과 ${filtered.length}건` : '전체 협력사') + '</option>' + filtered.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
++  sel.value = filtered.some(c => c.name === cur) ? cur : '';
+ }
+ 
+ function getFilteredWarnRecords() {
+diff --git a/src/style.css b/src/style.css
+index 0a56076..a2f0fc6 100644
+--- a/src/style.css
++++ b/src/style.css
+@@ -296,13 +296,8 @@ input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; accent-color:
+ .form-input::placeholder { color: var(--text3); }
+ textarea.form-input { resize: vertical; min-height: 80px; }
+ select.form-input { cursor: pointer; }
+-.searchable-select-wrap { position: relative; }
+-.searchable-select-input { width: 100%; }
+-.searchable-select-list { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; max-height: 240px; overflow-y: auto; background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgba(15,23,42,.12); z-index: 300; }
+-.searchable-select-list.open { display: block; }
+-.ss-item { padding: 9px 13px; font-size: 14px; color: var(--text); cursor: pointer; }
+-.ss-item:hover, .ss-item.active { background: var(--surface2); }
+-.ss-empty { padding: 12px 13px; font-size: 13px; color: var(--text3); text-align: center; }
++.contractor-search-row { display: flex; gap: 6px; margin-bottom: 6px; }
++.contractor-search-row .form-input { flex: 1; }
+ .form-note { font-size: 12px; color: var(--text3); line-height: 1.6; }
+ .form-hint { font-size: 11px; color: var(--text3); margin-top: 3px; }
+ 
