@@ -631,3 +631,5 @@ details > summary::-webkit-details-marker { display: none; }
 .more-item { display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px 6px; border:1.5px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); cursor:pointer; font-family:inherit; font-size:22px; }
 .more-item span { font-size:12px; font-weight:600; color:var(--text2); }
 .more-item:active { background:var(--surface2); }
+.contractor-search-row { display: flex; gap: 6px; margin-bottom: 6px; }
+.contractor-search-row .form-input { flex: 1; }

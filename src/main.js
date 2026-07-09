@@ -4554,15 +4554,28 @@ window.handleMpFile = async function(file) {
   try {
     const parsed = await parseMpXlsx(file);
     const dim = mpDaysInMonth(month);
-    const upserts = [];
+    // 같은 협력사가 여러 공종으로 나뉘어 여러 행에 등장하는 경우(예: "OO건설[건축]"+"OO건설[전기]")
+    // company 기준으로는 동일 키가 되므로, upsert 전에 (협력사, 날짜) 단위로 합산 병합한다.
+    // (병합 안 하면 같은 배치 안에 동일 충돌키가 두 번 들어가 Postgres가 'ON CONFLICT DO UPDATE
+    //  command cannot affect row a second time' 오류를 낸다.)
+    const merged = new Map(); // company -> { types:Set, days:{day:sum} }
     for (const p of parsed) {
-      for (const [d, v] of Object.entries(p.days)) {
+      if (!merged.has(p.company)) merged.set(p.company, { types: new Set(), days: {} });
+      const m = merged.get(p.company);
+      if (p.type) m.types.add(p.type);
+      for (const [d, v] of Object.entries(p.days)) m.days[d] = (m.days[d] || 0) + v;
+    }
+    const mergedCount = [...merged.values()].filter(m => m.types.size > 1).length;
+    const upserts = [];
+    for (const [company, m] of merged) {
+      const type = [...m.types].slice(0, 3).join('/') || '기타';
+      for (const [d, v] of Object.entries(m.days)) {
         const day = Number(d);
         if (day < 1 || day > dim) continue; // 존재하지 않는 날짜(예: 6월 31일)는 건너뜀
         upserts.push({
           workspace_id: currentWS.id,
           work_date: `${month}-${String(day).padStart(2,'0')}`,
-          company: p.company, work_type: p.type, headcount: v,
+          company, work_type: type, headcount: v,
           updated_at: new Date().toISOString()
         });
       }
@@ -4574,7 +4587,7 @@ window.handleMpFile = async function(file) {
         .upsert(upserts.slice(i, i + 500), { onConflict: 'workspace_id,work_date,company' });
       if (error) throw error;
     }
-    toast(`${month} 투입인원 ${upserts.length}건 저장 완료 (겹친 날짜는 새 데이터로 병합)`, 'success');
+    toast(`${month} 투입인원 ${upserts.length}건 저장 완료${mergedCount ? ` (여러 공종 협력사 ${mergedCount}곳은 공수 합산 병합)` : ''}`, 'success');
     mpMonth = month;
     await loadManpower();
   } catch (err) {
