@@ -381,6 +381,15 @@
                 <div style="margin-bottom:10px;">
                   <button class="btn btn-secondary btn-sm" style="width:100%;" onclick="printAllWarningsByContractor()">📑 저장된 전체 물질 인쇄 (협력사별 표지 포함)</button>
                 </div>
+                <div id="warnSelWrap" style="display:none;margin-bottom:10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);">
+                  <div style="display:flex;align-items:center;padding:7px 10px;cursor:pointer;user-select:none;" onclick="toggleWarnSelPanel()">
+                    <span style="font-size:12px;font-weight:700;" id="warnSelTitle">✅ 선택된 물질 0건</span>
+                    <span style="flex:1"></span>
+                    <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px;" onclick="event.stopPropagation();clearAllWarnSelected()">전체 해제</button>
+                    <span id="warnSelToggleIcon" style="margin-left:8px;font-size:11px;color:var(--text3);">▾ 접기</span>
+                  </div>
+                  <div id="warnSelChips" style="display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 10px;"></div>
+                </div>
               </div>
               <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;letter-spacing:.5px;" id="warnPickCountLabel">물질 선택</div>
               <div class="warn-pick-list" id="warnPickList">
@@ -388,7 +397,7 @@
               </div>
             </div>
             <div class="warn-right">
-              <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;letter-spacing:.5px;">미리보기 (인쇄 결과와 동일)</div>
+              <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;letter-spacing:.5px;" id="warnPreviewHeader">미리보기 (인쇄 결과와 동일)</div>
               <div class="warn-preview-wrap">
                 <div class="warn-preview-scroll" id="warningPreview">
                   <div class="warn-empty">왼쪽에서 물질을 선택하세요</div>

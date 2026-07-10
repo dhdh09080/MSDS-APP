@@ -633,3 +633,6 @@ details > summary::-webkit-details-marker { display: none; }
 .more-item:active { background:var(--surface2); }
 .contractor-search-row { display: flex; gap: 6px; margin-bottom: 6px; }
 .contractor-search-row .form-input { flex: 1; }
+
+/* 경고표지: 단일 미리보기 중인 행 하이라이트 */
+.warn-pick-item.previewing { background: var(--primary-light); box-shadow: inset 3px 0 0 var(--primary); }

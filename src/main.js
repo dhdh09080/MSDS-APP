@@ -1410,14 +1410,15 @@ function renderWarnPickList() {
   if (msdsRecords.length === 0) { el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">등록된 물질이 없습니다</div>'; return; }
   if (filtered.length === 0) { el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">검색/필터 조건에 맞는 물질이 없습니다</div>'; return; }
   el.innerHTML = filtered.map(r => `
-    <label class="warn-pick-item">
-      <input type="checkbox" class="warn-check" value="${r.id}" onchange="onWarnCheck('${r.id}',this.checked)" ${warnSelected.has(r.id)?'checked':''}>
+    <div class="warn-pick-item ${warnPreviewSingle===r.id?'previewing':''}" onclick="warnPreviewOne('${r.id}')" title="클릭하면 이 표지만 미리보기 (선택과 무관)">
+      <input type="checkbox" class="warn-check" value="${r.id}" onclick="event.stopPropagation()" onchange="onWarnCheck('${r.id}',this.checked)" ${warnSelected.has(r.id)?'checked':''} title="인쇄 대상으로 선택">
       <div style="flex:1;min-width:0;">
         <div class="wp-name">${r.product_name}</div>
         <div class="wp-sub">${r.contractor} ${r.work_type?'/ '+r.work_type:''} ${r.signal_word?'· '+r.signal_word:''} ${r.cas_no?'· CAS '+r.cas_no:''}</div>
       </div>
       ${r.legal_special==='Y'?'<span class="badge badge-danger">특별</span>':''}
-    </label>`).join('');
+    </div>`).join('');
+  renderWarnSelPanel();
 }
 window.renderWarnPickList = renderWarnPickList;
 
@@ -1425,6 +1426,7 @@ window.onWarnCheck = function(id, checked) {
   if(checked) warnSelected.add(id); else warnSelected.delete(id);
   const countLabel = document.getElementById('warnPickCountLabel');
   if (countLabel) countLabel.textContent = countLabel.textContent.replace(/\d+건 선택됨/, `${warnSelected.size}건 선택됨`);
+  renderWarnSelPanel();
   updateWarningPreview();
 };
 window.selectAllWarn = function(v) {
@@ -1433,18 +1435,103 @@ window.selectAllWarn = function(v) {
   if (v) filtered.forEach(r => warnSelected.add(r.id));
   else filtered.forEach(r => warnSelected.delete(r.id));
   renderWarnPickList();
+  renderWarnSelPanel();
   updateWarningPreview();
 };
 
+let warnPreviewSingle = null; // 단일 미리보기 중인 레코드 id (선택과 무관)
+
 window.updateWarningPreview = function() {
-  const ids = [...warnSelected];
   const prev = document.getElementById('warningPreview');
+  const header = document.getElementById('warnPreviewHeader');
   if (!prev) return;
-  if (ids.length === 0) { prev.innerHTML='<div class="warn-empty">왼쪽에서 물질을 선택하세요</div>'; return; }
   const site = document.getElementById('warningSite')?.value || currentWS?.name || '현장명';
+
+  // ── 단일 미리보기 모드: 행 클릭으로 진입, 선택 여부와 무관 ──
+  if (warnPreviewSingle) {
+    const r = msdsRecords.find(x => x.id === warnPreviewSingle);
+    if (!r) { warnPreviewSingle = null; }
+    else {
+      const sel = warnSelected.has(r.id);
+      if (header) header.textContent = `단일 미리보기 — ${r.product_name}`;
+      prev.innerHTML = `
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+          <button class="btn ${sel?'btn-secondary':'btn-primary'} btn-sm" onclick="onWarnCheck('${r.id}',${!sel});warnPreviewOne('${r.id}');renderWarnPickList();">${sel?'✓ 선택됨 — 선택 해제':'＋ 인쇄 선택에 추가'}</button>
+          <button class="btn btn-outline btn-sm" onclick="printSingleWarning('${r.id}')">🖨 이 표지만 인쇄</button>
+          <button class="btn btn-secondary btn-sm" onclick="warnShowAllPreview()">← 선택 전체 보기 (${warnSelected.size}건)</button>
+        </div>
+        <div style="transform:scale(0.85);transform-origin:top left;width:calc(100% / 0.85);">${buildWarnLabel(r, site)}</div>`;
+      return;
+    }
+  }
+
+  // ── 선택 전체 미리보기 모드 (기본) ──
+  if (header) header.textContent = '미리보기 (인쇄 결과와 동일)';
+  const ids = [...warnSelected];
+  if (ids.length === 0) { prev.innerHTML='<div class="warn-empty">체크박스로 인쇄할 물질을 선택하거나,<br>물질 이름을 클릭해 표지를 미리 확인하세요</div>'; return; }
   const labels = ids.map(id => msdsRecords.find(r => r.id === id)).filter(Boolean);
   prev.innerHTML = `<div style="font-size:12px;color:var(--text3);margin-bottom:12px;"><strong style="color:var(--text)">${ids.length}개</strong> 선택됨 · A4 한 장에 하나씩</div>` +
     labels.map(r => `<div style="margin-bottom:20px;transform:scale(0.85);transform-origin:top left;width:calc(100% / 0.85);">${buildWarnLabel(r, site)}</div>`).join('');
+};
+
+window.warnPreviewOne = function(id) {
+  warnPreviewSingle = id;
+  renderWarnPickList(); // 현재 보는 행 하이라이트
+  updateWarningPreview();
+};
+
+window.warnShowAllPreview = function() {
+  warnPreviewSingle = null;
+  renderWarnPickList();
+  updateWarningPreview();
+};
+
+window.printSingleWarning = function(id) {
+  const keep = new Set(warnSelected);
+  warnSelected = new Set([id]);
+  printWarnings();
+  warnSelected = keep;
+};
+
+// ── 선택된 물질 패널 (필터와 무관하게 전체 선택 상태 표시) ──
+let warnSelPanelOpen = true;
+
+function renderWarnSelPanel() {
+  const wrap = document.getElementById('warnSelWrap');
+  const chips = document.getElementById('warnSelChips');
+  const title = document.getElementById('warnSelTitle');
+  if (!wrap || !chips) return;
+  if (!warnSelected.size) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  title.textContent = `✅ 선택된 물질 ${warnSelected.size}건 (필터와 무관하게 전부 인쇄됨)`;
+  chips.style.display = warnSelPanelOpen ? 'flex' : 'none';
+  document.getElementById('warnSelToggleIcon').textContent = warnSelPanelOpen ? '▾ 접기' : '▸ 펼치기';
+  if (!warnSelPanelOpen) return;
+  chips.innerHTML = [...warnSelected].map(id => {
+    const r = msdsRecords.find(x => x.id === id);
+    if (!r) return '';
+    return `<span class="tag" style="cursor:pointer;" onclick="warnPreviewOne('${id}')" title="클릭하면 미리보기">${r.product_name} <span style="color:var(--text3);font-size:10px;">${r.contractor}</span><span class="tag-remove" onclick="event.stopPropagation();warnRemoveSel('${id}')">✕</span></span>`;
+  }).join('');
+}
+
+window.toggleWarnSelPanel = function() {
+  warnSelPanelOpen = !warnSelPanelOpen;
+  renderWarnSelPanel();
+};
+
+window.warnRemoveSel = function(id) {
+  warnSelected.delete(id);
+  renderWarnPickList();
+  renderWarnSelPanel();
+  updateWarningPreview();
+};
+
+window.clearAllWarnSelected = function() {
+  if (warnSelected.size && !confirm(`선택된 ${warnSelected.size}건을 모두 해제할까요?`)) return;
+  warnSelected.clear();
+  renderWarnPickList();
+  renderWarnSelPanel();
+  updateWarningPreview();
 };
 
 function buildWarnLabel(r, site) {
