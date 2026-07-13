@@ -99,6 +99,35 @@ export const P_CODES = {
   'P410+P412':'직사광선을 피하시오. 50℃ 이상의 온도에 노출시키지 마시오.',
 };
 
+// ═══ 고용노동부고시 제2023-9호 그림문자 작성규칙 ═══
+// ① 해골(GHS06)과 감탄부호(GHS07)에 모두 해당 → GHS06만 표시
+// ② 5개 이상 → 4개만 표시 가능
+export function applyPictogramRules(codes) {
+  let c = [...new Set(codes)];
+  if (c.includes('GHS06') && c.includes('GHS07')) c = c.filter(x => x !== 'GHS07');
+  const truncated = c.length > 4;
+  return { codes: c.slice(0, 4), truncated };
+}
+
+// 예방조치문구 7개 이상 → 예방(P2)·대응(P3)·저장(P4)·폐기(P5) 각 1개 이상 포함 6개만 기재 가능
+// 이 경우 "표시하지 않은 예방조치 문구는 MSDS 참조" 안내 필요 (호출측에서 표기)
+export function condensePCodes(list) {
+  if (!list || list.length <= 6) return { list: list || [], condensed: false };
+  const cat = p => ({ '2': 0, '3': 1, '4': 2, '5': 3 })[(p.code.match(/^P(\d)/) || [])[1]] ?? 4;
+  const picked = new Set();
+  [0, 1, 2, 3].forEach(c => {
+    const f = list.find(p => cat(p) === c && !picked.has(p));
+    if (f) picked.add(f);
+  });
+  for (const p of list) {
+    if (picked.size >= 6) break;
+    picked.add(p);
+  }
+  const order = new Map(list.map((p, i) => [p, i]));
+  const out = [...picked].sort((a, b) => order.get(a) - order.get(b)).slice(0, 6);
+  return { list: out, condensed: true };
+}
+
 export function decodeHCodes(str) {
   if (!str) return [];
   const results = [];
