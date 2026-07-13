@@ -1,6 +1,7 @@
 import { supabase } from './lib/supabase.js';
 import { generateCode, generateToken, base64ToBlob, downloadBlob, guessFromPath, today } from './lib/utils.js';
-import { ghsPictogramWithLabel, decodeHCodes, decodePCodes, GHS_NAMES } from './lib/ghs.js';
+import { ghsPictogramWithLabel, decodeHCodes, decodePCodes, GHS_NAMES, applyPictogramRules, condensePCodes } from './lib/ghs.js';
+import qrcode from 'qrcode-generator';
 
 // ═══════════════════════════════════════════════
 // State
@@ -12,6 +13,8 @@ let tokens = [], members = [];
 let msdsFileQueue = [], healthFileQueue = [];
 let editingMsdsId = null, currentDetailId = null, receiptEditId = null;
 let warnSelected = new Set();
+let warnLabelSize = 'a4'; // a4(전면) | a5(2분할) | a6(4분할) | mini(8분할 소분용기)
+let warnQrEnabled = true;
 let pendingInvites = [];
 let measureFileData = null, measureFileName_val = null;
 
@@ -354,7 +357,20 @@ function populateContractorSelects() {
   });
 }
 
-window.searchContractorSelect = function(id) { populateContractorSelects(); };
+window.searchContractorSelect = function(id) {
+  const isNameBased = id === 'warnFilterContractor'; // 경고표지 필터는 값이 이름 기반
+  isNameBased ? populateWarnContractorFilter() : populateContractorSelects();
+  // 검색 결과가 정확히 1곳이면 자동 선택 + 연동 로직(공종 목록·목록 필터 등)까지 발동
+  const q = (document.getElementById(id + 'Search')?.value || '').trim().toLowerCase();
+  if (!q) return;
+  const matches = contractors.filter(c => c.name.toLowerCase().includes(q));
+  const el = document.getElementById(id);
+  const val = isNameBased ? matches[0]?.name : matches[0]?.id;
+  if (matches.length === 1 && el && el.value !== val) {
+    el.value = val;
+    el.dispatchEvent(new Event('change'));
+  }
+};
 
 function getWorkTypesForContractor(contractorId) {
   return workTypes.filter(w => w.contractor_id === contractorId);
@@ -1371,8 +1387,9 @@ function populateWarnContractorFilter() {
   const sel = document.getElementById('warnFilterContractor');
   if (!sel) return;
   const cur = sel.value;
-  const sorted = [...contractors].sort((a,b) => a.name.localeCompare(b.name, 'ko'));
-  sel.innerHTML = '<option value="">전체 협력사</option>' + sorted.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+  const q = (document.getElementById('warnFilterContractorSearch')?.value || '').trim().toLowerCase();
+  const sorted = [...contractors].filter(c => !q || c.name.toLowerCase().includes(q)).sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+  sel.innerHTML = `<option value="">${q ? `검색결과 ${sorted.length}건 (전체 보기)` : '전체 협력사'}</option>` + sorted.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
   sel.value = sorted.some(c => c.name === cur) ? cur : '';
 }
 
@@ -1396,14 +1413,15 @@ function renderWarnPickList() {
   if (msdsRecords.length === 0) { el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">등록된 물질이 없습니다</div>'; return; }
   if (filtered.length === 0) { el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">검색/필터 조건에 맞는 물질이 없습니다</div>'; return; }
   el.innerHTML = filtered.map(r => `
-    <label class="warn-pick-item">
-      <input type="checkbox" class="warn-check" value="${r.id}" onchange="onWarnCheck('${r.id}',this.checked)" ${warnSelected.has(r.id)?'checked':''}>
+    <div class="warn-pick-item ${warnPreviewSingle===r.id?'previewing':''}" onclick="warnPreviewOne('${r.id}')" title="클릭하면 이 표지만 미리보기 (선택과 무관)">
+      <input type="checkbox" class="warn-check" value="${r.id}" onclick="event.stopPropagation()" onchange="onWarnCheck('${r.id}',this.checked)" ${warnSelected.has(r.id)?'checked':''} title="인쇄 대상으로 선택">
       <div style="flex:1;min-width:0;">
         <div class="wp-name">${r.product_name}</div>
         <div class="wp-sub">${r.contractor} ${r.work_type?'/ '+r.work_type:''} ${r.signal_word?'· '+r.signal_word:''} ${r.cas_no?'· CAS '+r.cas_no:''}</div>
       </div>
       ${r.legal_special==='Y'?'<span class="badge badge-danger">특별</span>':''}
-    </label>`).join('');
+    </div>`).join('');
+  renderWarnSelPanel();
 }
 window.renderWarnPickList = renderWarnPickList;
 
@@ -1411,6 +1429,7 @@ window.onWarnCheck = function(id, checked) {
   if(checked) warnSelected.add(id); else warnSelected.delete(id);
   const countLabel = document.getElementById('warnPickCountLabel');
   if (countLabel) countLabel.textContent = countLabel.textContent.replace(/\d+건 선택됨/, `${warnSelected.size}건 선택됨`);
+  renderWarnSelPanel();
   updateWarningPreview();
 };
 window.selectAllWarn = function(v) {
@@ -1419,80 +1438,316 @@ window.selectAllWarn = function(v) {
   if (v) filtered.forEach(r => warnSelected.add(r.id));
   else filtered.forEach(r => warnSelected.delete(r.id));
   renderWarnPickList();
+  renderWarnSelPanel();
   updateWarningPreview();
 };
 
+let warnPreviewSingle = null; // 단일 미리보기 중인 레코드 id (선택과 무관)
+
 window.updateWarningPreview = function() {
-  const ids = [...warnSelected];
   const prev = document.getElementById('warningPreview');
+  const header = document.getElementById('warnPreviewHeader');
   if (!prev) return;
-  if (ids.length === 0) { prev.innerHTML='<div class="warn-empty">왼쪽에서 물질을 선택하세요</div>'; return; }
   const site = document.getElementById('warningSite')?.value || currentWS?.name || '현장명';
+
+  // ── 단일 미리보기 모드: 행 클릭으로 진입, 선택 여부와 무관 ──
+  if (warnPreviewSingle) {
+    const r = msdsRecords.find(x => x.id === warnPreviewSingle);
+    if (!r) { warnPreviewSingle = null; }
+    else {
+      const sel = warnSelected.has(r.id);
+      if (header) header.textContent = `단일 미리보기 — ${r.product_name}`;
+      prev.innerHTML = `
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+          <button class="btn ${sel?'btn-secondary':'btn-primary'} btn-sm" onclick="onWarnCheck('${r.id}',${!sel});warnPreviewOne('${r.id}');renderWarnPickList();">${sel?'✓ 선택됨 — 선택 해제':'＋ 인쇄 선택에 추가'}</button>
+          <button class="btn btn-outline btn-sm" onclick="printSingleWarning('${r.id}')">🖨 이 표지만 인쇄</button>
+          <button class="btn btn-secondary btn-sm" onclick="warnShowAllPreview()">← 선택 전체 보기 (${warnSelected.size}건)</button>
+        </div>
+        <div style="transform:scale(0.85);transform-origin:top left;width:calc(100% / 0.85);">${buildWarnLabel(r, site)}</div>`;
+      return;
+    }
+  }
+
+  // ── 선택 전체 미리보기 모드 (기본) ──
+  if (header) header.textContent = '미리보기 (인쇄 결과와 동일)';
+  const ids = [...warnSelected];
+  if (ids.length === 0) { prev.innerHTML='<div class="warn-empty">체크박스로 인쇄할 물질을 선택하거나,<br>물질 이름을 클릭해 표지를 미리 확인하세요</div>'; return; }
   const labels = ids.map(id => msdsRecords.find(r => r.id === id)).filter(Boolean);
-  prev.innerHTML = `<div style="font-size:12px;color:var(--text3);margin-bottom:12px;"><strong style="color:var(--text)">${ids.length}개</strong> 선택됨 · A4 한 장에 하나씩</div>` +
+  const szCfg = WARN_SIZES[warnLabelSize];
+  prev.innerHTML = `<div style="font-size:12px;color:var(--text3);margin-bottom:12px;"><strong style="color:var(--text)">${ids.length}개</strong> 선택됨 · ${szCfg.name} — A4 한 장에 ${szCfg.perPage}매 (총 ${Math.ceil(ids.length / szCfg.perPage)}장)</div>` +
     labels.map(r => `<div style="margin-bottom:20px;transform:scale(0.85);transform-origin:top left;width:calc(100% / 0.85);">${buildWarnLabel(r, site)}</div>`).join('');
 };
 
-function buildWarnLabel(r, site) {
+window.warnPreviewOne = function(id) {
+  warnPreviewSingle = id;
+  renderWarnPickList(); // 현재 보는 행 하이라이트
+  updateWarningPreview();
+};
+
+window.warnShowAllPreview = function() {
+  warnPreviewSingle = null;
+  renderWarnPickList();
+  updateWarningPreview();
+};
+
+window.printSingleWarning = function(id) {
+  const keep = new Set(warnSelected);
+  warnSelected = new Set([id]);
+  printWarnings();
+  warnSelected = keep;
+};
+
+// ── 선택된 물질 패널 (필터와 무관하게 전체 선택 상태 표시) ──
+let warnSelPanelOpen = true;
+
+function renderWarnSelPanel() {
+  const wrap = document.getElementById('warnSelWrap');
+  const chips = document.getElementById('warnSelChips');
+  const title = document.getElementById('warnSelTitle');
+  if (!wrap || !chips) return;
+  if (!warnSelected.size) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  title.textContent = `✅ 선택된 물질 ${warnSelected.size}건 (필터와 무관하게 전부 인쇄됨)`;
+  chips.style.display = warnSelPanelOpen ? 'flex' : 'none';
+  document.getElementById('warnSelToggleIcon').textContent = warnSelPanelOpen ? '▾ 접기' : '▸ 펼치기';
+  if (!warnSelPanelOpen) return;
+  chips.innerHTML = [...warnSelected].map(id => {
+    const r = msdsRecords.find(x => x.id === id);
+    if (!r) return '';
+    return `<span class="tag" style="cursor:pointer;" onclick="warnPreviewOne('${id}')" title="클릭하면 미리보기">${r.product_name} <span style="color:var(--text3);font-size:10px;">${r.contractor}</span><span class="tag-remove" onclick="event.stopPropagation();warnRemoveSel('${id}')">✕</span></span>`;
+  }).join('');
+}
+
+window.toggleWarnSelPanel = function() {
+  warnSelPanelOpen = !warnSelPanelOpen;
+  renderWarnSelPanel();
+};
+
+window.warnRemoveSel = function(id) {
+  warnSelected.delete(id);
+  renderWarnPickList();
+  renderWarnSelPanel();
+  updateWarningPreview();
+};
+
+window.clearAllWarnSelected = function() {
+  if (warnSelected.size && !confirm(`선택된 ${warnSelected.size}건을 모두 해제할까요?`)) return;
+  warnSelected.clear();
+  renderWarnPickList();
+  renderWarnSelPanel();
+  updateWarningPreview();
+};
+
+// ═══ 라벨 크기 프리셋 (A4 용지 분할 기준, 고시 제2023-9호 별표 규격 대응) ═══
+const WARN_SIZES = {
+  a4:   { name: 'A4 전면',            perPage: 1, picto: 80, area: '약 620㎠' },
+  a5:   { name: 'A4 2분할 (A5)',      perPage: 2, picto: 56, area: '약 310㎠' },
+  a6:   { name: 'A4 4분할 (A6)',      perPage: 4, picto: 44, area: '약 155㎠' },
+  mini: { name: 'A4 8분할 (소분용기)', perPage: 8, picto: 40, area: '약 77㎠' },
+};
+
+// QR코드 SVG — 스캔 시 msds-view Edge Function이 원본 PDF로 리다이렉트
+function warnQrSvg(r) {
+  if (!warnQrEnabled || !r.pdf_path) return '';
+  try {
+    const base = (import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+    const qr = qrcode(0, 'M');
+    qr.addData(`${base}/functions/v1/msds-view?id=${r.id}`);
+    qr.make();
+    return qr.createSvgTag({ cellSize: 2, margin: 0, scalable: true });
+  } catch { return ''; }
+}
+
+function buildWarnLabel(r, site, size = warnLabelSize) {
   const isDanger = r.signal_word?.includes('위험');
-  const codes = (r.pictograms||'').match(/GHS\d{2}/g)||[];
+  const rawCodes = (r.pictograms || '').match(/GHS\d{2}/g) || [];
+  const { codes } = applyPictogramRules(rawCodes); // 법정 규칙: GHS06>GHS07, 최대 4개
+  const cfg = WARN_SIZES[size] || WARN_SIZES.a4;
   const pictoHtml = codes.length
-    ? codes.map(c => ghsPictogramWithLabel(c, 80)).join('')
-    : '<span style="font-size:36px;">⚠️</span>';
+    ? codes.map(c => ghsPictogramWithLabel(c, cfg.picto)).join('')
+    : `<span style="font-size:${Math.round(cfg.picto * 0.45)}px;">⚠️</span>`;
+  const qrSvg = warnQrSvg(r);
+  const qrBox = qrSvg ? `<div class="wl-qr"><div class="wl-qr-img">${qrSvg}</div><div class="wl-qr-cap">QR스캔 →<br>MSDS 원본</div></div>` : '';
+
+  // ── 소분용기 간이표지 (고시 제6조②: 100g/100㎖ 이하 → 명칭·그림문자·신호어·공급자정보만) ──
+  if (size === 'mini') {
+    return `<div class="wlabel wlabel--mini">
+      <div class="wl-name-box">${r.product_name}</div>
+      <div class="wl-mini-row">
+        <div class="wl-picto-row">${pictoHtml}</div>
+        ${qrBox}
+      </div>
+      <div class="wl-signal-bar ${isDanger ? 'danger' : 'warning'}">${r.signal_word || '경고'}</div>
+      <div class="wl-foot">
+        <div><b>공급</b>${r.supplier || '-'} ${r.supplier_contact ? '(' + r.supplier_contact + ')' : ''}</div>
+        <div style="font-weight:700;">■ 자세한 내용은 MSDS 참조 (100㎖ 이하 소분용기용 간이표지)</div>
+      </div>
+    </div>`;
+  }
+
   const hList = decodeHCodes(r.h_codes);
-  const pList = decodePCodes(r.p_codes);
-  const hHtml = hList.length ? hList.map(h => `<li><span style="color:#888;font-size:10px;">[${h.code}]</span> ${h.text}</li>`).join('') : '<li>해당 정보 없음</li>';
-  const pHtml = pList.length ? pList.map(p => `<li><span style="color:#888;font-size:10px;">[${p.code}]</span> ${p.text}</li>`).join('') : '<li>해당 정보 없음</li>';
-  return `<div class="wlabel">
-    <div class="wl-top">(산업안전보건법 제114조 규정에 의한 경고표지)</div>
+  const pRaw = decodePCodes(r.p_codes);
+  // A4 전면은 전체 기재, 축소 라벨은 법정 허용 범위(예방·대응·저장·폐기 각 1개 포함 6개)로 축약
+  const { list: pList, condensed } = size === 'a4' ? { list: pRaw, condensed: false } : condensePCodes(pRaw);
+  const hHtml = hList.length ? hList.map(h => `<li><span style="color:#888;font-size:0.85em;">[${h.code}]</span> ${h.text}</li>`).join('') : '<li>해당 정보 없음</li>';
+  const pHtml = (pList.length ? pList.map(p => `<li><span style="color:#888;font-size:0.85em;">[${p.code}]</span> ${p.text}</li>`).join('') : '<li>해당 정보 없음</li>')
+    + (condensed ? '<li style="font-weight:700;">그 밖의 예방조치 문구는 MSDS 참조</li>' : '');
+
+  return `<div class="wlabel wlabel--${size}">
+    <div class="wl-top">(산업안전보건법 제115조 규정에 의한 경고표지)</div>
     <div class="wl-name-box">${r.product_name}</div>
     <div class="wl-picto-row">${pictoHtml}</div>
-    <div class="wl-signal-bar ${isDanger?'danger':'warning'}">신호어 : ${r.signal_word||'경고'}</div>
+    <div class="wl-signal-bar ${isDanger ? 'danger' : 'warning'}">신호어 : ${r.signal_word || '경고'}</div>
     <div class="wl-block"><div class="wl-block-head">유해·위험 문구</div><ul class="wl-list">${hHtml}</ul></div>
     <div class="wl-block"><div class="wl-block-head">예방조치 문구</div><ul class="wl-list">${pHtml}</ul></div>
-    ${r.protective_equipment?`<div class="wl-block"><div class="wl-block-head">개인보호구</div><div class="wl-pe">${r.protective_equipment}</div></div>`:''}
-    ${r.legal_special==='Y'?`<div class="wl-special">⚠️ 특별관리물질 — 취급 시 관리감독자 확인 및 특별안전보건교육 필수</div>`:''}
-    <div class="wl-foot">
-      <div><b>공급업체</b>${r.supplier||'-'} ${r.supplier_contact?'('+r.supplier_contact+')':''}</div>
-      <div><b>사용 협력사</b>${r.contractor||'-'} ${r.work_type?'/ '+r.work_type:''}</div>
-      <div><b>현장</b>${site}</div>
-      <div style="margin-top:6px;font-weight:700;text-align:center;">■ 기타 자세한 내용은 물질안전보건자료(MSDS) 참조</div>
+    ${r.protective_equipment && size !== 'a6' ? `<div class="wl-block"><div class="wl-block-head">개인보호구</div><div class="wl-pe">${r.protective_equipment}</div></div>` : ''}
+    ${r.legal_special === 'Y' ? `<div class="wl-special">⚠️ 특별관리물질 — 취급 시 관리감독자 확인 및 특별안전보건교육 필수</div>` : ''}
+    <div class="wl-foot-row">
+      <div class="wl-foot">
+        <div><b>공급업체</b>${r.supplier || '-'} ${r.supplier_contact ? '(' + r.supplier_contact + ')' : ''}</div>
+        <div><b>사용 협력사</b>${r.contractor || '-'} ${r.work_type ? '/ ' + r.work_type : ''}</div>
+        <div><b>현장</b>${site} · <b>발행</b>${today()}</div>
+        <div style="margin-top:4px;font-weight:700;">■ 기타 자세한 내용은 물질안전보건자료(MSDS) 참조</div>
+      </div>
+      ${qrBox}
     </div>
   </div>`;
+}
+
+// ═══ 라벨 공통 인쇄 CSS — 크기별 폰트 스케일 + A4 분할 시트 그리드 ═══
+function warnLabelCss() {
+  return `
+    .sheet{display:grid;page-break-after:always;width:100%;min-height:283mm;max-height:283mm;overflow:hidden;}
+    .sheet:last-child{page-break-after:auto;}
+    .sheet-1{grid-template-columns:1fr;grid-template-rows:1fr;}
+    .sheet-2{grid-template-columns:1fr;grid-template-rows:1fr 1fr;}
+    .sheet-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
+    .sheet-8{grid-template-columns:1fr 1fr;grid-template-rows:repeat(4,1fr);}
+    .cell{padding:3mm;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;border:0.2mm dashed #bbb;}
+    .sheet-1 .cell{border:none;padding:0;}
+    .wlabel{border:3px solid #111;border-radius:6px;padding:14px;width:100%;font-family:'Malgun Gothic',sans-serif;color:#111;background:#fff;font-size:9px;}
+    .wlabel--a5{padding:9px;font-size:8px;border-width:2px;}
+    .wlabel--a6{padding:7px;font-size:7px;border-width:1.5px;}
+    .wlabel--mini{padding:6px;font-size:7px;border-width:1.5px;}
+    .wl-top{text-align:center;font-size:11px;font-weight:700;margin-bottom:6px;}
+    .wlabel--a5 .wl-top{font-size:8px;margin-bottom:4px;}
+    .wlabel--a6 .wl-top{font-size:7px;margin-bottom:3px;}
+    .wl-name-box{border:2.5px solid #E30613;border-radius:5px;text-align:center;font-size:24px;font-weight:900;padding:8px;margin-bottom:10px;letter-spacing:3px;}
+    .wlabel--a5 .wl-name-box{font-size:16px;padding:5px;margin-bottom:6px;letter-spacing:2px;border-width:2px;}
+    .wlabel--a6 .wl-name-box{font-size:12px;padding:3px;margin-bottom:4px;letter-spacing:1px;border-width:1.5px;}
+    .wlabel--mini .wl-name-box{font-size:11px;padding:2px;margin-bottom:4px;letter-spacing:1px;border-width:1.5px;}
+    .wl-picto-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end;}
+    .wlabel--a5 .wl-picto-row{gap:6px;margin-bottom:6px;}
+    .wlabel--a6 .wl-picto-row,.wlabel--mini .wl-picto-row{gap:4px;margin-bottom:4px;}
+    .wl-mini-row{display:flex;align-items:center;justify-content:space-between;gap:4px;}
+    .wl-signal-bar{text-align:center;font-size:15px;font-weight:900;color:#fff;padding:6px;border-radius:5px;margin-bottom:10px;}
+    .wlabel--a5 .wl-signal-bar{font-size:11px;padding:4px;margin-bottom:6px;}
+    .wlabel--a6 .wl-signal-bar,.wlabel--mini .wl-signal-bar{font-size:9px;padding:2px;margin-bottom:4px;}
+    .wl-signal-bar.danger{background:#C0392B;} .wl-signal-bar.warning{background:#E67E22;}
+    .wl-block{margin-bottom:7px;border:1px solid #ccc;border-radius:4px;overflow:hidden;}
+    .wlabel--a6 .wl-block{margin-bottom:4px;}
+    .wl-block-head{background:#C0392B;color:#fff;font-size:10px;font-weight:800;padding:3px 10px;}
+    .wlabel--a5 .wl-block-head{font-size:8px;padding:2px 6px;}
+    .wlabel--a6 .wl-block-head{font-size:7px;padding:1px 5px;}
+    .wl-list{margin:0;padding:5px 10px 5px 22px;font-size:9px;line-height:1.7;columns:2;column-gap:12px;}
+    .wlabel--a5 .wl-list{font-size:7.5px;line-height:1.55;padding:3px 6px 3px 16px;column-gap:8px;}
+    .wlabel--a6 .wl-list{font-size:6.5px;line-height:1.45;padding:2px 5px 2px 13px;columns:1;}
+    .wl-list li{break-inside:avoid;}
+    .wl-pe{padding:5px 10px;font-size:9px;font-weight:600;columns:2;column-gap:12px;}
+    .wlabel--a5 .wl-pe{font-size:7.5px;padding:3px 6px;}
+    .wl-special{background:#FFF3CD;border:1.5px solid #FFC107;border-radius:4px;padding:6px;margin:6px 0;font-size:9px;font-weight:800;color:#856404;text-align:center;}
+    .wlabel--a5 .wl-special{font-size:7.5px;padding:4px;margin:4px 0;}
+    .wlabel--a6 .wl-special{font-size:6.5px;padding:2px;margin:3px 0;border-width:1px;}
+    .wl-foot-row{display:flex;align-items:flex-end;gap:8px;border-top:1px solid #ddd;padding-top:6px;margin-top:8px;}
+    .wlabel--a6 .wl-foot-row{padding-top:3px;margin-top:4px;}
+    .wl-foot{flex:1;min-width:0;font-size:9px;color:#555;line-height:1.7;}
+    .wl-foot-row .wl-foot{border-top:none;padding-top:0;margin-top:0;}
+    .wlabel--a5 .wl-foot{font-size:7.5px;line-height:1.55;}
+    .wlabel--a6 .wl-foot,.wlabel--mini .wl-foot{font-size:6.5px;line-height:1.45;}
+    .wlabel--mini .wl-foot{border-top:1px solid #ddd;padding-top:3px;margin-top:3px;}
+    .wl-foot b{color:#333;margin-right:3px;}
+    .wl-qr{flex-shrink:0;text-align:center;}
+    .wl-qr-img{width:64px;height:64px;}
+    .wlabel--a5 .wl-qr-img{width:52px;height:52px;}
+    .wlabel--a6 .wl-qr-img{width:44px;height:44px;}
+    .wlabel--mini .wl-qr-img{width:40px;height:40px;}
+    .wl-qr-img svg{width:100%;height:100%;display:block;}
+    .wl-qr-cap{font-size:6.5px;font-weight:700;color:#333;line-height:1.3;margin-top:2px;}
+  `;
+}
+
+// 라벨 목록 → A4 분할 시트 HTML로 묶기
+function warnSheets(labelHtmlArr, size = warnLabelSize) {
+  const per = (WARN_SIZES[size] || WARN_SIZES.a4).perPage;
+  const sheets = [];
+  for (let i = 0; i < labelHtmlArr.length; i += per) {
+    const cells = labelHtmlArr.slice(i, i + per).map(h => `<div class="cell">${h}</div>`).join('');
+    sheets.push(`<div class="sheet sheet-${per}">${cells}</div>`);
+  }
+  return sheets;
+}
+
+window.setWarnLabelSize = function(v) {
+  warnLabelSize = WARN_SIZES[v] ? v : 'a4';
+  updateWarningPreview();
+};
+window.toggleWarnQr = function(v) {
+  warnQrEnabled = !!v;
+  updateWarningPreview();
+};
+
+// ═══════════════════════════════════════════════
+// 인쇄 공통 유틸 — 팝업 차단에 안전한 숨김 iframe 방식
+// (기존 window.open 방식은 팝업 차단 시 조용히 실패해 "인쇄가 안 됨"으로 보이는 문제가 있었음)
+// ═══════════════════════════════════════════════
+function openPrintWindow(html) {
+  const old = document.getElementById('__printFrame');
+  if (old) old.remove();
+  const iframe = document.createElement('iframe');
+  iframe.id = '__printFrame';
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
+  const cleanup = () => { try { iframe.remove(); } catch {} };
+  try { iframe.contentWindow.onafterprint = cleanup; } catch {}
+  setTimeout(() => {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (e) {
+      toast('인쇄 창을 열지 못했습니다: ' + (e?.message || e), 'error');
+      cleanup();
+      return;
+    }
+    setTimeout(cleanup, 60000); // afterprint 미지원 브라우저 대비 안전장치
+  }, 350);
+}
+
+function buildPrintHtml(title, pageSize, bodyStyle, bodyHtml) {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>
+    @page{size:${pageSize};margin:6mm;}
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;color:#111;}
+    ${bodyStyle}
+  </style></head><body>${bodyHtml}</body></html>`;
 }
 
 window.printWarnings = function() {
   const ids = [...warnSelected];
   if (ids.length === 0) { toast('인쇄할 물질을 선택하세요', 'error'); return; }
   const site = document.getElementById('warningSite')?.value || currentWS?.name || '현장명';
-  const labels = ids.map(id => msdsRecords.find(r => r.id === id)).filter(Boolean);
-  const w = window.open('', '_blank');
-  const pages = labels.map(r => `<div class="page-a4">${buildWarnLabel(r, site)}</div>`).join('');
-w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지</title><style>
+  const records = ids.map(id => msdsRecords.find(r => r.id === id)).filter(Boolean);
+  const labels = records.map(r => buildWarnLabel(r, site));
+  const sheets = warnSheets(labels);
+  openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지</title><style>
     @page{size:A4;margin:6mm;}
     *{box-sizing:border-box;}
     body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;}
-    .page-a4{width:100%;page-break-after:always;display:flex;align-items:flex-start;justify-content:center;}
-    .page-a4:last-child{page-break-after:auto;}
-    .wlabel{border:3px solid #111;border-radius:6px;padding:14px;width:100%;font-family:'Malgun Gothic',sans-serif;color:#111;background:#fff;}
-    .wl-top{text-align:center;font-size:11px;font-weight:700;margin-bottom:6px;}
-    .wl-name-box{border:2.5px solid #E30613;border-radius:5px;text-align:center;font-size:24px;font-weight:900;padding:8px;margin-bottom:10px;letter-spacing:3px;}
-    .wl-picto-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end;}
-    .wl-signal-bar{text-align:center;font-size:15px;font-weight:900;color:#fff;padding:6px;border-radius:5px;margin-bottom:10px;}
-    .wl-signal-bar.danger{background:#C0392B;} .wl-signal-bar.warning{background:#E67E22;}
-    .wl-two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:7px;}
-    .wl-block{margin-bottom:7px;border:1px solid #ccc;border-radius:4px;overflow:hidden;}
-    .wl-block.full{margin-bottom:7px;}
-    .wl-block-head{background:#C0392B;color:#fff;font-size:10px;font-weight:800;padding:3px 10px;}
-    .wl-list{margin:0;padding:5px 10px 5px 22px;font-size:9px;line-height:1.7;columns:2;column-gap:12px;}
-    .wl-list li{break-inside:avoid;}
-    .wl-pe{padding:5px 10px;font-size:9px;font-weight:600;columns:2;column-gap:12px;}
-    .wl-special{background:#FFF3CD;border:1.5px solid #FFC107;border-radius:4px;padding:6px;margin:6px 0;font-size:9px;font-weight:800;color:#856404;text-align:center;}
-    .wl-foot{border-top:1px solid #ddd;padding-top:6px;margin-top:8px;font-size:9px;color:#555;line-height:1.7;}
-    .wl-foot b{color:#333;margin-right:3px;}
-  </style></head><body>${pages}<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
-  w.document.close();
-  toast(`${labels.length}건 인쇄 준비 완료`, 'success');
+    ${warnLabelCss()}
+  </style></head><body>${sheets.join('')}</body></html>`);
+  const cfg = WARN_SIZES[warnLabelSize];
+  toast(`${records.length}건 · ${cfg.name} · ${sheets.length}장 인쇄 준비 완료`, 'success');
 };
 
 // ═══════════════════════════════════════════════
@@ -1532,14 +1787,11 @@ window.printAllWarningsByContractor = function() {
       <div class="cover-sub">${site}</div>
     </div></div>`);
     pageCount++;
-    g.items.forEach(r => {
-      htmlPages.push(`<div class="page-a4">${buildWarnLabel(r, site)}</div>`);
-      pageCount++;
-    });
+    const sheets = warnSheets(g.items.map(r => buildWarnLabel(r, site)));
+    sheets.forEach(s => { htmlPages.push(s); pageCount++; });
   });
 
-  const w = window.open('', '_blank');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지 전체 인쇄</title><style>
+  openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지 전체 인쇄</title><style>
     @page{size:A4;margin:6mm;}
     *{box-sizing:border-box;}
     body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;}
@@ -1551,25 +1803,9 @@ window.printAllWarningsByContractor = function() {
     .cover-label{font-size:16px;letter-spacing:6px;color:#888;font-weight:700;margin-bottom:18px;}
     .cover-name{font-size:48px;font-weight:900;color:#111;border:4px solid #111;border-radius:10px;padding:30px 50px;letter-spacing:2px;}
     .cover-sub{font-size:15px;color:#555;margin-top:20px;font-weight:600;}
-    .wlabel{border:3px solid #111;border-radius:6px;padding:14px;width:100%;font-family:'Malgun Gothic',sans-serif;color:#111;background:#fff;}
-    .wl-top{text-align:center;font-size:11px;font-weight:700;margin-bottom:6px;}
-    .wl-name-box{border:2.5px solid #E30613;border-radius:5px;text-align:center;font-size:24px;font-weight:900;padding:8px;margin-bottom:10px;letter-spacing:3px;}
-    .wl-picto-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end;}
-    .wl-signal-bar{text-align:center;font-size:15px;font-weight:900;color:#fff;padding:6px;border-radius:5px;margin-bottom:10px;}
-    .wl-signal-bar.danger{background:#C0392B;} .wl-signal-bar.warning{background:#E67E22;}
-    .wl-two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:7px;}
-    .wl-block{margin-bottom:7px;border:1px solid #ccc;border-radius:4px;overflow:hidden;}
-    .wl-block.full{margin-bottom:7px;}
-    .wl-block-head{background:#C0392B;color:#fff;font-size:10px;font-weight:800;padding:3px 10px;}
-    .wl-list{margin:0;padding:5px 10px 5px 22px;font-size:9px;line-height:1.7;columns:2;column-gap:12px;}
-    .wl-list li{break-inside:avoid;}
-    .wl-pe{padding:5px 10px;font-size:9px;font-weight:600;columns:2;column-gap:12px;}
-    .wl-special{background:#FFF3CD;border:1.5px solid #FFC107;border-radius:4px;padding:6px;margin:6px 0;font-size:9px;font-weight:800;color:#856404;text-align:center;}
-    .wl-foot{border-top:1px solid #ddd;padding-top:6px;margin-top:8px;font-size:9px;color:#555;line-height:1.7;}
-    .wl-foot b{color:#333;margin-right:3px;}
-  </style></head><body>${htmlPages.join('')}<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
-  w.document.close();
-  toast(`협력사 ${groups.length}곳 · 물질 ${sorted.length}건 인쇄 준비 완료 (양면인쇄 설정을 켜주세요)`, 'success');
+    ${warnLabelCss()}
+  </style></head><body>${htmlPages.join('')}</body></html>`);
+  toast(`협력사 ${groups.length}곳 · 물질 ${sorted.length}건 · ${WARN_SIZES[warnLabelSize].name} 인쇄 준비 완료 (양면인쇄 설정을 켜주세요)`, 'success');
 };
 
 
@@ -1660,8 +1896,7 @@ window.printMsdsList = function() {
       </tr>`);
     });
   });
-  const w = window.open('', '_blank');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>
+  openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>
     @page{size:A4 landscape;margin:8mm;}*{box-sizing:border-box;}
     body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;color:#111;}
     .doc-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:6px;border-bottom:3px solid #111;padding-bottom:6px;}
@@ -1678,8 +1913,7 @@ window.printMsdsList = function() {
     <thead><tr><th>No</th><th>협력사</th><th>공종</th><th>제품명</th><th>공급업체</th><th>연락처</th><th>개정일</th><th>CAS No.</th><th>구성성분명</th><th>측정</th><th>특수검진</th><th>관리</th><th>허가</th><th>특별</th><th>위험</th><th>보호구</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
-  <script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
-  w.document.close();
+  </body></html>`);
 };
 
 // ═══════════════════════════════════════════════
