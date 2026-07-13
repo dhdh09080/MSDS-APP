@@ -587,3 +587,54 @@ details > summary::-webkit-details-marker { display: none; }
   .msds-sidebar { display: none; }
   .msds-content { padding: 12px 16px; }
 }
+/* ═══ 투입인원 ═══ */
+.mp-grid { display:grid; grid-template-columns: 290px 1fr; gap:14px; }
+@media (max-width: 900px) { .mp-grid { grid-template-columns: 1fr; } }
+.mp-empty { color:var(--text3); font-size:13px; text-align:center; padding:40px 10px; }
+.mp-type-btn { padding:3px 10px; font-size:11px; border-radius:20px; border:1.5px solid var(--border); background:var(--surface); color:var(--text2); cursor:pointer; font-family:inherit; }
+.mp-company-item { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:var(--radius-sm); cursor:pointer; }
+.mp-company-item:hover { background:var(--surface2); }
+.mp-company-check { width:17px; height:17px; border:1.5px solid var(--border2); border-radius:5px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; flex-shrink:0; }
+.mp-company-name { flex:1; font-size:13px; color:var(--text); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mp-type-badge { font-size:10px; padding:2px 7px; border-radius:20px; font-weight:600; flex-shrink:0; }
+.mp-bar-container { display:flex; align-items:flex-end; gap:4px; height:150px; padding:0 2px; overflow-x:auto; }
+.mp-bar-col { flex:1; min-width:22px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; }
+.mp-bar-label { font-size:10px; color:var(--primary); font-weight:700; margin-bottom:2px; }
+.mp-bar-body { width:100%; max-width:30px; border-radius:4px 4px 0 0; }
+.mp-bar-days { display:flex; gap:4px; padding:4px 2px 0; border-top:1.5px solid var(--border); margin-top:4px; }
+.mp-bar-day { flex:1; min-width:22px; text-align:center; font-size:10px; color:var(--text3); }
+.mp-detail-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:6px; }
+.mp-detail-item { border-radius:var(--radius-sm); padding:7px 4px; text-align:center; }
+.mp-detail-day { font-size:10px; color:var(--text3); margin-bottom:2px; }
+.mp-detail-val { font-size:15px; font-weight:700; }
+
+/* ═══ 혹서기 ═══ */
+.wx-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; }
+.wx-poster { border:1.5px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; cursor:pointer; background:var(--surface2); }
+.wx-poster:hover { border-color:var(--primary); }
+.wx-poster img { width:100%; aspect-ratio:1; object-fit:cover; display:block; }
+.wx-poster-label { font-size:11px; color:var(--text2); padding:6px 8px; text-align:center; font-weight:600; }
+.wx-hours { display:flex; gap:5px; overflow-x:auto; padding-top:8px; }
+.wx-hour { flex-shrink:0; width:52px; text-align:center; border-radius:var(--radius-sm); padding:7px 0; color:#fff; }
+.wx-hour-t { font-size:15px; font-weight:800; }
+.wx-hour-h { font-size:10px; opacity:.85; }
+.wx-now { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.wx-big { font-size:38px; font-weight:900; line-height:1; }
+.wx-stage-badge { padding:4px 12px; border-radius:20px; color:#fff; font-weight:800; font-size:13px; }
+
+/* ═══ 취약자 명단 ═══ */
+.vul-card { margin-bottom:16px; border-top:4px solid var(--primary); }
+.vul-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+.vul-table th { background:var(--surface2); padding:7px 8px; text-align:left; font-size:11.5px; color:var(--text2); border-bottom:1.5px solid var(--border2); }
+.vul-table td { padding:6px 8px; border-bottom:1px solid var(--border); }
+.vul-table tr:nth-child(even) td { background:var(--bg); }
+
+/* 모바일 더보기 시트 */
+.more-item { display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px 6px; border:1.5px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); cursor:pointer; font-family:inherit; font-size:22px; }
+.more-item span { font-size:12px; font-weight:600; color:var(--text2); }
+.more-item:active { background:var(--surface2); }
+.contractor-search-row { display: flex; gap: 6px; margin-bottom: 6px; }
+.contractor-search-row .form-input { flex: 1; }
+
+/* 경고표지: 단일 미리보기 중인 행 하이라이트 */
+.warn-pick-item.previewing { background: var(--primary-light); box-shadow: inset 3px 0 0 var(--primary); }
