@@ -362,11 +362,19 @@
                 <div class="form-field" style="margin-bottom:8px;">
                   <label class="form-label">라벨 크기 (A4 용지 분할)</label>
                   <select class="form-input" id="warnSizeSel" onchange="setWarnLabelSize(this.value)">
-                    <option value="a4">A4 전면 — 1매/장 · 드럼(200ℓ↑)·게시용 (≈620㎠)</option>
-                    <option value="a5">A4 2분할 — 2매/장 · 200~500ℓ 용기 (≈310㎠)</option>
-                    <option value="a6">A4 4분할 — 4매/장 · 5~50ℓ 소형용기 (≈155㎠)</option>
-                    <option value="mini">A4 8분할 — 8매/장 · 100㎖ 이하 소분용기 간이표지 (≈77㎠)</option>
+                    <option value="a4">A4 전면 · 1매/장 (드럼·게시용)</option>
+                    <option value="a5">A4 2분할 · 2매/장 (200~500ℓ)</option>
+                    <option value="a6">A4 4분할 · 4매/장 (5~50ℓ)</option>
+                    <option value="mini">A4 8분할 · 8매/장 (100㎖↓ 간이표지)</option>
                   </select>
+                </div>
+                <div class="form-field" style="margin-bottom:8px;">
+                  <label class="form-label">표지당 인쇄 매수</label>
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <input class="form-input" type="number" id="warnCopiesInput" value="1" min="1" max="20" style="width:80px;text-align:center;" onchange="setWarnCopies(this.value)">
+                    <button class="btn btn-secondary btn-sm" onclick="warnFillPage()" title="선택한 분할 수만큼 매수를 맞춰 A4 한 장을 같은 표지로 채웁니다">한 장 채우기</button>
+                  </div>
+                  <div class="form-hint">예) 4분할 + 4매 → 물질 1개로 A4 한 장을 꽉 채워 인쇄 (빈칸·종이낭비 없음)</div>
                 </div>
                 <label class="legal-check" style="margin-bottom:6px;">
                   <input type="checkbox" id="warnQrChk" checked onchange="toggleWarnQr(this.checked)">
@@ -400,7 +408,8 @@
                   <button class="btn btn-primary btn-sm" onclick="printWarnings()">🖨️ 선택 인쇄</button>
                 </div>
                 <div style="margin-bottom:10px;">
-                  <button class="btn btn-secondary btn-sm" style="width:100%;" onclick="printAllWarningsByContractor()">📑 저장된 전체 물질 인쇄 (협력사별 표지 포함)</button>
+                  <button class="btn btn-secondary btn-sm" style="width:100%;" onclick="printAllWarningsByContractor()">📑 전체 인쇄 (협력사별 표지)</button>
+                  <div class="form-hint" style="margin-top:4px;">저장된 전체 물질을 협력사별 표지와 함께 양면인쇄용으로 출력합니다</div>
                 </div>
                 <div id="warnSelWrap" style="display:none;margin-bottom:10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);">
                   <div style="display:flex;align-items:center;padding:7px 10px;cursor:pointer;user-select:none;" onclick="toggleWarnSelPanel()">

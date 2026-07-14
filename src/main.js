@@ -15,6 +15,7 @@ let editingMsdsId = null, currentDetailId = null, receiptEditId = null;
 let warnSelected = new Set();
 let warnLabelSize = 'a4'; // a4(전면) | a5(2분할) | a6(4분할) | mini(8분할 소분용기)
 let warnQrEnabled = true;
+let warnCopies = 1; // 표지당 인쇄 매수 (같은 표지를 반복 배치해 분할 시트의 빈칸을 없앰)
 let pendingInvites = [];
 let measureFileData = null, measureFileName_val = null;
 
@@ -1474,7 +1475,9 @@ window.updateWarningPreview = function() {
   if (ids.length === 0) { prev.innerHTML='<div class="warn-empty">체크박스로 인쇄할 물질을 선택하거나,<br>물질 이름을 클릭해 표지를 미리 확인하세요</div>'; return; }
   const labels = ids.map(id => msdsRecords.find(r => r.id === id)).filter(Boolean);
   const szCfg = WARN_SIZES[warnLabelSize];
-  prev.innerHTML = `<div style="font-size:12px;color:var(--text3);margin-bottom:12px;"><strong style="color:var(--text)">${ids.length}개</strong> 선택됨 · ${szCfg.name} — A4 한 장에 ${szCfg.perPage}매 (총 ${Math.ceil(ids.length / szCfg.perPage)}장)</div>` +
+  const totalLabels = ids.length * warnCopies;
+  const copyTxt = warnCopies > 1 ? ` × ${warnCopies}매 = 표지 ${totalLabels}매` : '';
+  prev.innerHTML = `<div style="font-size:12px;color:var(--text3);margin-bottom:12px;"><strong style="color:var(--text)">${ids.length}개</strong> 선택됨${copyTxt} · ${szCfg.name} — A4 한 장에 ${szCfg.perPage}매 (총 A4 ${Math.ceil(totalLabels / szCfg.perPage)}장)</div>` +
     labels.map(r => `<div style="margin-bottom:20px;transform:scale(0.85);transform-origin:top left;width:calc(100% / 0.85);">${buildWarnLabel(r, site)}</div>`).join('');
 };
 
@@ -1691,6 +1694,18 @@ window.setWarnLabelSize = function(v) {
   warnLabelSize = WARN_SIZES[v] ? v : 'a4';
   updateWarningPreview();
 };
+window.setWarnCopies = function(v) {
+  warnCopies = Math.min(20, Math.max(1, parseInt(v, 10) || 1));
+  const inp = document.getElementById('warnCopiesInput');
+  if (inp) inp.value = warnCopies;
+  updateWarningPreview();
+};
+// 현재 분할 수에 맞춰 매수를 설정 → 물질 1개로도 A4 한 장이 꽉 참
+window.warnFillPage = function() {
+  const per = (WARN_SIZES[warnLabelSize] || WARN_SIZES.a4).perPage;
+  setWarnCopies(per);
+  toast(`매수를 ${per}매로 설정 — ${WARN_SIZES[warnLabelSize].name} 한 장이 같은 표지로 채워집니다`, 'success');
+};
 window.toggleWarnQr = function(v) {
   warnQrEnabled = !!v;
   updateWarningPreview();
@@ -1738,7 +1753,10 @@ window.printWarnings = function() {
   if (ids.length === 0) { toast('인쇄할 물질을 선택하세요', 'error'); return; }
   const site = document.getElementById('warningSite')?.value || currentWS?.name || '현장명';
   const records = ids.map(id => msdsRecords.find(r => r.id === id)).filter(Boolean);
-  const labels = records.map(r => buildWarnLabel(r, site));
+  const labels = records.flatMap(r => {
+    const html = buildWarnLabel(r, site);
+    return Array.from({ length: warnCopies }, () => html);
+  });
   const sheets = warnSheets(labels);
   openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지</title><style>
     @page{size:A4;margin:6mm;}
@@ -1747,7 +1765,8 @@ window.printWarnings = function() {
     ${warnLabelCss()}
   </style></head><body>${sheets.join('')}</body></html>`);
   const cfg = WARN_SIZES[warnLabelSize];
-  toast(`${records.length}건 · ${cfg.name} · ${sheets.length}장 인쇄 준비 완료`, 'success');
+  const copyTxt = warnCopies > 1 ? ` × ${warnCopies}매` : '';
+  toast(`${records.length}건${copyTxt} · ${cfg.name} · A4 ${sheets.length}장 인쇄 준비 완료`, 'success');
 };
 
 // ═══════════════════════════════════════════════
@@ -1787,7 +1806,11 @@ window.printAllWarningsByContractor = function() {
       <div class="cover-sub">${site}</div>
     </div></div>`);
     pageCount++;
-    const sheets = warnSheets(g.items.map(r => buildWarnLabel(r, site)));
+    const groupLabels = g.items.flatMap(r => {
+      const html = buildWarnLabel(r, site);
+      return Array.from({ length: warnCopies }, () => html);
+    });
+    const sheets = warnSheets(groupLabels);
     sheets.forEach(s => { htmlPages.push(s); pageCount++; });
   });
 

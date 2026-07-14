@@ -1,27 +1,34 @@
 :root {
-  --bg: #F8FAFC;
+  /* ── iOS 27 (Liquid Glass) semantic tokens ── */
+  --bg: #F2F2F7;                 /* systemGroupedBackground */
   --surface: #FFFFFF;
-  --surface2: #F1F5F9;
-  --border: #E2E8F0;
-  --border2: #CBD5E1;
-  --primary: #2563EB;
-  --primary-dark: #1D4ED8;
-  --primary-light: #EFF6FF;
-  --danger: #DC2626;
-  --danger-light: #FEF2F2;
-  --warn: #D97706;
-  --warn-light: #FFFBEB;
-  --ok: #16A34A;
-  --ok-light: #F0FDF4;
-  --text: #0F172A;
-  --text2: #475569;
-  --text3: #94A3B8;
+  --surface2: #F2F2F7;           /* secondarySystemFill 근사 */
+  --border: #E3E3E8;             /* separator */
+  --border2: #C7C7CC;
+  --primary: #007AFF;            /* systemBlue */
+  --primary-dark: #0062CC;
+  --primary-light: #EAF3FF;      /* blue tint */
+  --danger: #FF3B30;             /* systemRed */
+  --danger-light: #FFEEED;
+  --warn: #E68600;               /* systemOrange (텍스트 대비 확보용 살짝 어둡게) */
+  --warn-light: #FFF4E5;
+  --ok: #34C759;                 /* systemGreen */
+  --ok-dark: #1F9C43;
+  --ok-light: #EAF9EF;
+  --text: #000000;               /* label */
+  --text2: #48484A;              /* secondaryLabel 근사 */
+  --text3: #8E8E93;              /* tertiaryLabel */
   --font: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
-  --shadow-lg: 0 10px 15px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.05);
+  --radius: 16px;                /* iOS 카드 라운드 */
+  --radius-sm: 10px;
+  --radius-capsule: 999px;
+  /* Liquid Glass 표면 */
+  --glass: rgba(255,255,255,0.78);
+  --glass-strong: rgba(255,255,255,0.9);
+  --glass-blur: saturate(180%) blur(20px);
+  --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 10px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.05);
+  --shadow-lg: 0 12px 28px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -666,3 +673,153 @@ details > summary::-webkit-details-marker { display: none; }
 
 /* 경고표지: 단일 미리보기 중인 행 하이라이트 */
 .warn-pick-item.previewing { background: var(--primary-light); box-shadow: inset 3px 0 0 var(--primary); }
+
+/* ═══════════════════════════════════════════════════════════════
+   iOS 27 (Liquid Glass) 스타일 레이어
+   — Apple iOS 27 UI Kit 참고: 글래스 표면 / 캡슐 버튼 S·M·L /
+     세그먼티드 컨트롤 / pressed·disabled 상태 / 오버플로 안전장치
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── 글래스 표면: 사이드바 · 페이지 헤더 · 모바일 탭바 · 모달 ── */
+.sidebar {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-right: 1px solid rgba(0,0,0,0.08);
+}
+.page-header {
+  position: sticky; top: 0; z-index: 40;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+.mobile-tabbar {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-top: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 -6px 20px rgba(0,0,0,0.06);
+}
+.ws-topbar {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.modal { border-radius: 20px; }
+.modal-backdrop { background: rgba(0,0,0,0.32); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+
+/* ── 버튼: iOS 캡슐 + S(28)/M(36)/L(50) 크기 체계 ── */
+.btn {
+  border-radius: var(--radius-capsule);
+  min-height: 36px;
+  padding: 8px 16px;
+  min-width: 0;                 /* flex 컨테이너 안에서 넘침 방지 */
+  max-width: 100%;
+  transition: transform .12s ease, background .15s, opacity .15s, border-color .15s, box-shadow .15s;
+}
+.btn:active { transform: scale(0.96); }
+.btn:disabled { opacity: .4; }
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0,122,255,.35); }
+.btn-sm { min-height: 28px; padding: 4px 12px; font-size: 13px; }
+.btn-lg { min-height: 50px; padding: 12px 24px; font-size: 16px; border-radius: var(--radius-capsule); }
+.btn-primary { box-shadow: 0 1px 3px rgba(0,122,255,.35); }
+.btn-secondary { background: rgba(120,120,128,0.12); border: none; color: var(--text); }
+.btn-secondary:hover { background: rgba(120,120,128,0.2); color: var(--text); }
+.btn-outline { border-width: 1.5px; }
+.btn-danger { border: none; background: var(--danger-light); }
+.btn-danger:hover { background: #FFE0DE; }
+.btn-warn { border: none; }
+.btn-ok { border: none; color: var(--ok-dark); }
+.btn-icon { border-radius: var(--radius-capsule); min-width: 36px; justify-content: center; }
+
+/* 버튼 안 텍스트 말줄임 (좁을 때 캡슐 밖으로 새는 것 방지) */
+.header-actions .btn, .batch-bar .btn, .warn-actions .btn {
+  overflow: hidden;
+}
+
+/* ── 세그먼티드 컨트롤 (건강검진 서브탭 → iOS 스타일) ── */
+.health-subtabs {
+  display: inline-flex !important;
+  gap: 2px !important;
+  background: rgba(120,120,128,0.12);
+  border-radius: 12px;
+  padding: 3px;
+  border-bottom: none !important;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.health-subtab {
+  border-bottom: none;
+  margin-bottom: 0;
+  border-radius: 9px;
+  padding: 7px 14px;
+  white-space: nowrap;
+  color: var(--text2);
+}
+.health-subtab.active {
+  background: #fff;
+  color: var(--text);
+  border-bottom-color: transparent;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  font-weight: 700;
+}
+
+/* 인증 탭도 동일 언어로 */
+.auth-tabs { border-radius: 12px; padding: 3px; background: rgba(120,120,128,0.12); }
+.auth-tab { border-radius: 9px; }
+.auth-tab.active { color: var(--text); }
+
+/* ── 내비게이션 · 카드 미세 조정 ── */
+.nav-item { border-radius: var(--radius-sm); }
+.nav-item.active { font-weight: 700; }
+.card { border-width: 1px; }
+.stat-card { border-width: 1px; }
+.table-wrap { border-width: 1px; }
+.ws-card { border-width: 1px; }
+.ws-card:active { transform: scale(0.99); }
+
+/* 입력 요소: iOS 필드 톤 + select 말줄임 */
+.form-input, .auth-input, .search-wrap input {
+  border-radius: var(--radius-sm);
+}
+select.form-input, select.filter-select {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 28px;
+}
+.form-input:focus, .auth-input:focus, .search-wrap input:focus {
+  box-shadow: 0 0 0 3px rgba(0,122,255,.14);
+}
+
+/* 하드코딩된 구 팔레트 정리 */
+.cal-cell-num.sat, .dash-day-label.sat { color: var(--primary); }
+.cal-cell-num.sun, .dash-day-label.sun { color: var(--danger); }
+.tag { border-color: rgba(0,122,255,0.25); }
+
+/* ── 오버플로 · 축소 안전장치 ── */
+.page-header { min-width: 0; }
+.page-title { overflow-wrap: anywhere; }
+.header-actions { min-width: 0; }
+.filter-bar > * { min-width: 0; }
+.warn-actions { flex-wrap: wrap; }
+.wp-name { overflow-wrap: anywhere; }
+.detail-val { overflow-wrap: anywhere; }
+.tag { max-width: 100%; }
+.tag > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── 반응형 보강 ── */
+@media (max-width: 768px) {
+  .btn { font-size: 13px; }
+  .header-actions .btn { min-height: 44px; }   /* iOS 최소 터치 타겟 */
+  .mobile-tab { min-height: 44px; }
+  .health-subtabs { width: 100%; }
+  .health-subtab { flex: 1; padding: 7px 8px; font-size: 13px; }
+}
+@media (max-width: 480px) {
+  .btn { font-size: 12.5px; padding-left: 12px; padding-right: 12px; }
+  .btn-sm { font-size: 12px; }
+  .page-title { font-size: 17px; }
+  .health-subtab { font-size: 12px; }
+}
