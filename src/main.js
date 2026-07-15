@@ -5254,6 +5254,71 @@ window.runKoshaSearch = async function() {
 };
 
 // ═══════════════════════════════════════════════
+// ── 조문 검색: 키워드 하나로 여러 법령의 조문을 한번에 훑어서 법령별 카드로 표시 ──
+window.clauseQuick = function(q) {
+  document.getElementById('clauseQuery').value = q;
+  runClauseSearch();
+};
+
+function clauseCardHtml(title, bodyHtml, badge) {
+  return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
+    <div style="background:var(--primary);color:#fff;padding:10px 14px;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between;">
+      <span>${title}</span>${badge ? `<span style="font-size:11px;font-weight:600;opacity:.85;">${badge}</span>` : ''}
+    </div>
+    <div style="max-height:260px;overflow-y:auto;padding:10px 14px;">${bodyHtml}</div>
+  </div>`;
+}
+
+window.runClauseSearch = async function() {
+  const q = document.getElementById('clauseQuery').value.trim();
+  const out = document.getElementById('clauseResults');
+  const btn = document.getElementById('clauseSearchBtn');
+  if (!q) { toast('검색어를 입력하세요', 'error'); return; }
+  btn.disabled = true; btn.textContent = '검색 중...';
+  out.innerHTML = `<div class="mp-empty" style="padding:16px;">법령 여러 건을 훑는 중이라 몇 초 걸릴 수 있어요...</div>`;
+  try {
+    const [lawRes] = await Promise.all([
+      supabase.functions.invoke('law-clause-search', { body: { query: q } }),
+      loadKgCatalog(),
+    ]);
+    const { data, error } = lawRes;
+    if (error || data?.error) throw new Error(error?.message || data.error);
+    const laws = data.result.laws || [];
+
+    const cards = laws.map(l => {
+      if (l.error) {
+        return clauseCardHtml(l.lawName, `<div style="color:var(--text3);font-size:12px;">${l.error}</div>`);
+      }
+      if (!l.articles.length) {
+        return clauseCardHtml(l.lawName, `<div style="color:var(--text3);font-size:12px;">일치하는 조문 없음</div>`);
+      }
+      const body = l.articles.map(a => `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border);">
+          <div style="font-weight:700;font-size:13px;margin-bottom:2px;">제${a.jo}조 ${a.title || ''}</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;">${a.snippet}</div>
+        </div>`).join('');
+      return clauseCardHtml(l.lawName, body, `${l.articles.length}건`);
+    });
+
+    // KOSHA GUIDE 카탈로그 (제목/분류 매치, 우리 쪽에 저장된 목록 기준 — 조문 본문은 없음)
+    if (kgCatalog && kgCatalog.length) {
+      const ql = q.toLowerCase();
+      const matched = kgCatalog.filter(g => [g.guide_no, g.title, g.category, g.committee, g.code].join(' ').toLowerCase().includes(ql)).slice(0, 15);
+      const body = matched.length
+        ? matched.map(g => `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+            <div style="font-weight:700;font-size:13px;">${g.title}</div>
+            <div style="font-size:12px;color:var(--text3);">${g.guide_no}${g.category ? ' · ' + g.category : ''}</div>
+          </div>`).join('')
+        : `<div style="color:var(--text3);font-size:12px;">일치하는 지침 없음</div>`;
+      cards.push(clauseCardHtml('KOSHA GUIDE', body, matched.length ? `${matched.length}건` : ''));
+    }
+
+    out.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">${cards.join('')}</div>`;
+  } catch (e) {
+    out.innerHTML = `<div class="mp-empty" style="padding:16px;">${e.message}<br><span style="font-size:11px;">law-clause-search 엣지펑션 배포 여부를 확인하세요</span></div>`;
+  } finally { btn.disabled = false; btn.textContent = '검색'; }
+};
+
 // 자료실: 법령 검색 (법제처) + KOSHA GUIDE 카탈로그
 // ═══════════════════════════════════════════════
 window.lawQuick = function(q) {

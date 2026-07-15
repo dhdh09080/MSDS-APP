@@ -911,9 +911,27 @@
         </div>
         <div class="content-scroll">
 
+          <!-- 조문 검색: 키워드로 관련 법령들의 조문을 한번에 -->
+          <div class="card" style="margin-bottom:14px;">
+            <div class="dash-section-header"><div class="dash-section-title">🔍 조문 검색 (키워드로 관련 조문 한번에 찾기)</div></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+              <button class="btn btn-outline btn-sm" onclick="clauseQuick('보건관리자')">보건관리자</button>
+              <button class="btn btn-outline btn-sm" onclick="clauseQuick('위험성평가')">위험성평가</button>
+              <button class="btn btn-outline btn-sm" onclick="clauseQuick('작업환경측정')">작업환경측정</button>
+              <button class="btn btn-outline btn-sm" onclick="clauseQuick('안전보건교육')">안전보건교육</button>
+              <button class="btn btn-outline btn-sm" onclick="clauseQuick('특별관리물질')">특별관리물질</button>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:10px;">
+              <input class="form-input" id="clauseQuery" placeholder="예: 보건관리자, 밀폐공간, 관리감독자" style="flex:1;" onkeydown="if(event.key==='Enter')runClauseSearch()">
+              <button class="btn btn-primary" id="clauseSearchBtn" onclick="runClauseSearch()">검색</button>
+            </div>
+            <div class="form-note" style="margin-bottom:10px;">산업안전보건법·시행령·시행규칙·안전보건기준규칙·유해위험작업취업제한규칙·중대재해처벌법·시행령 + KOSHA GUIDE 카탈로그를 한번에 훑어서, 검색어가 들어간 조문만 법령별로 묶어 보여줍니다.</div>
+            <div id="clauseResults"></div>
+          </div>
+
           <!-- 법령 검색 -->
           <div class="card" style="margin-bottom:14px;">
-            <div class="dash-section-header"><div class="dash-section-title">⚖️ 법령 검색 (법제처)</div></div>
+            <div class="dash-section-header"><div class="dash-section-title">📖 법령 원문 찾기 (법령명으로 전체 문서 열람)</div></div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
               <button class="btn btn-outline btn-sm" onclick="lawQuick('산업안전보건법')">산업안전보건법</button>
               <button class="btn btn-outline btn-sm" onclick="lawQuick('산업안전보건법 시행령')">시행령</button>
