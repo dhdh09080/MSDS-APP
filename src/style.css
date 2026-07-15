@@ -1291,6 +1291,10 @@ body {
   margin-bottom: 20px;
 }
 
+.stats-row > * {
+  min-width: 0;
+}
+
 .dash-alert-bar {
   background: var(--warn-light);
   border: 1.5px solid #FDE68A;
@@ -1352,6 +1356,11 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  min-width: 0;
+}
+
+.dash-two-col > * {
+  min-width: 0;
 }
 
 .dash-calendar-card {
@@ -2991,6 +3000,10 @@ details > summary::-webkit-details-marker {
   .stats-row {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+  }
+
+  .dash-two-col {
+    grid-template-columns: 1fr;
   }
 
   .stat-value {

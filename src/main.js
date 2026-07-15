@@ -267,14 +267,12 @@ window.enterWorkspace = async function(wsId) {
   document.getElementById('sidebarAvatar').textContent = name.charAt(0).toUpperCase();
   document.getElementById('accountInfo').innerHTML = `이메일: ${user.email}<br>이름: ${name}<br>가입일: ${new Date(user.created_at).toLocaleDateString('ko-KR')}`;
   await Promise.all([loadContractors(), loadWorkTypes(), loadMembers(), loadTokens(), loadPublicLink()]);
-  await loadMsdsRecords();
-  await Promise.all([loadPlacementSnapshots(), loadTodos(), loadRoutineTasks(), loadBusinessLicenses(), loadMeasureRounds(), loadMeasureResults(), loadNotifications(), loadHealthRecords()]);
+  await Promise.all([loadMsdsRecords(), loadPlacementSnapshots(), loadTodos(), loadRoutineTasks(), loadBusinessLicenses(), loadMeasureRounds(), loadMeasureResults(), loadNotifications(), loadHealthRecords()]);
   subscribeNotifications();
   renderHomeDashboard(); // 알림(재업로드 도착) 로드 후 대시보드 갱신
   loadDashWeather();
-  await loadPhotoFolders();
-  await loadPhotos();
   showPage('home');
+  loadPhotoFolders().then(loadPhotos); // 사진은 홈 화면 진입을 막지 않고 백그라운드로 로드
 }
 
 window.goWorkspaces = function() {
