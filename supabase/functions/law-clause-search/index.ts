@@ -39,6 +39,15 @@ function flattenText(v: any): string {
   return String(v);
 }
 
+// 조문내용만으로는 안 됨 — 실제 본문은 항/호(하위 단위)에 들어있는 경우가 많아서 메타 필드만 빼고 전부 이어붙임
+const ARTICLE_META_KEYS = new Set(['조문키', '조문번호', '조문가지번호', '조문시행일자', '조문여부', '조문이동이전', '조문이동이후', '조문변경여부', '조문제개정유형', '조문참고자료']);
+function articleFullText(a: any): string {
+  return Object.entries(a)
+    .filter(([k]) => !ARTICLE_META_KEYS.has(k))
+    .map(([, v]) => flattenText(v))
+    .join(' ');
+}
+
 function stripTags(s: string): string {
   return s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -91,13 +100,11 @@ serve(async (req) => {
         const raw = await fetchArticles(OC, mst);
         const matched = raw.filter((a: any) => {
           if (a['조문여부'] === '전문') return false; // 전문(머리말) 제외, 실제 조문만
-          const title = flattenText(a['조문제목']);
-          const content = flattenText(a['조문내용']);
-          return title.includes(q) || content.includes(q);
+          return articleFullText(a).includes(q);
         });
         const articles = matched.slice(0, 15).map((a: any) => {
           const title = stripTags(flattenText(a['조문제목']));
-          const content = stripTags(flattenText(a['조문내용']));
+          const content = stripTags(articleFullText(a));
           return {
             jo: a['조문번호'] || '',
             title,
