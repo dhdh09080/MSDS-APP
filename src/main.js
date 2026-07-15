@@ -1638,7 +1638,7 @@ function warnLabelCss() {
     .sheet-8{grid-template-columns:1fr 1fr;grid-template-rows:repeat(4,1fr);}
     .cell{padding:3mm;display:flex;align-items:stretch;justify-content:center;overflow:hidden;border:0.2mm dashed #bbb;}
     .sheet-1 .cell{border:none;padding:0;}
-    .wlabel{box-sizing:border-box;display:flex;flex-direction:column;height:100%;border:3px solid #111;border-radius:6px;padding:16px;width:100%;font-family:'Malgun Gothic',sans-serif;color:#111;background:#fff;font-size:11.5px;}
+    .wlabel{box-sizing:border-box;display:flex;flex-direction:column;height:100%;border:3px solid #111;border-radius:6px;padding:16px;width:100%;font-family:'Malgun Gothic',sans-serif;color:#111;background:#fff;font-size:11.5px;word-break:keep-all;overflow-wrap:break-word;}
     .wl-spacer{flex:1 1 auto;min-height:6px;}
     .wlabel > *:not(.wl-spacer){flex-shrink:0;}
     .wlabel--a5{padding:11px;font-size:10px;border-width:2px;}
