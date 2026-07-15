@@ -4931,9 +4931,9 @@ async function loadDashWeather() {
       const list = await fetchWxPosterList('forecast');
       if (!list.length) { card.style.display = 'none'; return; }
       card.style.display = 'block';
-      body.innerHTML = head + `<div style="display:flex;gap:12px;align-items:center;">
-        <img src="${list[0].download_url}" style="width:120px;border-radius:8px;border:1px solid var(--border);">
-        <div style="font-size:13px;color:var(--text2);">최신 예보 포스터가 도착했어요.<br>클릭해서 크게 보고 카톡으로 공유하세요.</div>
+      body.innerHTML = head + `<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">
+        <img src="${list[0].download_url}" style="display:block;width:120px;max-width:100%;height:auto;border-radius:8px;border:1px solid var(--border);flex-shrink:0;">
+        <div style="font-size:13px;color:var(--text2);min-width:0;flex:1;">최신 예보 포스터가 도착했어요.<br>클릭해서 크게 보고 카톡으로 공유하세요.</div>
       </div>`;
     } catch { card.style.display = 'none'; }
   }

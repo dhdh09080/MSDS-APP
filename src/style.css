@@ -1362,10 +1362,13 @@ body {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
+  min-width: 0;
 }
 
 .dash-day-col {
   min-height: 80px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .dash-day-label {
@@ -3522,12 +3525,16 @@ details > summary::-webkit-details-marker {
   cursor: pointer;
   font-family: inherit;
   font-size: 22px;
+  min-width: 0;
 }
 
 .more-item span {
   font-size: 12px;
   font-weight: 600;
   color: var(--text2);
+  white-space: normal;
+  word-break: keep-all;
+  text-align: center;
 }
 
 .more-item:active {
