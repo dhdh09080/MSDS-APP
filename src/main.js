@@ -1619,7 +1619,6 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
     <div class="wl-foot-row">
       <div class="wl-foot">
         <div><b>공급업체</b>${r.supplier || '-'} ${r.supplier_contact ? '(' + r.supplier_contact + ')' : ''}</div>
-        <div><b>사용 협력사</b>${r.contractor || '-'} ${r.work_type ? '/ ' + r.work_type : ''}</div>
         <div><b>현장</b>${site} · <b>발행</b>${today()}</div>
         <div style="margin-top:4px;font-weight:700;">■ 기타 자세한 내용은 물질안전보건자료(MSDS) 참조</div>
       </div>
