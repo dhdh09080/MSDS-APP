@@ -354,40 +354,7 @@
         <div class="content-scroll">
           <div class="warn-layout">
             <div class="warn-left">
-              <div class="card" style="margin-bottom:16px;">
-                <div class="form-field" style="margin-bottom:12px;">
-                  <label class="form-label">현장명</label>
-                  <input class="form-input" id="warningSite" placeholder="예) 성동자이리버뷰 신축공사" oninput="updateWarningPreview()">
-                </div>
-                <div class="form-field" style="margin-bottom:8px;">
-                  <label class="form-label">라벨 크기 (A4 용지 분할)</label>
-                  <select class="form-input" id="warnSizeSel" onchange="setWarnLabelSize(this.value)">
-                    <option value="a4">A4 전면 · 1매/장 (드럼·게시용)</option>
-                    <option value="a5">A4 2분할 · 2매/장 (200~500ℓ)</option>
-                    <option value="a6">A4 4분할 · 4매/장 (5~50ℓ)</option>
-                    <option value="mini">A4 8분할 · 8매/장 (100㎖↓ 간이표지)</option>
-                  </select>
-                </div>
-                <div class="form-field" style="margin-bottom:8px;">
-                  <label class="form-label">표지당 인쇄 매수</label>
-                  <div style="display:flex;gap:6px;align-items:center;">
-                    <input class="form-input" type="number" id="warnCopiesInput" value="1" min="1" max="20" style="width:80px;text-align:center;" onchange="setWarnCopies(this.value)">
-                    <button class="btn btn-secondary btn-sm" onclick="warnFillPage()" title="선택한 분할 수만큼 매수를 맞춰 A4 한 장을 같은 표지로 채웁니다">한 장 채우기</button>
-                  </div>
-                  <div class="form-hint">예) 4분할 + 4매 → 물질 1개로 A4 한 장을 꽉 채워 인쇄 (빈칸·종이낭비 없음)</div>
-                </div>
-                <label class="legal-check" style="margin-bottom:6px;">
-                  <input type="checkbox" id="warnQrChk" checked onchange="toggleWarnQr(this.checked)">
-                  📱 QR코드 삽입 — 스캔 시 MSDS 원본 PDF 즉시 열람 (원본 등록 물질만 표시)
-                </label>
-                <details style="margin-bottom:12px;">
-                  <summary style="font-size:11.5px;color:var(--text3);cursor:pointer;user-select:none;">📏 법정 최소 규격 안내 (고용노동부고시 제2023-9호)</summary>
-                  <div style="font-size:11px;color:var(--text2);line-height:1.8;background:var(--surface2);border-radius:6px;padding:8px 10px;margin-top:6px;">
-                    용기 용량별 경고표지 최소 크기: <b>500ℓ↑</b> 450㎠ · <b>200~500ℓ</b> 300㎠ · <b>50~200ℓ</b> 180㎠ · <b>5~50ℓ</b> 90㎠ · <b>5ℓ 미만</b> 상하면 제외 표면적의 5%↑<br>
-                    그림문자는 표찰 규격의 1/40 이상(최소 0.5㎠). <b>100g·100㎖ 이하</b>는 명칭·그림문자·신호어·공급자정보만 표시 가능(8분할 간이표지).<br>
-                    ※ 50~200ℓ 용기(180㎠↑)에는 4분할(155㎠)이 미달이므로 2분할 이상을 사용하세요.
-                  </div>
-                </details>
+              <div class="card" style="margin-bottom:12px;">
                 <div class="form-field" style="margin-bottom:10px;">
                   <label class="form-label">검색 (물질명 · CAS No. · 협력사명 · 공급업체)</label>
                   <input class="form-input" id="warnSearchInput" placeholder="예) 벤젠, 71-43-2, 또는 협력사명" oninput="renderWarnPickList()">
@@ -401,17 +368,13 @@
                     <option value="">전체 협력사</option>
                   </select>
                 </div>
-                <div style="display:flex;gap:8px;margin-bottom:10px;">
+                <div style="display:flex;gap:8px;">
                   <button class="btn btn-secondary btn-sm" onclick="selectAllWarn(true)">전체 선택</button>
                   <button class="btn btn-secondary btn-sm" onclick="selectAllWarn(false)">전체 해제</button>
                   <div style="flex:1"></div>
                   <button class="btn btn-primary btn-sm" onclick="printWarnings()">🖨️ 선택 인쇄</button>
                 </div>
-                <div style="margin-bottom:10px;">
-                  <button class="btn btn-secondary btn-sm" style="width:100%;" onclick="printAllWarningsByContractor()">📑 전체 인쇄 (협력사별 표지)</button>
-                  <div class="form-hint" style="margin-top:4px;">저장된 전체 물질을 협력사별 표지와 함께 양면인쇄용으로 출력합니다</div>
-                </div>
-                <div id="warnSelWrap" style="display:none;margin-bottom:10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);">
+                <div id="warnSelWrap" style="display:none;margin-top:10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);">
                   <div style="display:flex;align-items:center;padding:7px 10px;cursor:pointer;user-select:none;" onclick="toggleWarnSelPanel()">
                     <span style="font-size:12px;font-weight:700;" id="warnSelTitle">✅ 선택된 물질 0건</span>
                     <span style="flex:1"></span>
@@ -425,6 +388,44 @@
               <div class="warn-pick-list" id="warnPickList">
                 <div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">등록된 물질이 없습니다</div>
               </div>
+              <details class="card" style="margin-top:12px;padding:12px 14px;">
+                <summary style="font-size:12.5px;font-weight:700;color:var(--text2);cursor:pointer;user-select:none;">⚙️ 인쇄 설정 (현장명 · 라벨 크기 · QR · 규격 안내)</summary>
+                <div style="margin-top:12px;">
+                  <div class="form-field" style="margin-bottom:12px;">
+                    <label class="form-label">현장명</label>
+                    <input class="form-input" id="warningSite" placeholder="예) 성동자이리버뷰 신축공사" oninput="updateWarningPreview()">
+                  </div>
+                  <div class="form-field" style="margin-bottom:8px;">
+                    <label class="form-label">라벨 크기 (A4 용지 분할)</label>
+                    <select class="form-input" id="warnSizeSel" onchange="setWarnLabelSize(this.value)">
+                      <option value="a4">A4 전면 · 1매/장 (드럼·게시용)</option>
+                      <option value="a5">A4 2분할 · 2매/장 (200~500ℓ)</option>
+                      <option value="a6">A4 4분할 · 4매/장 (5~50ℓ)</option>
+                      <option value="mini">A4 8분할 · 8매/장 (100㎖↓ 간이표지)</option>
+                    </select>
+                  </div>
+                  <div class="form-field" style="margin-bottom:8px;">
+                    <label class="form-label">표지당 인쇄 매수</label>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                      <input class="form-input" type="number" id="warnCopiesInput" value="1" min="1" max="20" style="width:80px;text-align:center;" onchange="setWarnCopies(this.value)">
+                      <button class="btn btn-secondary btn-sm" onclick="warnFillPage()" title="선택한 분할 수만큼 매수를 맞춰 A4 한 장을 같은 표지로 채웁니다">한 장 채우기</button>
+                    </div>
+                    <div class="form-hint">예) 4분할 + 4매 → 물질 1개로 A4 한 장을 꽉 채워 인쇄 (빈칸·종이낭비 없음)</div>
+                  </div>
+                  <label class="legal-check" style="margin-bottom:6px;">
+                    <input type="checkbox" id="warnQrChk" checked onchange="toggleWarnQr(this.checked)">
+                    📱 QR코드 삽입 — 스캔 시 MSDS 원본 PDF 즉시 열람 (원본 등록 물질만 표시)
+                  </label>
+                  <details style="margin-bottom:2px;">
+                    <summary style="font-size:11.5px;color:var(--text3);cursor:pointer;user-select:none;">📏 법정 최소 규격 안내 (고용노동부고시 제2023-9호)</summary>
+                    <div style="font-size:11px;color:var(--text2);line-height:1.8;background:var(--surface2);border-radius:6px;padding:8px 10px;margin-top:6px;">
+                      용기 용량별 경고표지 최소 크기: <b>500ℓ↑</b> 450㎠ · <b>200~500ℓ</b> 300㎠ · <b>50~200ℓ</b> 180㎠ · <b>5~50ℓ</b> 90㎠ · <b>5ℓ 미만</b> 상하면 제외 표면적의 5%↑<br>
+                      그림문자는 표찰 규격의 1/40 이상(최소 0.5㎠). <b>100g·100㎖ 이하</b>는 명칭·그림문자·신호어·공급자정보만 표시 가능(8분할 간이표지).<br>
+                      ※ 50~200ℓ 용기(180㎠↑)에는 4분할(155㎠)이 미달이므로 2분할 이상을 사용하세요.
+                    </div>
+                  </details>
+                </div>
+              </details>
             </div>
             <div class="warn-right">
               <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;letter-spacing:.5px;" id="warnPreviewHeader">미리보기 (인쇄 결과와 동일)</div>
@@ -1357,6 +1358,7 @@
     <div class="modal-body" id="detailBody"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary btn-sm" id="detailViewFileBtn" style="display:none">📄 원본 보기</button>
+      <button class="btn btn-outline btn-sm" onclick="printWarningFromDetail()">🏷️ 경고표지 생성</button>
       <button class="btn btn-outline btn-sm" id="msdsRenewBtn" onclick="openMsdsRenewPicker()">🔄 새 MSDS로 갱신</button>
       <input type="file" id="msdsRenewFileInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleMsdsRenewFile(event)">
       <button class="btn btn-secondary btn-sm" onclick="editMsdsRecord()">✏️ 수정</button>

@@ -388,7 +388,7 @@ details > summary::-webkit-details-marker { display: none; }
 .warn-layout { display: flex; gap: 20px; align-items: flex-start; }
 .warn-left { width: 300px; flex-shrink: 0; }
 .warn-right { flex: 1; min-width: 0; }
-.warn-pick-list { max-height: 380px; overflow-y: auto; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: #fff; margin-top: 8px; }
+.warn-pick-list { max-height: 480px; overflow-y: auto; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: #fff; margin-top: 8px; }
 .warn-pick-item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s; }
 .warn-pick-item:last-child { border-bottom: none; }
 .warn-pick-item:hover { background: var(--primary-light); }

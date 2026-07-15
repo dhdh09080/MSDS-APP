@@ -1222,6 +1222,15 @@ window.showMsdsDetail = function(id) {
 
 window.editMsdsRecord = function() { closeModal('msdsDetailModal'); startMsdsEdit(currentDetailId); };
 
+// ─── MSDS 대장 상세 → 경고표지 탭으로 이동, 해당 물질 선택 상태로 진입 ───
+window.printWarningFromDetail = function() {
+  if (!currentDetailId) return;
+  warnSelected.add(currentDetailId);
+  warnPreviewSingle = null;
+  closeModal('msdsDetailModal');
+  showPage('warning');
+};
+
 // ─── 새 MSDS 파일로 갱신 (기존 레코드를 AI 재분석 결과로 버전업) ───
 window.openMsdsRenewPicker = function() {
   if (!currentDetailId) return;
