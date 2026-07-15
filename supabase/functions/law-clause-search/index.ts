@@ -39,13 +39,53 @@ function flattenText(v: any): string {
   return String(v);
 }
 
-// 조문내용만으로는 안 됨 — 실제 본문은 항/호(하위 단위)에 들어있는 경우가 많아서 메타 필드만 빼고 전부 이어붙임
-const ARTICLE_META_KEYS = new Set(['조문키', '조문번호', '조문가지번호', '조문시행일자', '조문여부', '조문이동이전', '조문이동이후', '조문변경여부', '조문제개정유형', '조문참고자료']);
-function articleFullText(a: any): string {
-  return Object.entries(a)
-    .filter(([k]) => !ARTICLE_META_KEYS.has(k))
-    .map(([, v]) => flattenText(v))
-    .join(' ');
+function asArray(v: any): any[] {
+  if (v == null) return [];
+  return Array.isArray(v) ? v : [v];
+}
+
+// 특정 키(하위 항목·번호)는 제외하고 나머지 텍스트만 이어붙임 — 항 텍스트에 호 내용이 중복 포함되는 것 방지
+function flattenTextExcept(obj: any, except: string[]): string {
+  if (obj == null) return '';
+  if (typeof obj !== 'object') return String(obj);
+  if (Array.isArray(obj)) return obj.map(v => flattenTextExcept(v, except)).join(' ');
+  return Object.entries(obj).filter(([k]) => !except.includes(k)).map(([, v]) => flattenText(v)).join(' ');
+}
+
+const CIRCLED = ['', '①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩', '⑪', '⑫', '⑬', '⑭', '⑮', '⑯', '⑰', '⑱', '⑲', '⑳'];
+function circledNum(n: string): string {
+  const num = parseInt(n, 10);
+  return (num >= 1 && num <= 20) ? CIRCLED[num] : (n || '');
+}
+
+// 조문내용만으로는 안 됨 — 실제 본문은 항/호/목(하위 단위)에 들어있는 경우가 많음.
+// 국가법령정보센터 표기처럼 항은 ①②③, 호는 "1. 2. 3.", 목은 "가. 나. 다." + 들여쓰기로 줄바꿈해서 조립
+function formatArticleText(a: any): string {
+  const lines: string[] = [];
+  const intro = flattenText(a['조문내용']).trim();
+  if (intro) lines.push(intro);
+
+  for (const hang of asArray(a['항'])) {
+    const hangNo = hang['항번호'] ? circledNum(hang['항번호']) + ' ' : '';
+    const hangText = flattenTextExcept(hang, ['항번호', '호']).trim();
+    if (hangText) lines.push(`${hangNo}${hangText}`);
+    for (const ho of asArray(hang['호'])) {
+      const hoNo = ho['호번호'] ? `${ho['호번호']}. ` : '';
+      const hoText = flattenTextExcept(ho, ['호번호', '목']).trim();
+      if (hoText) lines.push(`  ${hoNo}${hoText}`);
+      for (const mok of asArray(ho['목'])) {
+        const mokNo = mok['목번호'] ? `${mok['목번호']}. ` : '';
+        const mokText = flattenTextExcept(mok, ['목번호']).trim();
+        if (mokText) lines.push(`    ${mokNo}${mokText}`);
+      }
+    }
+  }
+  return lines.join('\n');
+}
+
+// 태그만 제거, 줄바꿈은 보존 (기존 stripTags는 \s+를 공백 하나로 뭉개서 들여쓰기/줄바꿈이 다 사라짐)
+function stripTagsKeepBreaks(s: string): string {
+  return s.replace(/<[^>]+>/g, '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function stripTags(s: string): string {
@@ -100,16 +140,17 @@ serve(async (req) => {
         const raw = await fetchArticles(OC, mst);
         const matched = raw.filter((a: any) => {
           if (a['조문여부'] === '전문') return false; // 전문(머리말) 제외, 실제 조문만
-          return articleFullText(a).includes(q);
+          return formatArticleText(a).includes(q);
         });
         const articles = matched.slice(0, 15).map((a: any) => {
           const title = stripTags(flattenText(a['조문제목']));
-          const content = stripTags(articleFullText(a));
+          const content = stripTagsKeepBreaks(formatArticleText(a));
+          const flatForSnippet = content.replace(/\n/g, ' ').replace(/\s+/g, ' ');
           return {
             jo: a['조문번호'] || '',
             title,
-            snippet: makeSnippet(content, q) || content.slice(0, 180),
-            content: content.slice(0, 3000),
+            snippet: makeSnippet(flatForSnippet, q) || flatForSnippet.slice(0, 180),
+            content: content.slice(0, 4000),
           };
         });
         return { lawName, articles };

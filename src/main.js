@@ -5268,10 +5268,22 @@ function clauseCardHtml(title, bodyHtml, badge) {
 }
 
 window.clauseSearchStore = []; // 팝업에서 참조할 최근 검색 결과 (법령별 원문 보관) — inline onclick에서 접근해야 해서 window에 부착
+window.clauseSearchQuery = ''; // 하이라이트할 검색어
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function highlightQuery(escapedText, query) {
+  if (!query) return escapedText;
+  const escQ = escapeHtml(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return escapedText.replace(new RegExp(escQ, 'gi'), m => `<mark style="background:#FFF176;padding:0 1px;border-radius:2px;">${m}</mark>`);
+}
 
 window.openClauseDetail = function(lawName, jo, title, content) {
   document.getElementById('clauseDetailTitle').textContent = `${lawName} 제${jo}조${title ? ' ' + title : ''}`;
-  document.getElementById('clauseDetailBody').textContent = content;
+  const escaped = escapeHtml(content);
+  document.getElementById('clauseDetailBody').innerHTML = highlightQuery(escaped, window.clauseSearchQuery);
   openModal('clauseDetailModal');
 };
 
@@ -5291,6 +5303,7 @@ window.runClauseSearch = async function() {
     if (error || data?.error) throw new Error(error?.message || data.error);
     const laws = data.result.laws || [];
     window.clauseSearchStore = laws;
+    window.clauseSearchQuery = q;
 
     const cards = laws.map((l, li) => {
       if (l.error) {
