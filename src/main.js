@@ -1590,6 +1590,7 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
         ${qrBox}
       </div>
       <div class="wl-signal-bar ${isDanger ? 'danger' : 'warning'}">${r.signal_word || '경고'}</div>
+      <div class="wl-spacer"></div>
       <div class="wl-foot">
         <div><b>공급</b>${r.supplier || '-'} ${r.supplier_contact ? '(' + r.supplier_contact + ')' : ''}</div>
         <div style="font-weight:700;">■ 자세한 내용은 MSDS 참조 (100㎖ 이하 소분용기용 간이표지)</div>
@@ -1614,6 +1615,7 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
     <div class="wl-block"><div class="wl-block-head">예방조치 문구</div><ul class="wl-list">${pHtml}</ul></div>
     ${r.protective_equipment && size !== 'a6' ? `<div class="wl-block"><div class="wl-block-head">개인보호구</div><div class="wl-pe">${r.protective_equipment}</div></div>` : ''}
     ${r.legal_special === 'Y' ? `<div class="wl-special">⚠️ 특별관리물질 — 취급 시 관리감독자 확인 및 특별안전보건교육 필수</div>` : ''}
+    <div class="wl-spacer"></div>
     <div class="wl-foot-row">
       <div class="wl-foot">
         <div><b>공급업체</b>${r.supplier || '-'} ${r.supplier_contact ? '(' + r.supplier_contact + ')' : ''}</div>
@@ -1635,9 +1637,11 @@ function warnLabelCss() {
     .sheet-2{grid-template-columns:1fr;grid-template-rows:1fr 1fr;}
     .sheet-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
     .sheet-8{grid-template-columns:1fr 1fr;grid-template-rows:repeat(4,1fr);}
-    .cell{padding:3mm;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;border:0.2mm dashed #bbb;}
+    .cell{padding:3mm;display:flex;align-items:stretch;justify-content:center;overflow:hidden;border:0.2mm dashed #bbb;}
     .sheet-1 .cell{border:none;padding:0;}
-    .wlabel{border:3px solid #111;border-radius:6px;padding:14px;width:100%;font-family:'Malgun Gothic',sans-serif;color:#111;background:#fff;font-size:9px;}
+    .wlabel{box-sizing:border-box;display:flex;flex-direction:column;height:100%;border:3px solid #111;border-radius:6px;padding:14px;width:100%;font-family:'Malgun Gothic',sans-serif;color:#111;background:#fff;font-size:9px;}
+    .wl-spacer{flex:1 1 auto;min-height:6px;}
+    .wlabel > *:not(.wl-spacer){flex-shrink:0;}
     .wlabel--a5{padding:9px;font-size:8px;border-width:2px;}
     .wlabel--a6{padding:7px;font-size:7px;border-width:1.5px;}
     .wlabel--mini{padding:6px;font-size:7px;border-width:1.5px;}
