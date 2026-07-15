@@ -5357,36 +5357,61 @@ function kgKoshaLink(q) {
   return `navigator.clipboard&&navigator.clipboard.writeText('${q.replace(/'/g,"\\'")}');window.open('https://www.kosha.or.kr/kosha/info/searchTechnicalGuidelines.do','_blank');toast('검색어가 복사됐습니다 — KOSHA 검색창에 붙여넣으세요','success')`;
 }
 
+function kgResultRow(guideNo, title, meta, url) {
+  return `<div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);">
+    <span class="badge badge-primary" style="flex-shrink:0;font-family:monospace;">${guideNo || '-'}</span>
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:13px;font-weight:600;">${title}</div>
+      <div style="font-size:11px;color:var(--text3);">${meta}</div>
+    </div>
+    ${url ? `<a href="${url}" target="_blank" class="btn btn-outline btn-sm" style="flex-shrink:0;">원문</a>` : `<button class="btn btn-outline btn-sm" style="flex-shrink:0;" onclick="${kgKoshaLink(title)}">원문 찾기</button>`}
+  </div>`;
+}
+
+let kgSearchTimer = null;
 window.renderKgResults = function() {
+  clearTimeout(kgSearchTimer);
+  kgSearchTimer = setTimeout(runKgLiveSearch, 350); // 입력 중 API 스팸 방지
+};
+
+async function runKgLiveSearch() {
   const out = document.getElementById('kgResults');
-  const q = (document.getElementById('kgQuery').value || '').trim().toLowerCase();
+  const q = (document.getElementById('kgQuery').value || '').trim();
+  document.querySelectorAll('#kgTopics button').forEach(b => {
+    const kw = b.textContent.replace(/^[^\s]+\s/, '');
+    b.setAttribute('onclick', `kgQuick('${kw}')`);
+  });
+  out.innerHTML = `<div class="mp-empty" style="padding:16px;">KOSHA 조회 중...</div>`;
+  try {
+    const { data, error } = await supabase.functions.invoke('kosha-guide-search', { body: { query: q } });
+    if (error || data?.error) throw new Error(error?.message || data.error);
+    const { list, totalCount } = data.result;
+    if (!list.length) { out.innerHTML = '<div class="mp-empty" style="padding:16px;">검색 결과가 없습니다</div>'; return; }
+    out.innerHTML = `<div style="font-size:12px;color:var(--text3);margin-bottom:6px;">KOSHA 공식 API 실시간 조회 · 총 ${totalCount}건${list.length < totalCount ? ` 중 ${list.length}건 표시` : ''}</div>` +
+      list.map(g => kgResultRow(g.guideNo, g.title, [g.category, g.date].filter(Boolean).join(' · '), g.url)).join('');
+  } catch (e) {
+    // API 실패 시 (엣지펑션 미배포/키 미설정 등) → 업로드해둔 CSV 카탈로그로 폴백
+    renderKgResultsFromCatalog(q, e.message);
+  }
+}
+
+function renderKgResultsFromCatalog(q, apiErrorMsg) {
+  const out = document.getElementById('kgResults');
+  const ql = q.toLowerCase();
   if (!kgCatalog || !kgCatalog.length) {
-    out.innerHTML = `<div class="mp-empty" style="padding:16px;">카탈로그가 아직 없어요 — 위에서 공식 CSV를 올리면 앱 안에서 검색됩니다.<br>지금은 주제 버튼을 누르면 KOSHA 공식 검색으로 연결돼요.</div>`;
-    // 카탈로그 없으면 토픽 버튼이 외부 검색으로 동작
+    out.innerHTML = `<div class="mp-empty" style="padding:16px;">${apiErrorMsg ? `실시간 API 조회 실패 (${apiErrorMsg})<br>` : ''}카탈로그도 아직 없어요 — 위에서 공식 CSV를 올리면 앱 안에서 검색됩니다.<br>지금은 주제 버튼을 누르면 KOSHA 공식 검색으로 연결돼요.</div>`;
     document.querySelectorAll('#kgTopics button').forEach(b => {
       const kw = b.textContent.replace(/^[^\s]+\s/, '');
       b.setAttribute('onclick', kgKoshaLink(kw));
     });
     return;
   }
-  document.querySelectorAll('#kgTopics button').forEach(b => {
-    const kw = b.textContent.replace(/^[^\s]+\s/, '');
-    b.setAttribute('onclick', `kgQuick('${kw}')`);
-  });
-  const list = !q ? kgCatalog.slice(0, 50)
-    : kgCatalog.filter(g => [g.guide_no, g.title, g.category, g.committee, g.code].join(' ').toLowerCase().includes(q)).slice(0, 100);
+  const list = !ql ? kgCatalog.slice(0, 50)
+    : kgCatalog.filter(g => [g.guide_no, g.title, g.category, g.committee, g.code].join(' ').toLowerCase().includes(ql)).slice(0, 100);
   if (!list.length) { out.innerHTML = '<div class="mp-empty" style="padding:16px;">검색 결과가 없습니다</div>'; return; }
-  out.innerHTML = (!q ? `<div style="font-size:12px;color:var(--text3);margin-bottom:6px;">전체 ${kgCatalog.length}건 중 앞 50건 — 검색어를 입력해 좁혀보세요</div>` : '') +
-    list.map(g => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);">
-      <span class="badge badge-primary" style="flex-shrink:0;font-family:monospace;">${g.guide_no}</span>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;">${g.title}</div>
-        <div style="font-size:11px;color:var(--text3);">${[g.committee, g.category].filter(Boolean).join(' · ')}</div>
-      </div>
-      <button class="btn btn-outline btn-sm" style="flex-shrink:0;" onclick="${kgKoshaLink(g.guide_no)}">원문 찾기</button>
-    </div>`).join('');
-};
+  out.innerHTML = `<div style="font-size:12px;color:var(--text3);margin-bottom:6px;">${apiErrorMsg ? '실시간 API 조회 실패 — ' : ''}업로드된 카탈로그 기준${!ql ? ` · 전체 ${kgCatalog.length}건 중 앞 50건` : ''}</div>` +
+    list.map(g => kgResultRow(g.guide_no, g.title, [g.committee, g.category].filter(Boolean).join(' · '))).join('');
+}
 
 window.handleKgFile = function(file) {
   if (!file) return;
