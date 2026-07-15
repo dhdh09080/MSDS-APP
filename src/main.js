@@ -5269,7 +5269,7 @@ function clauseCardHtml(title, bodyHtml, badge) {
   </div>`;
 }
 
-let clauseSearchStore = []; // 팝업에서 참조할 최근 검색 결과 (법령별 원문 보관)
+window.clauseSearchStore = []; // 팝업에서 참조할 최근 검색 결과 (법령별 원문 보관) — inline onclick에서 접근해야 해서 window에 부착
 
 window.openClauseDetail = function(lawName, jo, title, content) {
   document.getElementById('clauseDetailTitle').textContent = `${lawName} 제${jo}조${title ? ' ' + title : ''}`;
@@ -5292,7 +5292,7 @@ window.runClauseSearch = async function() {
     const { data, error } = lawRes;
     if (error || data?.error) throw new Error(error?.message || data.error);
     const laws = data.result.laws || [];
-    clauseSearchStore = laws;
+    window.clauseSearchStore = laws;
 
     const cards = laws.map((l, li) => {
       if (l.error) {
