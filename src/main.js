@@ -5252,42 +5252,83 @@ window.runKoshaSearch = async function() {
 };
 
 // ═══════════════════════════════════════════════
-// 자료실: 법령 검색 (법제처) + KOSHA GUIDE 카탈로그
-// ═══════════════════════════════════════════════
-window.lawQuick = function(q) {
-  document.getElementById('lawQuery').value = q;
-  runLawSearch();
+// ── 조문 검색: 키워드 하나로 여러 법령의 조문을 한번에 훑어서 법령별 카드로 표시 ──
+window.clauseQuick = function(q) {
+  document.getElementById('clauseQuery').value = q;
+  runClauseSearch();
 };
 
-window.runLawSearch = async function() {
-  const q = document.getElementById('lawQuery').value.trim();
-  const out = document.getElementById('lawResults');
-  const btn = document.getElementById('lawSearchBtn');
-  if (!q) { toast('법령명을 입력하세요', 'error'); return; }
+function clauseCardHtml(title, bodyHtml, badge) {
+  return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
+    <div style="background:var(--primary);color:#fff;padding:10px 14px;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between;">
+      <span>${title}</span>${badge ? `<span style="font-size:11px;font-weight:600;opacity:.85;">${badge}</span>` : ''}
+    </div>
+    <div style="max-height:260px;overflow-y:auto;padding:10px 14px;">${bodyHtml}</div>
+  </div>`;
+}
+
+window.clauseSearchStore = []; // 팝업에서 참조할 최근 검색 결과 (법령별 원문 보관) — inline onclick에서 접근해야 해서 window에 부착
+
+window.openClauseDetail = function(lawName, jo, title, content) {
+  document.getElementById('clauseDetailTitle').textContent = `${lawName} 제${jo}조${title ? ' ' + title : ''}`;
+  document.getElementById('clauseDetailBody').textContent = content;
+  openModal('clauseDetailModal');
+};
+
+window.runClauseSearch = async function() {
+  const q = document.getElementById('clauseQuery').value.trim();
+  const out = document.getElementById('clauseResults');
+  const btn = document.getElementById('clauseSearchBtn');
+  if (!q) { toast('검색어를 입력하세요', 'error'); return; }
   btn.disabled = true; btn.textContent = '검색 중...';
-  out.innerHTML = '<div class="mp-empty" style="padding:16px;">법제처 조회 중...</div>';
+  out.innerHTML = `<div class="mp-empty" style="padding:16px;">법령 여러 건을 훑는 중이라 몇 초 걸릴 수 있어요...</div>`;
   try {
-    const { data, error } = await supabase.functions.invoke('law-search', { body: { query: q } });
+    const [lawRes] = await Promise.all([
+      supabase.functions.invoke('law-clause-search', { body: { query: q } }),
+      loadKgCatalog(),
+    ]);
+    const { data, error } = lawRes;
     if (error || data?.error) throw new Error(error?.message || data.error);
-    const { list, totalCnt, oc } = data.result;
-    if (!list.length) { out.innerHTML = '<div class="mp-empty" style="padding:16px;">검색 결과가 없습니다</div>'; return; }
-    out.innerHTML = `<div style="font-size:12px;color:var(--text3);margin-bottom:8px;">총 ${totalCnt}건 · 시행일 최신순${oc==='test' ? ' · 공용 계정(test) 사용 중 — 안정적 사용을 위해 open.law.go.kr에서 무료 OC 발급 권장' : ''}</div>` +
-      list.map(l => `
-      <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <b style="font-size:14px;">${l.name}</b>
-          ${l.abbr ? `<span style="font-size:12px;color:var(--text3);">(${l.abbr})</span>` : ''}
-          <span class="badge badge-gray">${l.kind}</span>
-          ${l.link ? `<a href="${l.link}" target="_blank" class="btn btn-outline btn-sm" style="margin-left:auto;">원문 보기 →</a>` : ''}
-        </div>
-        <div style="font-size:12px;color:var(--text2);margin-top:4px;">
-          시행 <b>${l.efDate}</b> · 공포 ${l.ancDate} · ${l.revision} · ${l.dept}
-        </div>
-      </div>`).join('');
+    const laws = data.result.laws || [];
+    window.clauseSearchStore = laws;
+
+    const cards = laws.map((l, li) => {
+      if (l.error) {
+        return clauseCardHtml(l.lawName, `<div style="color:var(--text3);font-size:12px;">${l.error}</div>`);
+      }
+      if (!l.articles.length) {
+        return clauseCardHtml(l.lawName, `<div style="color:var(--text3);font-size:12px;">일치하는 조문 없음</div>`);
+      }
+      const body = l.articles.map((a, ai) => `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClauseDetail(clauseSearchStore[${li}].lawName, clauseSearchStore[${li}].articles[${ai}].jo, clauseSearchStore[${li}].articles[${ai}].title, clauseSearchStore[${li}].articles[${ai}].content)">
+          <div style="font-weight:700;font-size:13px;margin-bottom:2px;">제${a.jo}조 ${a.title || ''}</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;">${a.snippet}</div>
+        </div>`).join('');
+      return clauseCardHtml(l.lawName, body, `${l.articles.length}건`);
+    });
+
+    // KOSHA GUIDE 카탈로그 (제목/분류 매치 — 우리 쪽에 저장된 목록 기준, 조문 본문은 없음)
+    const ql = q.toLowerCase();
+    const kgMatched = (kgCatalog || []).filter(g => [g.guide_no, g.title, g.category, g.committee, g.code].join(' ').toLowerCase().includes(ql)).slice(0, 15);
+    const kgBody = !kgCatalog || !kgCatalog.length
+      ? `<div style="color:var(--text3);font-size:12px;">카탈로그 미등록 — 아래 KOSHA GUIDE 섹션에서 목록 CSV를 먼저 올려주세요</div>`
+      : kgMatched.length
+        ? kgMatched.map(g => `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+            <div style="font-weight:700;font-size:13px;">${g.title}</div>
+            <div style="font-size:12px;color:var(--text3);">${g.guide_no}${g.category ? ' · ' + g.category : ''}</div>
+          </div>`).join('')
+        : `<div style="color:var(--text3);font-size:12px;">일치하는 지침 없음</div>`;
+    cards.push(clauseCardHtml('KOSHA GUIDE', kgBody, kgMatched.length ? `${kgMatched.length}건` : ''));
+
+    out.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">${cards.join('')}</div>`;
   } catch (e) {
-    out.innerHTML = `<div class="mp-empty" style="padding:16px;">${e.message}<br><span style="font-size:11px;">law-search 엣지펑션 배포 여부를 확인하세요 (supabase functions deploy law-search)</span></div>`;
+    out.innerHTML = `<div class="mp-empty" style="padding:16px;">${e.message}<br><span style="font-size:11px;">law-clause-search 엣지펑션 배포 여부를 확인하세요</span></div>`;
   } finally { btn.disabled = false; btn.textContent = '검색'; }
 };
+
+// 자료실: KOSHA GUIDE 카탈로그
+// ═══════════════════════════════════════════════
+// (lawQuick, runLawSearch 제거됨 — '법령 원문 찾기' 카드 삭제에 따라 불필요)
 
 // ── KOSHA GUIDE ──
 let kgCatalog = null; // [{guide_no,title,committee,category,code}]
