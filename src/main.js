@@ -1552,10 +1552,10 @@ window.clearAllWarnSelected = function() {
 
 // ═══ 라벨 크기 프리셋 (A4 용지 분할 기준, 고시 제2023-9호 별표 규격 대응) ═══
 const WARN_SIZES = {
-  a4:   { name: 'A4 전면',            perPage: 1, picto: 80, area: '약 620㎠' },
-  a5:   { name: 'A4 2분할 (A5)',      perPage: 2, picto: 56, area: '약 310㎠' },
-  a6:   { name: 'A4 4분할 (A6)',      perPage: 4, picto: 44, area: '약 155㎠' },
-  mini: { name: 'A4 8분할 (소분용기)', perPage: 8, picto: 40, area: '약 77㎠' },
+  a4:   { name: 'A4 전면',            perPage: 1, picto: 112, area: '약 620㎠' },
+  a5:   { name: 'A4 2분할 (A5)',      perPage: 2, picto: 76, area: '약 310㎠' },
+  a6:   { name: 'A4 4분할 (A6)',      perPage: 4, picto: 58, area: '약 155㎠' },
+  mini: { name: 'A4 8분할 (소분용기)', perPage: 8, picto: 48, area: '약 77㎠' },
 };
 
 // QR코드 SVG — 스캔 시 msds-view Edge Function이 원본 PDF로 리다이렉트
@@ -1647,10 +1647,10 @@ function warnLabelCss() {
     .wl-top{text-align:center;font-size:11px;font-weight:700;margin-bottom:6px;}
     .wlabel--a5 .wl-top{font-size:8px;margin-bottom:4px;}
     .wlabel--a6 .wl-top{font-size:7px;margin-bottom:3px;}
-    .wl-name-box{border:2.5px solid #E30613;border-radius:5px;text-align:center;font-size:24px;font-weight:900;padding:8px;margin-bottom:10px;letter-spacing:3px;}
-    .wlabel--a5 .wl-name-box{font-size:16px;padding:5px;margin-bottom:6px;letter-spacing:2px;border-width:2px;}
-    .wlabel--a6 .wl-name-box{font-size:12px;padding:3px;margin-bottom:4px;letter-spacing:1px;border-width:1.5px;}
-    .wlabel--mini .wl-name-box{font-size:11px;padding:2px;margin-bottom:4px;letter-spacing:1px;border-width:1.5px;}
+    .wl-name-box{border:2.5px solid #E30613;border-radius:5px;text-align:center;font-size:34px;font-weight:900;padding:11px;margin-bottom:10px;letter-spacing:3px;}
+    .wlabel--a5 .wl-name-box{font-size:23px;padding:7px;margin-bottom:6px;letter-spacing:2px;border-width:2px;}
+    .wlabel--a6 .wl-name-box{font-size:16px;padding:4px;margin-bottom:4px;letter-spacing:1px;border-width:1.5px;}
+    .wlabel--mini .wl-name-box{font-size:14px;padding:3px;margin-bottom:4px;letter-spacing:1px;border-width:1.5px;}
     .wl-picto-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end;}
     .wlabel--a5 .wl-picto-row{gap:6px;margin-bottom:6px;}
     .wlabel--a6 .wl-picto-row,.wlabel--mini .wl-picto-row{gap:4px;margin-bottom:4px;}
