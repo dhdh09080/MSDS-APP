@@ -929,23 +929,6 @@
             <div id="clauseResults"></div>
           </div>
 
-          <!-- 법령 검색 -->
-          <div class="card" style="margin-bottom:14px;">
-            <div class="dash-section-header"><div class="dash-section-title">📖 법령 원문 찾기 (법령명으로 전체 문서 열람)</div></div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
-              <button class="btn btn-outline btn-sm" onclick="lawQuick('산업안전보건법')">산업안전보건법</button>
-              <button class="btn btn-outline btn-sm" onclick="lawQuick('산업안전보건법 시행령')">시행령</button>
-              <button class="btn btn-outline btn-sm" onclick="lawQuick('산업안전보건법 시행규칙')">시행규칙</button>
-              <button class="btn btn-outline btn-sm" onclick="lawQuick('산업안전보건기준에 관한 규칙')">안전보건규칙</button>
-              <button class="btn btn-outline btn-sm" onclick="lawQuick('중대재해 처벌 등에 관한 법률')">중대재해처벌법</button>
-            </div>
-            <div style="display:flex;gap:8px;margin-bottom:10px;">
-              <input class="form-input" id="lawQuery" placeholder="법령명 검색 (예: 화학물질관리법)" style="flex:1;" onkeydown="if(event.key==='Enter')runLawSearch()">
-              <button class="btn btn-primary" id="lawSearchBtn" onclick="runLawSearch()">검색</button>
-            </div>
-            <div id="lawResults"><div class="mp-empty" style="padding:16px;">자주 찾는 법령 버튼을 누르거나 법령명을 검색하세요. 최신 시행일 순으로 나와서 개정 여부를 바로 확인할 수 있어요.</div></div>
-          </div>
-
           <!-- KOSHA GUIDE -->
           <div class="card">
             <div class="dash-section-header">
@@ -1388,6 +1371,22 @@
         <button class="btn btn-danger btn-sm" id="detailDeleteBtn">🗑 삭제</button>
         <button class="btn btn-primary btn-sm" onclick="closeModal('msdsDetailModal')">닫기</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 조문 상세 미니 팝업 -->
+<div class="modal-backdrop" id="clauseDetailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="clauseDetailTitle">조문 상세</div>
+      <button class="modal-close" onclick="closeModal('clauseDetailModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="clauseDetailBody" style="font-size:14px;line-height:1.8;white-space:pre-wrap;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary btn-sm" onclick="closeModal('clauseDetailModal')">닫기</button>
     </div>
   </div>
 </div>

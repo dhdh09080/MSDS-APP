@@ -102,6 +102,7 @@ serve(async (req) => {
             jo: a['조문번호'] || '',
             title,
             snippet: makeSnippet(content, q) || content.slice(0, 180),
+            content: content.slice(0, 3000),
           };
         });
         return { lawName, articles };
