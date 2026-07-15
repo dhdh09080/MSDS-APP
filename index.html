@@ -1356,14 +1356,20 @@
       <button class="modal-close" onclick="closeModal('msdsDetailModal')">✕</button>
     </div>
     <div class="modal-body" id="detailBody"></div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary btn-sm" id="detailViewFileBtn" style="display:none">📄 원본 보기</button>
-      <button class="btn btn-outline btn-sm" onclick="printWarningFromDetail()">🏷️ 경고표지 생성</button>
-      <button class="btn btn-outline btn-sm" id="msdsRenewBtn" onclick="openMsdsRenewPicker()">🔄 새 MSDS로 갱신</button>
-      <input type="file" id="msdsRenewFileInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleMsdsRenewFile(event)">
-      <button class="btn btn-secondary btn-sm" onclick="editMsdsRecord()">✏️ 수정</button>
-      <button class="btn btn-danger btn-sm" id="detailDeleteBtn">🗑 삭제</button>
-      <button class="btn btn-primary btn-sm" onclick="closeModal('msdsDetailModal')">닫기</button>
+    <div class="modal-footer msds-detail-footer">
+      <div class="footer-group">
+        <button class="btn btn-secondary btn-sm" id="detailViewFileBtn" style="display:none">📄 원본 보기</button>
+        <button class="btn btn-outline btn-sm" onclick="printWarningFromDetail()">🏷️ 경고표지 생성</button>
+        <button class="btn btn-outline btn-sm" id="msdsRenewBtn" onclick="openMsdsRenewPicker()">🔄 새 MSDS로 갱신</button>
+        <button class="btn btn-outline btn-sm" onclick="openMsdsFileReplacePicker()">📎 파일만 교체</button>
+        <input type="file" id="msdsRenewFileInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleMsdsRenewFile(event)">
+        <input type="file" id="msdsFileReplaceInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleMsdsFileReplace(event)">
+      </div>
+      <div class="footer-group">
+        <button class="btn btn-secondary btn-sm" onclick="editMsdsRecord()">✏️ 수정</button>
+        <button class="btn btn-danger btn-sm" id="detailDeleteBtn">🗑 삭제</button>
+        <button class="btn btn-primary btn-sm" onclick="closeModal('msdsDetailModal')">닫기</button>
+      </div>
     </div>
   </div>
 </div>

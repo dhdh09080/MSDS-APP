@@ -1296,6 +1296,42 @@ window.handleMsdsRenewFile = async function(e) {
   }
 };
 
+// ─── 파일만 교체 (AI 재분석·필드 변경 없이 첨부 PDF만 바꿔치기) ───
+window.openMsdsFileReplacePicker = function() {
+  if (!currentDetailId) return;
+  document.getElementById('msdsFileReplaceInput').value = '';
+  document.getElementById('msdsFileReplaceInput').click();
+};
+
+window.handleMsdsFileReplace = async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const recId = currentDetailId;
+  const old = msdsRecords.find(r => r.id === recId);
+  if (!old) { toast('대상 MSDS를 찾을 수 없습니다', 'error'); return; }
+  try {
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = ev => resolve(ev.target.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const nv = (old.version || 1) + 1;
+    const history = [...(old.history || []), { version: old.version || 1, date: (old.updated_at || old.created_at || '').split('T')[0], note: '파일만 교체 (필드 변경 없음)' }];
+    const { error } = await supabase.from('msds_records').update({ version: nv, history, updated_at: new Date().toISOString() }).eq('id', recId);
+    if (error) throw error;
+    await uploadMsdsFile(recId, file.name, base64, file.type);
+    await loadMsdsRecords();
+    showMsdsDetail(recId);
+    toast(`파일이 교체됐습니다 (v${nv}, 나머지 필드는 유지)`, 'success');
+  } catch (err) {
+    console.error(err);
+    toast('파일 교체 실패: ' + err.message, 'error');
+  } finally {
+    e.target.value = '';
+  }
+};
+
 window.startMsdsEdit = function(id) {
   const r = msdsRecords.find(x => x.id === id); if (!r) return;
   editingMsdsId = id;
