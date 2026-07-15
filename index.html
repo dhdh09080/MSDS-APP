@@ -929,31 +929,19 @@
             <div id="clauseResults"></div>
           </div>
 
-          <!-- KOSHA GUIDE -->
+          <!-- KOSHA GUIDE 카탈로그 관리 (검색은 위 조문 검색으로 통합됨 — CSV는 실시간 API 실패 시 폴백용) -->
           <div class="card">
             <div class="dash-section-header">
-              <div class="dash-section-title">📘 KOSHA GUIDE 기술지침 <span id="kgCount" style="color:var(--text3);font-weight:400;font-size:12px;"></span></div>
+              <div class="dash-section-title">📘 KOSHA GUIDE 카탈로그 관리 <span id="kgCount" style="color:var(--text3);font-weight:400;font-size:12px;"></span></div>
               <div style="display:flex;gap:6px;">
                 <button class="btn btn-outline btn-sm" onclick="document.getElementById('kgFileInput').click()">📤 목록 CSV 업로드</button>
                 <input type="file" id="kgFileInput" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleKgFile(this.files[0]);this.value=''">
               </div>
             </div>
-            <div id="kgSetup" class="form-note" style="margin-bottom:10px;">
-              공공데이터포털의 <a href="https://www.data.go.kr/data/15116595/fileData.do" target="_blank" style="color:var(--primary);font-weight:700;">공식 KOSHA Guide 목록 CSV</a>를 한 번 올려두면 (1,352건, 로그인 없이 다운로드) 팀 전체가 앱에서 지침번호·명칭으로 바로 검색할 수 있어요.
+            <div id="kgSetup" class="form-note">
+              KOSHA GUIDE는 위 "조문 검색"에서 실시간 API로 함께 검색돼요. 이 CSV는 API가 안 될 때만 쓰이는 예비용이라 평소엔 안 올리셔도 됩니다.
             </div>
-            <div style="display:flex;gap:8px;margin-bottom:10px;">
-              <input class="form-input" id="kgQuery" placeholder="지침번호·명칭·분류 검색 (예: 온열, 밀폐공간, H-)" style="flex:1;" oninput="renderKgResults()">
-            </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;" id="kgTopics">
-              <button class="btn btn-outline btn-sm" onclick="kgQuick('온열')">🌡 온열질환</button>
-              <button class="btn btn-outline btn-sm" onclick="kgQuick('근골격계')">💪 근골격계</button>
-              <button class="btn btn-outline btn-sm" onclick="kgQuick('밀폐공간')">🕳 밀폐공간</button>
-              <button class="btn btn-outline btn-sm" onclick="kgQuick('호흡보호구')">😷 호흡보호구</button>
-              <button class="btn btn-outline btn-sm" onclick="kgQuick('소음')">🔊 소음</button>
-              <button class="btn btn-outline btn-sm" onclick="kgQuick('석면')">⚠️ 석면</button>
-              <button class="btn btn-outline btn-sm" onclick="kgQuick('국소배기')">🌀 국소배기</button>
-            </div>
-            <div id="kgResults" style="max-height:420px;overflow-y:auto;"></div>
+            <div id="kgResults" style="display:none;"></div>
           </div>
 
         </div>

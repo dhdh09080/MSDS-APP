@@ -5283,9 +5283,9 @@ window.runClauseSearch = async function() {
   btn.disabled = true; btn.textContent = '검색 중...';
   out.innerHTML = `<div class="mp-empty" style="padding:16px;">법령 여러 건을 훑는 중이라 몇 초 걸릴 수 있어요...</div>`;
   try {
-    const [lawRes] = await Promise.all([
+    const [lawRes, kgRes] = await Promise.all([
       supabase.functions.invoke('law-clause-search', { body: { query: q } }),
-      loadKgCatalog(),
+      supabase.functions.invoke('kosha-guide-search', { body: { query: q } }).catch(e => ({ error: e })),
     ]);
     const { data, error } = lawRes;
     if (error || data?.error) throw new Error(error?.message || data.error);
@@ -5307,18 +5307,24 @@ window.runClauseSearch = async function() {
       return clauseCardHtml(l.lawName, body, `${l.articles.length}건`);
     });
 
-    // KOSHA GUIDE 카탈로그 (제목/분류 매치 — 우리 쪽에 저장된 목록 기준, 조문 본문은 없음)
-    const ql = q.toLowerCase();
-    const kgMatched = (kgCatalog || []).filter(g => [g.guide_no, g.title, g.category, g.committee, g.code].join(' ').toLowerCase().includes(ql)).slice(0, 15);
-    const kgBody = !kgCatalog || !kgCatalog.length
-      ? `<div style="color:var(--text3);font-size:12px;">카탈로그 미등록 — 아래 KOSHA GUIDE 섹션에서 목록 CSV를 먼저 올려주세요</div>`
-      : kgMatched.length
-        ? kgMatched.map(g => `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
-            <div style="font-weight:700;font-size:13px;">${g.title}</div>
-            <div style="font-size:12px;color:var(--text3);">${g.guide_no}${g.category ? ' · ' + g.category : ''}</div>
-          </div>`).join('')
-        : `<div style="color:var(--text3);font-size:12px;">일치하는 지침 없음</div>`;
-    cards.push(clauseCardHtml('KOSHA GUIDE', kgBody, kgMatched.length ? `${kgMatched.length}건` : ''));
+    // KOSHA GUIDE: 실시간 API 우선, 실패 시에만 업로드된 CSV 카탈로그로 폴백
+    let kgList = null, kgSource = 'api';
+    if (!kgRes.error && !kgRes.data?.error) {
+      kgList = (kgRes.data.result.list || []).slice(0, 15);
+    } else {
+      await loadKgCatalog();
+      kgSource = 'catalog';
+      const ql = q.toLowerCase();
+      kgList = (kgCatalog || []).filter(g => [g.guide_no, g.title, g.category, g.committee, g.code].join(' ').toLowerCase().includes(ql)).slice(0, 15)
+        .map(g => ({ guideNo: g.guide_no, title: g.title, category: g.category, date: '', url: '' }));
+    }
+    const kgBody = !kgList.length
+      ? `<div style="color:var(--text3);font-size:12px;">${kgSource === 'catalog' ? '일치하는 지침 없음 (실시간 API 실패 — CSV 카탈로그 기준)' : '일치하는 지침 없음'}</div>`
+      : kgList.map(g => `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+          <div style="font-weight:700;font-size:13px;">${g.title}</div>
+          <div style="font-size:12px;color:var(--text3);">${g.guideNo || ''}${g.category ? ' · ' + g.category : ''}${g.date ? ' · ' + g.date : ''}</div>
+        </div>`).join('');
+    cards.push(clauseCardHtml('KOSHA GUIDE' + (kgSource === 'catalog' ? ' (CSV)' : ''), kgBody, kgList.length ? `${kgList.length}건` : ''));
 
     out.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">${cards.join('')}</div>`;
   } catch (e) {
@@ -5342,75 +5348,7 @@ async function loadKgCatalog() {
 
 async function initLibraryPage() {
   await loadKgCatalog();
-  document.getElementById('kgCount').textContent = kgCatalog.length ? `(${kgCatalog.length}건 등록됨)` : '';
-  document.getElementById('kgSetup').style.display = kgCatalog.length ? 'none' : 'block';
-  renderKgResults();
-}
-
-window.kgQuick = function(q) {
-  document.getElementById('kgQuery').value = q;
-  renderKgResults();
-};
-
-function kgKoshaLink(q) {
-  // KOSHA 기술지침 공식 검색 페이지 딥링크 (검색어는 자동 복사)
-  return `navigator.clipboard&&navigator.clipboard.writeText('${q.replace(/'/g,"\\'")}');window.open('https://www.kosha.or.kr/kosha/info/searchTechnicalGuidelines.do','_blank');toast('검색어가 복사됐습니다 — KOSHA 검색창에 붙여넣으세요','success')`;
-}
-
-function kgResultRow(guideNo, title, meta, url) {
-  return `<div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);">
-    <span class="badge badge-primary" style="flex-shrink:0;font-family:monospace;">${guideNo || '-'}</span>
-    <div style="flex:1;min-width:0;">
-      <div style="font-size:13px;font-weight:600;">${title}</div>
-      <div style="font-size:11px;color:var(--text3);">${meta}</div>
-    </div>
-    ${url ? `<a href="${url}" target="_blank" class="btn btn-outline btn-sm" style="flex-shrink:0;">원문</a>` : `<button class="btn btn-outline btn-sm" style="flex-shrink:0;" onclick="${kgKoshaLink(title)}">원문 찾기</button>`}
-  </div>`;
-}
-
-let kgSearchTimer = null;
-window.renderKgResults = function() {
-  clearTimeout(kgSearchTimer);
-  kgSearchTimer = setTimeout(runKgLiveSearch, 350); // 입력 중 API 스팸 방지
-};
-
-async function runKgLiveSearch() {
-  const out = document.getElementById('kgResults');
-  const q = (document.getElementById('kgQuery').value || '').trim();
-  document.querySelectorAll('#kgTopics button').forEach(b => {
-    const kw = b.textContent.replace(/^[^\s]+\s/, '');
-    b.setAttribute('onclick', `kgQuick('${kw}')`);
-  });
-  out.innerHTML = `<div class="mp-empty" style="padding:16px;">KOSHA 조회 중...</div>`;
-  try {
-    const { data, error } = await supabase.functions.invoke('kosha-guide-search', { body: { query: q } });
-    if (error || data?.error) throw new Error(error?.message || data.error);
-    const { list, totalCount } = data.result;
-    if (!list.length) { out.innerHTML = '<div class="mp-empty" style="padding:16px;">검색 결과가 없습니다</div>'; return; }
-    out.innerHTML = `<div style="font-size:12px;color:var(--text3);margin-bottom:6px;">KOSHA 공식 API 실시간 조회 · 총 ${totalCount}건${list.length < totalCount ? ` 중 ${list.length}건 표시` : ''}</div>` +
-      list.map(g => kgResultRow(g.guideNo, g.title, [g.category, g.date].filter(Boolean).join(' · '), g.url)).join('');
-  } catch (e) {
-    // API 실패 시 (엣지펑션 미배포/키 미설정 등) → 업로드해둔 CSV 카탈로그로 폴백
-    renderKgResultsFromCatalog(q, e.message);
-  }
-}
-
-function renderKgResultsFromCatalog(q, apiErrorMsg) {
-  const out = document.getElementById('kgResults');
-  const ql = q.toLowerCase();
-  if (!kgCatalog || !kgCatalog.length) {
-    out.innerHTML = `<div class="mp-empty" style="padding:16px;">${apiErrorMsg ? `실시간 API 조회 실패 (${apiErrorMsg})<br>` : ''}카탈로그도 아직 없어요 — 위에서 공식 CSV를 올리면 앱 안에서 검색됩니다.<br>지금은 주제 버튼을 누르면 KOSHA 공식 검색으로 연결돼요.</div>`;
-    document.querySelectorAll('#kgTopics button').forEach(b => {
-      const kw = b.textContent.replace(/^[^\s]+\s/, '');
-      b.setAttribute('onclick', kgKoshaLink(kw));
-    });
-    return;
-  }
-  const list = !ql ? kgCatalog.slice(0, 50)
-    : kgCatalog.filter(g => [g.guide_no, g.title, g.category, g.committee, g.code].join(' ').toLowerCase().includes(ql)).slice(0, 100);
-  if (!list.length) { out.innerHTML = '<div class="mp-empty" style="padding:16px;">검색 결과가 없습니다</div>'; return; }
-  out.innerHTML = `<div style="font-size:12px;color:var(--text3);margin-bottom:6px;">${apiErrorMsg ? '실시간 API 조회 실패 — ' : ''}업로드된 카탈로그 기준${!ql ? ` · 전체 ${kgCatalog.length}건 중 앞 50건` : ''}</div>` +
-    list.map(g => kgResultRow(g.guide_no, g.title, [g.committee, g.category].filter(Boolean).join(' · '))).join('');
+  document.getElementById('kgCount').textContent = kgCatalog.length ? `(${kgCatalog.length}건 등록됨 — 예비용)` : '';
 }
 
 window.handleKgFile = function(file) {

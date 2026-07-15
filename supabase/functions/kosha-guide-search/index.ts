@@ -54,6 +54,12 @@ serve(async (req) => {
       const resultMsg = xml.match(/<resultMsg>([\s\S]*?)<\/resultMsg>/)?.[1] || '';
       throw new Error(`KOSHA GUIDE API 오류 (${resultCode}): ${resultMsg}`);
     }
+    // data.go.kr 게이트웨이 공통 에러 envelope (서비스키 미승인 등) — resultCode와 태그명이 달라 별도 체크
+    const gwErrMsg = xml.match(/<errMsg>([\s\S]*?)<\/errMsg>/)?.[1];
+    const gwAuthMsg = xml.match(/<returnAuthMsg>([\s\S]*?)<\/returnAuthMsg>/)?.[1];
+    if (gwErrMsg || gwAuthMsg) {
+      throw new Error(`데이터포털 게이트웨이 오류: ${gwAuthMsg || gwErrMsg} — 활용신청이 이 API(15144147)에도 승인됐는지 확인하세요`);
+    }
 
     const raw = xmlItems(xml);
     const list = raw.map(it => ({
@@ -66,8 +72,13 @@ serve(async (req) => {
     }));
 
     const totalCount = xml.match(/<totalCount>(\d+)<\/totalCount>/)?.[1];
-    return new Response(JSON.stringify({ result: { list, totalCount: totalCount ? Number(totalCount) : list.length } }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({
+      result: {
+        list,
+        totalCount: totalCount ? Number(totalCount) : list.length,
+        debug: list.length === 0 ? xml.slice(0, 400) : undefined, // 결과 0건일 때 원인 파악용 (정상 응답이면 프런트에서 무시)
+      }
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e) {
     return new Response(JSON.stringify({ error: e?.message || String(e) }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
