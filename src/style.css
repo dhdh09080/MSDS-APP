@@ -3006,6 +3006,29 @@ details > summary::-webkit-details-marker {
     grid-template-columns: 1fr;
   }
 
+  /* backdrop-filter + position:sticky/fixed 조합이 삼성인터넷 등 안드로이드 브라우저에서
+     스크롤 중 깜빡임·순간 사라짐을 유발함 — 모바일에서는 블러 끄고 불투명 배경으로 대체 */
+  .page-header,
+  .mobile-tabbar,
+  .ws-topbar,
+  .modal-backdrop {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .page-header,
+  .ws-topbar {
+    background: #fff;
+  }
+
+  .mobile-tabbar {
+    background: #fff;
+  }
+
+  .modal-backdrop {
+    background: rgba(0, 0, 0, 0.45);
+  }
+
   .stat-value {
     font-size: 24px;
   }
