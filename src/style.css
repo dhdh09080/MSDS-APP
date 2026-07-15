@@ -1291,6 +1291,10 @@ body {
   margin-bottom: 20px;
 }
 
+.stats-row > * {
+  min-width: 0;
+}
+
 .dash-alert-bar {
   background: var(--warn-light);
   border: 1.5px solid #FDE68A;
@@ -1352,6 +1356,11 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  min-width: 0;
+}
+
+.dash-two-col > * {
+  min-width: 0;
 }
 
 .dash-calendar-card {
@@ -1362,10 +1371,13 @@ body {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
+  min-width: 0;
 }
 
 .dash-day-col {
   min-height: 80px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .dash-day-label {
@@ -2990,6 +3002,33 @@ details > summary::-webkit-details-marker {
     gap: 10px;
   }
 
+  .dash-two-col {
+    grid-template-columns: 1fr;
+  }
+
+  /* backdrop-filter + position:sticky/fixed 조합이 삼성인터넷 등 안드로이드 브라우저에서
+     스크롤 중 깜빡임·순간 사라짐을 유발함 — 모바일에서는 블러 끄고 불투명 배경으로 대체 */
+  .page-header,
+  .mobile-tabbar,
+  .ws-topbar,
+  .modal-backdrop {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .page-header,
+  .ws-topbar {
+    background: #fff;
+  }
+
+  .mobile-tabbar {
+    background: #fff;
+  }
+
+  .modal-backdrop {
+    background: rgba(0, 0, 0, 0.45);
+  }
+
   .stat-value {
     font-size: 24px;
   }
@@ -3522,12 +3561,16 @@ details > summary::-webkit-details-marker {
   cursor: pointer;
   font-family: inherit;
   font-size: 22px;
+  min-width: 0;
 }
 
 .more-item span {
   font-size: 12px;
   font-weight: 600;
   color: var(--text2);
+  white-space: normal;
+  word-break: keep-all;
+  text-align: center;
 }
 
 .more-item:active {

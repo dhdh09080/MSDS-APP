@@ -267,14 +267,12 @@ window.enterWorkspace = async function(wsId) {
   document.getElementById('sidebarAvatar').textContent = name.charAt(0).toUpperCase();
   document.getElementById('accountInfo').innerHTML = `이메일: ${user.email}<br>이름: ${name}<br>가입일: ${new Date(user.created_at).toLocaleDateString('ko-KR')}`;
   await Promise.all([loadContractors(), loadWorkTypes(), loadMembers(), loadTokens(), loadPublicLink()]);
-  await loadMsdsRecords();
-  await Promise.all([loadPlacementSnapshots(), loadTodos(), loadRoutineTasks(), loadBusinessLicenses(), loadMeasureRounds(), loadMeasureResults(), loadNotifications(), loadHealthRecords()]);
+  await Promise.all([loadMsdsRecords(), loadPlacementSnapshots(), loadTodos(), loadRoutineTasks(), loadBusinessLicenses(), loadMeasureRounds(), loadMeasureResults(), loadNotifications(), loadHealthRecords()]);
   subscribeNotifications();
   renderHomeDashboard(); // 알림(재업로드 도착) 로드 후 대시보드 갱신
   loadDashWeather();
-  await loadPhotoFolders();
-  await loadPhotos();
   showPage('home');
+  loadPhotoFolders().then(loadPhotos); // 사진은 홈 화면 진입을 막지 않고 백그라운드로 로드
 }
 
 window.goWorkspaces = function() {
@@ -4931,9 +4929,9 @@ async function loadDashWeather() {
       const list = await fetchWxPosterList('forecast');
       if (!list.length) { card.style.display = 'none'; return; }
       card.style.display = 'block';
-      body.innerHTML = head + `<div style="display:flex;gap:12px;align-items:center;">
-        <img src="${list[0].download_url}" style="width:120px;border-radius:8px;border:1px solid var(--border);">
-        <div style="font-size:13px;color:var(--text2);">최신 예보 포스터가 도착했어요.<br>클릭해서 크게 보고 카톡으로 공유하세요.</div>
+      body.innerHTML = head + `<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">
+        <img src="${list[0].download_url}" style="display:block;width:120px;max-width:100%;height:auto;border-radius:8px;border:1px solid var(--border);flex-shrink:0;">
+        <div style="font-size:13px;color:var(--text2);min-width:0;flex:1;">최신 예보 포스터가 도착했어요.<br>클릭해서 크게 보고 카톡으로 공유하세요.</div>
       </div>`;
     } catch { card.style.display = 'none'; }
   }
