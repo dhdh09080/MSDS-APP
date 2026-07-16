@@ -52,31 +52,22 @@ function flattenTextExcept(obj: any, except: string[]): string {
   return Object.entries(obj).filter(([k]) => !except.includes(k)).map(([, v]) => flattenText(v)).join(' ');
 }
 
-const CIRCLED = ['', '①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩', '⑪', '⑫', '⑬', '⑭', '⑮', '⑯', '⑰', '⑱', '⑲', '⑳'];
-function circledNum(n: string): string {
-  const num = parseInt(n, 10);
-  return (num >= 1 && num <= 20) ? CIRCLED[num] : (n || '');
-}
-
 // 조문내용만으로는 안 됨 — 실제 본문은 항/호/목(하위 단위)에 들어있는 경우가 많음.
-// 국가법령정보센터 표기처럼 항은 ①②③, 호는 "1. 2. 3.", 목은 "가. 나. 다." + 들여쓰기로 줄바꿈해서 조립
+// 참고: 항내용/호내용/목내용에는 API가 이미 번호(①, 1., 가.)를 포함해서 줌 — 따로 붙이면 중복되므로 그대로 사용
 function formatArticleText(a: any): string {
   const lines: string[] = [];
   const intro = flattenText(a['조문내용']).trim();
   if (intro) lines.push(intro);
 
   for (const hang of asArray(a['항'])) {
-    const hangNo = hang['항번호'] ? circledNum(hang['항번호']) + ' ' : '';
     const hangText = flattenTextExcept(hang, ['항번호', '호']).trim();
-    if (hangText) lines.push(`${hangNo}${hangText}`);
+    if (hangText) lines.push(hangText);
     for (const ho of asArray(hang['호'])) {
-      const hoNo = ho['호번호'] ? `${ho['호번호']}. ` : '';
       const hoText = flattenTextExcept(ho, ['호번호', '목']).trim();
-      if (hoText) lines.push(`  ${hoNo}${hoText}`);
+      if (hoText) lines.push(`  ${hoText}`);
       for (const mok of asArray(ho['목'])) {
-        const mokNo = mok['목번호'] ? `${mok['목번호']}. ` : '';
         const mokText = flattenTextExcept(mok, ['목번호']).trim();
-        if (mokText) lines.push(`    ${mokNo}${mokText}`);
+        if (mokText) lines.push(`    ${mokText}`);
       }
     }
   }
