@@ -39,11 +39,7 @@
       <div id="loginForm" class="auth-form">
         <input type="email" id="loginEmail" class="auth-input" placeholder="이메일" autocomplete="email">
         <input type="password" id="loginPassword" class="auth-input" placeholder="비밀번호" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()">
-        <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text2);cursor:pointer;user-select:none;">
-          <input type="checkbox" id="autoLoginChk" style="width:16px;height:16px;cursor:pointer;"> 자동 로그인 (이 기기에 로그인 정보 저장)
-        </label>
         <button class="auth-btn" onclick="handleLogin()" id="loginBtn">로그인</button>
-        <button class="auth-btn" id="savedLoginBtn" style="display:none;background:var(--surface2);color:var(--text);border:1.5px solid var(--border2);" onclick="loginWithSaved()">⚡ 저장된 계정으로 바로 로그인</button>
         <button class="auth-link" onclick="switchTab('forgot')">비밀번호를 잊으셨나요?</button>
         <div class="auth-msg" id="loginMsg"></div>
       </div>
@@ -64,6 +60,15 @@
         <button class="auth-btn" onclick="handleForgot()" id="forgotBtn">재설정 링크 전송</button>
         <button class="auth-link" onclick="switchTab('login')">← 로그인으로 돌아가기</button>
         <div class="auth-msg" id="forgotMsg"></div>
+      </div>
+
+      <!-- 비밀번호 재설정 완료 -->
+      <div id="resetForm" class="auth-form" style="display:none">
+        <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:8px;">새 비밀번호를 입력하세요.</div>
+        <input type="password" id="resetPassword" class="auth-input" placeholder="새 비밀번호 (6자 이상)" autocomplete="new-password">
+        <input type="password" id="resetPasswordConfirm" class="auth-input" placeholder="새 비밀번호 확인" autocomplete="new-password" onkeydown="if(event.key==='Enter')handlePasswordUpdate()">
+        <button class="auth-btn" onclick="handlePasswordUpdate()" id="resetBtn">비밀번호 변경</button>
+        <div class="auth-msg" id="resetMsg"></div>
       </div>
     </div>
   </div>
@@ -494,9 +499,6 @@
                 <input class="form-input" id="linkContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('linkContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('linkContractor');}">
                 <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('linkContractor')">검색</button>
               </div>
-            </div>
-            <div class="contractor-search-row">
-              <input class="form-input" id="linkContractorSearch" placeholder="협력사명 검색 (1곳만 남으면 자동 선택)" oninput="searchContractorSelect('linkContractor')">
             </div>
             <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
               <select class="form-input" id="linkContractor" style="flex:1;min-width:180px;"><option value="">협력사 선택</option></select>
