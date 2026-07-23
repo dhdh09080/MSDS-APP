@@ -39,6 +39,13 @@
       <div id="loginForm" class="auth-form">
         <input type="email" id="loginEmail" class="auth-input" placeholder="이메일" autocomplete="email">
         <input type="password" id="loginPassword" class="auth-input" placeholder="비밀번호" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()">
+        <label class="auto-login-row">
+          <input type="checkbox" id="autoLoginChk" checked>
+          <span>
+            <b>이 기기에서 자동 로그인</b>
+            <small>비밀번호는 저장하지 않고 로그인 세션만 유지합니다.</small>
+          </span>
+        </label>
         <button class="auth-btn" onclick="handleLogin()" id="loginBtn">로그인</button>
         <button class="auth-link" onclick="switchTab('forgot')">비밀번호를 잊으셨나요?</button>
         <div class="auth-msg" id="loginMsg"></div>
@@ -165,6 +172,9 @@
         </div>
 
         <div class="nav-section">관리</div>
+        <div class="nav-item" id="nav-contractors" onclick="showPage('contractors')">
+          <span class="nav-icon">👷</span> 협력사 관리
+        </div>
         <div class="nav-item" id="nav-settings" onclick="showPage('settings')">
           <span class="nav-icon">⚙️</span> 설정
         </div>
@@ -981,12 +991,78 @@
         </div>
       </div>
 
+      <!-- ═══ 협력사 관리 ═══ -->
+      <div class="page" id="page-contractors">
+        <div class="page-header">
+          <div>
+            <div class="page-title">협력사 관리</div>
+            <div class="page-subtitle">협력사·공종·MSDS·사업자등록증을 한 화면에서 관리합니다</div>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" onclick="focusNewContractor()">+ 새 협력사</button>
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div class="stats-row contractor-stats" style="margin-bottom:16px;">
+            <button class="stat-card contractor-stat-card active" id="conStatAll" onclick="setContractorFilter('all')">
+              <div class="stat-label">전체 협력사</div>
+              <div class="stat-value primary" id="conStatTotal">0</div>
+            </button>
+            <button class="stat-card contractor-stat-card" id="conStatLicense" onclick="setContractorFilter('missing-license')">
+              <div class="stat-label">등록증 미제출</div>
+              <div class="stat-value danger" id="conStatMissingLicense">0</div>
+            </button>
+            <button class="stat-card contractor-stat-card" id="conStatMsds" onclick="setContractorFilter('missing-msds')">
+              <div class="stat-label">MSDS 미수령</div>
+              <div class="stat-value warn" id="conStatMissingMsds">0</div>
+            </button>
+          </div>
+
+          <div class="card" id="newContractorCard" style="margin-bottom:16px;">
+            <div class="card-title"><span class="card-title-icon">➕</span> 새 협력사 등록</div>
+            <div class="contractor-add-grid">
+              <input type="text" class="form-input" id="newContractor" placeholder="협력사명 입력" onkeydown="if(event.key==='Enter')addContractor()">
+              <button class="btn btn-primary" onclick="addContractor()">등록하고 계속</button>
+            </div>
+            <div class="form-note" style="margin-top:8px;">등록 후 같은 화면에서 공종, 사업자등록증, 업로드 링크를 관리할 수 있습니다.</div>
+          </div>
+
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+              <span><span class="card-title-icon">👷</span> 협력사 목록 <span id="conMgrCount" style="color:var(--text3);font-weight:400;font-size:13px;"></span></span>
+            </div>
+            <div class="contractor-toolbar">
+              <input type="search" class="form-input" id="conMgrSearch" placeholder="협력사명 검색" oninput="renderContractorTags()">
+              <select class="form-input" id="conMgrFilter" onchange="setContractorFilter(this.value)">
+                <option value="all">전체 상태</option>
+                <option value="missing-license">사업자등록증 미제출</option>
+                <option value="missing-msds">MSDS 미수령</option>
+              </select>
+            </div>
+            <div id="conMgrList"></div>
+          </div>
+
+          <div class="card" id="businessLicenseCard">
+            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+              <span><span class="card-title-icon">📑</span> 사업자등록증 관리</span>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-outline btn-sm" onclick="downloadAllLicenses()">📦 전체 다운로드</button>
+                <input type="file" id="manualLicenseInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleManualLicenseUpload(event)">
+              </div>
+            </div>
+            <div class="form-note" style="margin-bottom:12px;">미제출 협력사를 선택해 바로 업로드하거나 협력사 업로드 링크를 보낼 수 있습니다.</div>
+            <div id="businessLicenseStatus" style="margin-bottom:10px;font-size:14px;font-weight:700;"></div>
+            <div id="businessLicenseList"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- ═══ 설정 ═══ -->
       <div class="page" id="page-settings">
         <div class="page-header">
           <div>
             <div class="page-title">설정</div>
-            <div class="page-subtitle">현장 · 협력사 · 팀원 관리</div>
+            <div class="page-subtitle">현장 · 루틴 업무 · 팀원 · 계정 관리</div>
           </div>
         </div>
         <div class="content-scroll">
@@ -997,21 +1073,6 @@
               <input class="form-input" id="wsNameEdit" placeholder="현장명 입력">
             </div>
             <button class="btn btn-primary btn-sm" onclick="updateWSName()">저장</button>
-          </div>
-
-          <div class="card">
-            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-              <span><span class="card-title-icon">👷</span> 협력사 관리 <span id="conMgrCount" style="color:var(--text3);font-weight:400;font-size:13px;"></span></span>
-            </div>
-            <div class="form-note" style="margin-bottom:10px;">이름을 바꾸면 MSDS 대장의 협력사명도 함께 바뀝니다. 공종은 각 행에서 바로 추가/삭제하세요.</div>
-            <div style="display:flex;gap:8px;margin-bottom:10px;">
-              <input type="text" class="form-input" id="conMgrSearch" placeholder="협력사 검색" oninput="renderContractorTags()" style="flex:1;">
-            </div>
-            <div id="conMgrList" style="max-height:440px;overflow-y:auto;"></div>
-            <div class="add-tag-row" style="margin-top:10px;">
-              <input type="text" id="newContractor" placeholder="새 협력사명 입력 후 Enter" onkeydown="if(event.key==='Enter')addContractor()">
-              <button class="btn btn-primary btn-sm" onclick="addContractor()">추가</button>
-            </div>
           </div>
 
           <div class="card">
@@ -1053,21 +1114,6 @@
           </div>
 
           <div class="card">
-            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-              <span><span class="card-title-icon">📑</span> 사업자등록증 관리</span>
-              <div style="display:flex;gap:6px;">
-                <button class="btn btn-outline btn-sm" onclick="downloadAllLicenses()">📦 전체 다운로드</button>
-                <input type="file" id="manualLicenseInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleManualLicenseUpload(event)">
-              </div>
-            </div>
-            <div class="form-note" style="margin-bottom:12px;">협력사가 업로드 링크를 통해 직접 제출하거나, 여기서 관리자가 직접 업로드할 수 있습니다. 한 번 제출되면 협력사 화면에는 재업로드 요청이 뜨지 않습니다.</div>
-            <div id="businessLicenseStatus" style="margin-bottom:10px;font-size:13px;font-weight:700;"></div>
-            <div id="businessLicenseList"></div>
-          </div>
-
-          </div>
-
-          <div class="card">
             <div class="card-title"><span class="card-title-icon">👥</span> 팀원 관리</div>
             <div id="memberList" style="margin-bottom:16px;">
               <div style="color:var(--text3);font-size:13px;">로딩 중...</div>
@@ -1080,8 +1126,6 @@
             <button class="btn btn-primary" id="reanalyzeLegalBtn" onclick="reanalyzeLegal()">⚖️ 법정물질 일괄 재판정</button>
           </div>
 
-          <div class="card">
-            <div class="card-title"><span class="card-title-icon">ℹ️</span> 계정 정보</div>
           <div class="card">
             <div class="card-title"><span class="card-title-icon">ℹ️</span> 계정 정보</div>
             <div id="accountInfo" class="form-note" style="line-height:2;"></div>
@@ -1160,6 +1204,7 @@
         <button class="more-item" onclick="showPage('vulnerable');closeModal('moreSheet')">🧓<span>취약자 명단</span></button>
         <button class="more-item" onclick="showPage('bp');closeModal('moreSheet')">🩺<span>고령자 혈압</span></button>
         <button class="more-item" onclick="showPage('library');closeModal('moreSheet')">📚<span>법령·지침</span></button>
+        <button class="more-item" onclick="showPage('contractors');closeModal('moreSheet')">👷<span>협력사 관리</span></button>
         <button class="more-item" onclick="showPage('settings');closeModal('moreSheet')">⚙️<span>설정</span></button>
       </div>
     </div>
@@ -1202,10 +1247,10 @@
           <div class="form-field">
             <label class="form-label">사용 협력사 <span class="required">*</span></label>
             <div class="contractor-search-row">
-              <input class="form-input" id="batchContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('batchContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('batchContractor');}">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('batchContractor')">검색</button>
+              <input class="form-input" id="batchContractorSearch" placeholder="협력사명 검색 또는 신규 입력" oninput="searchContractorSelect('batchContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('batchContractor');}">
             </div>
             <select class="form-input" id="batchContractor" onchange="updateBatchWorkTypes()"><option value="">선택하세요</option></select>
+            <button type="button" class="inline-contractor-add" id="batchContractorAddBtn" onclick="quickAddContractorFromSearch('batchContractor')" style="display:none;"></button>
           </div>
           <div class="form-field">
             <label class="form-label">취급 공종</label>
@@ -1233,6 +1278,7 @@
         <div id="msdsBatchBar" class="batch-bar" style="display:none">
           <span class="batch-info" id="msdsBatchInfo"></span>
           <button class="btn btn-danger btn-sm" onclick="clearMsdsFiles()">전체 제거</button>
+          <button class="btn btn-secondary" id="retryMsdsBtn" onclick="retryMsdsErrors()" style="display:none;">오류 다시 시도</button>
           <button class="btn btn-primary" id="parseAllBtn" onclick="parseAllFiles()">✨ 분석 후 일괄 저장</button>
         </div>
         <div style="text-align:center;margin-top:8px;">
@@ -1256,10 +1302,10 @@
             <div class="form-field">
               <label class="form-label">사용 협력사 <span class="required">*</span></label>
               <div class="contractor-search-row">
-                <input class="form-input" id="f_contractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('f_contractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('f_contractor');}">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('f_contractor')">검색</button>
+                <input class="form-input" id="f_contractorSearch" placeholder="협력사명 검색 또는 신규 입력" oninput="searchContractorSelect('f_contractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('f_contractor');}">
               </div>
               <select class="form-input" id="f_contractor" onchange="updateManualWorkTypes()"><option value="">선택</option></select>
+              <button type="button" class="inline-contractor-add" id="f_contractorAddBtn" onclick="quickAddContractorFromSearch('f_contractor')" style="display:none;"></button>
             </div>
             <div class="form-field">
               <label class="form-label">취급 공종</label>
@@ -1373,10 +1419,35 @@
       <button class="modal-close" onclick="closeModal('clauseDetailModal')">✕</button>
     </div>
     <div class="modal-body">
+      <div class="search-highlight-banner" id="clauseDetailKeyword"></div>
       <div id="clauseDetailBody" style="font-size:14px;line-height:1.8;white-space:pre-wrap;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-primary btn-sm" onclick="closeModal('clauseDetailModal')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- KOSHA GUIDE 원문 미니 팝업 -->
+<div class="modal-backdrop" id="koshaGuideDetailModal">
+  <div class="modal wide kosha-guide-modal">
+    <div class="modal-header">
+      <div class="modal-title" id="koshaGuideDetailTitle">KOSHA GUIDE 원문</div>
+      <button class="modal-close" onclick="closeKoshaGuideDetail()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="kosha-guide-detail-meta" id="koshaGuideDetailMeta"></div>
+      <div class="search-highlight-banner" id="koshaGuideDetailKeyword"></div>
+      <div class="kosha-guide-preview-wrap">
+        <iframe id="koshaGuideDetailFrame" class="kosha-guide-preview-frame" title="KOSHA GUIDE 원문 PDF"></iframe>
+        <div class="kosha-guide-preview-empty" id="koshaGuideDetailEmpty" style="display:none;">
+          원문 미리보기를 제공하지 않는 자료입니다. 아래 원문 열기 버튼을 이용해 주세요.
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <a class="btn btn-outline btn-sm" id="koshaGuideOriginalBtn" target="_blank" rel="noopener noreferrer">새 창에서 원문 열기</a>
+      <button class="btn btn-primary btn-sm" onclick="closeKoshaGuideDetail()">닫기</button>
     </div>
   </div>
 </div>
@@ -1621,7 +1692,7 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('healthConfirmModal')">취소</button>
       <button class="btn btn-ok" onclick="downloadHealthExcel()" id="healthDownloadBtn" disabled>📥 엑셀 다운로드</button>
-      <button class="btn btn-primary" onclick="saveHealthRecord()">💾 대장에 저장</button>
+      <button class="btn btn-primary" id="healthSaveBtn" onclick="saveHealthRecord()">💾 대장에 저장</button>
     </div>
   </div>
 </div>

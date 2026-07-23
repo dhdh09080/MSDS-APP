@@ -229,7 +229,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
           <b id="uploadedCount">0</b>개의 MSDS 파일이 성공적으로 업로드됐습니다.<br>
           담당 보건관리자가 확인 후 처리합니다.
         </div>
+        <div id="uploadFailureSummary" style="display:none;margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--danger-light);color:var(--danger);font-size:13px;font-weight:700;"></div>
         <div class="complete-actions">
+          <button class="btn btn-secondary" id="retryFailedBtn" onclick="retryFailedUploads()" style="display:none;">실패 파일 다시 시도</button>
           <button class="btn btn-primary" onclick="printWarning()">⚠️ 경고표지 인쇄</button>
           <button class="btn btn-secondary" onclick="resetForm()">+ 추가 파일 업로드</button>
         </div>
@@ -467,15 +469,12 @@ window.startUpload = async function() {
       const recId = crypto.randomUUID();
       const ext = item.mediaType === 'application/pdf' ? 'pdf' : (item.mediaType.split('/')[1]||'jpg');
       const path = `${wsData.id}/${recId}.${ext}`;
-      let hasPdf = false;
-      try {
-        const bytes = atob(item.data); const arr = new Uint8Array(bytes.length);
-        for (let i=0;i<bytes.length;i++) arr[i]=bytes.charCodeAt(i);
-        const blob = new Blob([arr],{type:item.mediaType});
-        const { error: stErr } = await supabase.storage.from('msds-pdfs').upload(path, blob, {contentType:item.mediaType,upsert:true});
-        if (stErr) throw new Error('원본 파일 업로드 실패: ' + stErr.message);
-        hasPdf = true;
-      } catch {}
+      const bytes = atob(item.data); const arr = new Uint8Array(bytes.length);
+      for (let i=0;i<bytes.length;i++) arr[i]=bytes.charCodeAt(i);
+      const blob = new Blob([arr],{type:item.mediaType});
+      const { error: stErr } = await supabase.storage.from('msds-pdfs').upload(path, blob, {contentType:item.mediaType,upsert:true});
+      if (stErr) throw new Error('원본 파일 업로드 실패: ' + stErr.message);
+      const hasPdf = true;
       const { error: dbErr } = await supabase.from('msds_records').insert({
         id: recId,
         workspace_id: wsData.id,
@@ -518,7 +517,13 @@ window.startUpload = async function() {
   }
   document.getElementById('uploadBtn').disabled = false;
   if (saved > 0) {
+    const failed = waiting.length - saved;
     document.getElementById('uploadedCount').textContent = saved;
+    const failureSummary = document.getElementById('uploadFailureSummary');
+    const retryBtn = document.getElementById('retryFailedBtn');
+    failureSummary.style.display = failed ? 'block' : 'none';
+    failureSummary.textContent = failed ? `${failed}개 파일은 업로드하지 못했습니다. 아래 버튼으로 다시 시도해주세요.` : '';
+    retryBtn.style.display = failed ? '' : 'none';
     setStep(3);
     document.getElementById('stepView2').style.display = 'none';
     document.getElementById('stepView3').style.display = 'block';
@@ -539,6 +544,14 @@ window.resetForm = function() {
   document.getElementById('stepView3').style.display = 'none';
   document.getElementById('stepView1').style.display = 'block';
   renderFileList(); setStep(1);
+};
+
+window.retryFailedUploads = function() {
+  fileQueue = fileQueue.filter(item => item.status === 'error').map(item => ({ ...item, status: 'waiting', error: null }));
+  document.getElementById('stepView3').style.display = 'none';
+  document.getElementById('stepView2').style.display = 'block';
+  renderFileList();
+  setStep(2);
 };
 
 function toast(msg, type='') {

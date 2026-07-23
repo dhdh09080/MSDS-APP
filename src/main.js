@@ -1,4 +1,4 @@
-import { supabase } from './lib/supabase.js';
+import { supabase, isAutoLoginEnabled, setAutoLoginEnabled } from './lib/supabase.js';
 import { generateCode, generateToken, base64ToBlob, downloadBlob, guessFromPath, today } from './lib/utils.js';
 import { ghsPictogramWithLabel, decodeHCodes, decodePCodes, GHS_NAMES, applyPictogramRules, condensePCodes } from './lib/ghs.js';
 import { CAS_MEASUREMENT, CAS_HEALTH_EXAM, CAS_MANAGE, CAS_PERMIT, CAS_SPECIAL, CAS_EXAM_CYCLE } from './data/cas-lists.js';
@@ -21,6 +21,8 @@ let warnQrEnabled = true;
 let warnCopies = 1; // 표지당 인쇄 매수 (같은 표지를 반복 배치해 분할 시트의 빈칸을 없앰)
 let pendingInvites = [];
 let measureFileData = null, measureFileName_val = null;
+let contractorFilter = 'all';
+let activeHealthSub = 'result';
 
 // 전역 붙여넣기 캐치: 사진 업로드 모달이 열려있을 때 어디서 Ctrl+V를 눌러도 잡히도록 보강
 document.addEventListener('paste', (e) => {
@@ -77,6 +79,8 @@ function showAuth() {
   document.getElementById('authScreen').style.display = 'block';
   document.getElementById('workspaceScreen').style.display = 'none';
   document.getElementById('appScreen').style.display = 'none';
+  const autoLogin = document.getElementById('autoLoginChk');
+  if (autoLogin) autoLogin.checked = isAutoLoginEnabled();
 }
 
 window.switchTab = function(tab) {
@@ -95,6 +99,7 @@ window.handleLogin = async function() {
   const msg = document.getElementById('loginMsg');
   const btn = document.getElementById('loginBtn');
   if (!email || !password) { msg.className='auth-msg error'; msg.textContent='이메일과 비밀번호를 입력하세요'; return; }
+  setAutoLoginEnabled(document.getElementById('autoLoginChk')?.checked !== false);
   btn.disabled = true; btn.textContent = '로그인 중...';
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   btn.disabled = false; btn.textContent = '로그인';
@@ -290,7 +295,7 @@ window.showPage = function(id) {
   });
   if (id === 'warning') { renderWarnPickList(); updateWarningPreview(); }
   if (id === 'upload-link') { renderTokenList(); renderPublicLinkUI(); }
-  if (id === 'health') switchHealthSub('result');
+  if (id === 'health') switchHealthSub(activeHealthSub);
   if (id === 'calendar') { loadCalendarEvents().then(renderCalendar); }
   if (id === 'photos') { renderPhotoFolderTree(); renderPhotoMain(); }
   if (id === 'measure') { renderMeasureRoundsChecklist(); renderMeasureList(); }
@@ -298,10 +303,10 @@ window.showPage = function(id) {
   if (id === 'weather') { loadWeatherPage(); }
   if (id === 'bp') { initBpPage(); }
   if (id === 'library') { initLibraryPage(); }
-  if (id === 'settings') { renderContractorTags(); loadMembers(); }
+  if (id === 'contractors') { renderContractorTags(); renderBusinessLicenseStatus(); }
   document.getElementById('mainContent')?.scrollTo(0, 0);
   if (id === 'settings') {
-    renderContractorTags(); loadMembers();
+    loadMembers();
     // 재판정 버튼 건수 업데이트
     const btn = document.getElementById('reanalyzeLegalBtn');
     if (btn) btn.textContent = `⚖️ 법정물질 일괄 재판정 (${msdsRecords.length}건)`;
@@ -343,6 +348,7 @@ window.searchContractorSelect = function(id) {
   isNameBased ? populateWarnContractorFilter() : populateContractorSelects();
   // 검색 결과가 정확히 1곳이면 자동 선택 + 연동 로직(공종 목록·목록 필터 등)까지 발동
   const q = (document.getElementById(id + 'Search')?.value || '').trim().toLowerCase();
+  updateInlineContractorAdd(id);
   if (!q) return;
   const matches = contractors.filter(c => c.name.toLowerCase().includes(q));
   const el = document.getElementById(id);
@@ -350,6 +356,59 @@ window.searchContractorSelect = function(id) {
   if (matches.length === 1 && el && el.value !== val) {
     el.value = val;
     el.dispatchEvent(new Event('change'));
+  }
+};
+
+function normalizeContractorName(name) {
+  return (name || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('ko-KR');
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[ch]);
+}
+
+window.updateInlineContractorAdd = function(id) {
+  const btn = document.getElementById(id + 'AddBtn');
+  const input = document.getElementById(id + 'Search');
+  if (!btn || !input) return;
+  const name = input.value.trim().replace(/\s+/g, ' ');
+  const exact = contractors.some(c => normalizeContractorName(c.name) === normalizeContractorName(name));
+  btn.style.display = name && !exact ? 'flex' : 'none';
+  btn.textContent = name && !exact ? `+ “${name}” 신규 협력사로 등록` : '';
+};
+
+async function insertContractor(name) {
+  const cleanName = name.trim().replace(/\s+/g, ' ');
+  const existing = contractors.find(c => normalizeContractorName(c.name) === normalizeContractorName(cleanName));
+  if (existing) return { contractor: existing, created: false };
+  const { data, error } = await supabase.from('contractors')
+    .insert({ workspace_id: currentWS.id, name: cleanName }).select().single();
+  if (error) throw error;
+  contractors.push(data);
+  return { contractor: data, created: true };
+}
+
+window.quickAddContractorFromSearch = async function(id) {
+  const input = document.getElementById(id + 'Search');
+  const select = document.getElementById(id);
+  const name = input?.value.trim();
+  if (!name || !select) return;
+  const btn = document.getElementById(id + 'AddBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '등록 중...'; }
+  try {
+    const { contractor, created } = await insertContractor(name);
+    populateContractorSelects();
+    select.value = contractor.id;
+    select.dispatchEvent(new Event('change'));
+    updateInlineContractorAdd(id);
+    renderContractorTags();
+    toast(created ? `${contractor.name} 등록 완료 — 계속 업로드하세요` : `${contractor.name} 협력사를 선택했습니다`, 'success');
+  } catch (error) {
+    toast('협력사 등록 실패: ' + error.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
   }
 };
 
@@ -375,34 +434,115 @@ window.renderContractorTags = function() {
   const el = document.getElementById('conMgrList');
   if (!el) return;
   const q = (document.getElementById('conMgrSearch')?.value || '').trim().toLowerCase();
-  const list = contractors.filter(c => !q || c.name.toLowerCase().includes(q));
+  const submittedIds = new Set(businessLicenses.map(l => l.contractor_id));
+  const hasReceivedMsds = c => msdsRecords.some(r => r.contractor === c.name && r.receipt_status !== 'pending');
+  const missingLicense = contractors.filter(c => !submittedIds.has(c.id));
+  const missingMsds = contractors.filter(c => !hasReceivedMsds(c));
+  const list = contractors.filter(c => {
+    const matchesQuery = !q || c.name.toLowerCase().includes(q);
+    const matchesFilter = contractorFilter === 'missing-license'
+      ? !submittedIds.has(c.id)
+      : contractorFilter === 'missing-msds'
+        ? !hasReceivedMsds(c)
+        : true;
+    return matchesQuery && matchesFilter;
+  });
   const cnt = document.getElementById('conMgrCount');
-  if (cnt) cnt.textContent = `(${contractors.length}개사)`;
+  if (cnt) cnt.textContent = `(${list.length}/${contractors.length}개사)`;
+  const totalEl = document.getElementById('conStatTotal');
+  const licenseEl = document.getElementById('conStatMissingLicense');
+  const msdsEl = document.getElementById('conStatMissingMsds');
+  if (totalEl) totalEl.textContent = contractors.length;
+  if (licenseEl) licenseEl.textContent = missingLicense.length;
+  if (msdsEl) msdsEl.textContent = missingMsds.length;
   if (!list.length) {
-    el.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:14px 0;">${q ? '검색 결과가 없습니다' : '등록된 협력사가 없습니다'}</div>`;
+    el.innerHTML = `<div class="contractor-empty">
+      <div>${q ? '검색 조건에 맞는 협력사가 없습니다' : contractorFilter === 'all' ? '등록된 협력사가 없습니다' : '해당 상태의 협력사가 없습니다'}</div>
+      ${q && contractorFilter === 'all' ? `<button class="btn btn-primary btn-sm" onclick="prefillNewContractor()">+ “${escapeHtml(document.getElementById('conMgrSearch')?.value.trim())}” 신규 등록</button>` : ''}
+    </div>`;
     return;
   }
   el.innerHTML = list.map(c => {
     const wts = getWorkTypesForContractor(c.id);
     const msdsCnt = msdsRecords.filter(r => r.contractor === c.name).length;
     const hasLic = businessLicenses.some(l => l.contractor_id === c.id);
-    const wtChips = wts.map(w => `<span class="tag" style="font-size:11px;padding:2px 8px;">${w.name}<span class="tag-remove" onclick="conMgrDelWt('${w.id}')">✕</span></span>`).join('')
-      + `<button class="btn btn-outline btn-sm" style="padding:1px 8px;font-size:11px;" onclick="conMgrAddWt('${c.id}')">+ 공종</button>`;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);flex-wrap:wrap;">
-      <div style="flex:1;min-width:140px;">
-        <div style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;">
-          ${c.name}
-          <button class="btn btn-secondary btn-sm btn-icon" style="padding:1px 6px;" onclick="renameContractor('${c.id}')" title="이름 변경">✏️</button>
+    const wtChips = wts.map(w => `<span class="tag contractor-work-tag">${escapeHtml(w.name)}<button class="tag-remove" onclick="conMgrDelWt('${w.id}')" aria-label="${escapeHtml(w.name)} 공종 삭제">✕</button></span>`).join('')
+      + `<button class="btn btn-outline btn-sm contractor-add-work" onclick="conMgrAddWt('${c.id}')">+ 공종</button>`;
+    return `<div class="contractor-row">
+      <div class="contractor-main">
+        <div class="contractor-name">
+          ${escapeHtml(c.name)}
+          <button class="btn btn-secondary btn-sm" onclick="renameContractor('${c.id}')">이름 수정</button>
         </div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;align-items:center;">${wtChips}</div>
+        <div class="contractor-work-types">${wtChips}</div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-        <span style="font-size:12px;color:var(--text2);cursor:pointer;" onclick="showPage('msds');window.selectedContractor='${c.name.replace(/'/g,"\\'")}';renderMsdsTable();renderContractorSidebar&&renderContractorSidebar()" title="MSDS 대장에서 보기">🧪 ${msdsCnt}건</span>
-        <span style="font-size:12px;color:${hasLic?'var(--ok)':'var(--danger)'};">📑 ${hasLic?'제출':'미제출'}</span>
-        <button class="btn btn-danger btn-sm btn-icon" onclick="removeContractor('${c.id}')" title="삭제">🗑</button>
+      <div class="contractor-statuses">
+        <button class="contractor-badge neutral" onclick="openContractorMsds('${c.id}')">🧪 MSDS ${msdsCnt}건</button>
+        <button class="contractor-badge ${hasLic ? 'ok' : 'danger'}" onclick="${hasLic ? `scrollToBusinessLicenses()` : `uploadLicenseForContractor('${c.id}')`}">📑 ${hasLic ? '등록증 제출' : '등록증 미제출'}</button>
+        <button class="btn btn-outline btn-sm" onclick="openContractorUploadLink('${c.id}')">링크 관리</button>
+        <button class="btn btn-danger btn-sm" onclick="removeContractor('${c.id}')">삭제</button>
       </div>
     </div>`;
   }).join('');
+};
+
+window.setContractorFilter = function(filter) {
+  contractorFilter = filter || 'all';
+  const select = document.getElementById('conMgrFilter');
+  if (select && select.value !== contractorFilter) select.value = contractorFilter;
+  document.querySelectorAll('.contractor-stat-card').forEach(el => el.classList.remove('active'));
+  const activeId = contractorFilter === 'missing-license' ? 'conStatLicense' : contractorFilter === 'missing-msds' ? 'conStatMsds' : 'conStatAll';
+  document.getElementById(activeId)?.classList.add('active');
+  renderContractorTags();
+};
+
+window.openContractorPage = function(filter = 'all') {
+  showPage('contractors');
+  setContractorFilter(filter);
+};
+
+window.focusNewContractor = function() {
+  document.getElementById('newContractorCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setTimeout(() => document.getElementById('newContractor')?.focus(), 250);
+};
+
+window.prefillNewContractor = function() {
+  const search = document.getElementById('conMgrSearch');
+  const input = document.getElementById('newContractor');
+  if (input && search) input.value = search.value.trim();
+  focusNewContractor();
+};
+
+window.openContractorMsds = function(id) {
+  const name = contractors.find(c => c.id === id)?.name;
+  if (!name) return;
+  showPage('msds');
+  window.selectedContractor = name;
+  renderMsdsTable();
+  renderContractorSidebar?.();
+};
+
+window.openContractorUploadLink = function(id) {
+  showPage('upload-link');
+  const select = document.getElementById('linkContractor');
+  if (select) select.value = id;
+  setTimeout(() => document.getElementById('linkContractor')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+};
+
+window.scrollToBusinessLicenses = function() {
+  document.getElementById('businessLicenseCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+window.uploadLicenseForContractor = function(id) {
+  let target = document.getElementById('manualLicenseContractor');
+  if (!target) {
+    target = document.createElement('input');
+    target.type = 'hidden';
+    target.id = 'manualLicenseContractor';
+    document.getElementById('businessLicenseList')?.appendChild(target);
+  }
+  target.value = id;
+  document.getElementById('manualLicenseInput')?.click();
 };
 
 window.renameContractor = async function(id) {
@@ -446,13 +586,17 @@ window.conMgrDelWt = async function(id) {
 window.addContractor = async function() {
   const v = document.getElementById('newContractor').value.trim();
   if (!v) return;
-  if (contractors.some(c => c.name === v)) { toast('이미 있는 협력사입니다', 'error'); return; }
-  const { data, error } = await supabase.from('contractors').insert({ workspace_id: currentWS.id, name: v }).select().single();
-  if (error) { toast('추가 실패', 'error'); return; }
-  contractors.push(data);
-  document.getElementById('newContractor').value = '';
-  renderContractorTags(); populateContractorSelects();
-  toast(v + ' 추가됨', 'success');
+  try {
+    const { contractor, created } = await insertContractor(v);
+    if (!created) { toast('이미 등록된 협력사입니다', 'error'); return; }
+    document.getElementById('newContractor').value = '';
+    document.getElementById('conMgrSearch').value = '';
+    setContractorFilter('all');
+    populateContractorSelects();
+    toast(`${contractor.name} 등록 완료`, 'success');
+  } catch (error) {
+    toast('협력사 등록 실패: ' + error.message, 'error');
+  }
 };
 
 window.removeContractor = async function(id) {
@@ -462,7 +606,8 @@ window.removeContractor = async function(id) {
     ? `이 협력사에 연결된 MSDS가 ${linked}건 있습니다.\nMSDS 기록은 삭제되지 않고 남지만, 협력사와 공종 정보는 삭제됩니다.\n계속하시겠습니까?`
     : '협력사를 삭제하면 관련 공종도 삭제됩니다. 계속하시겠습니까?';
   if (!confirm(warn)) return;
-  await supabase.from('contractors').delete().eq('id', id);
+  const { error } = await supabase.from('contractors').delete().eq('id', id);
+  if (error) { toast('협력사 삭제 실패: ' + error.message, 'error'); return; }
   contractors = contractors.filter(c => c.id !== id);
   workTypes = workTypes.filter(w => w.contractor_id !== id);
   renderContractorTags(); populateContractorSelects();
@@ -701,7 +846,7 @@ async function loadMsdsRecords() {
   const { data } = await supabase.from('msds_records')
     .select('*').eq('workspace_id', currentWS.id).order('created_at', { ascending: false });
   msdsRecords = data || [];
-  updateStats(); renderMsdsTable(); renderHomeDashboard(); renderWarnPickList();
+  updateStats(); renderMsdsTable(); renderHomeDashboard(); renderWarnPickList(); renderContractorTags();
   renderContractorSidebar(); // 추가
 }
 
@@ -778,7 +923,7 @@ function renderHomeDashboard() {
       licList.innerHTML = licenseMissing.slice(0, 6).map(c => `
         <div class="alert-item">
           <span><b>${c.name}</b></span>
-          <button class="btn btn-warn btn-sm" onclick="showPage('settings')">관리</button>
+          <button class="btn btn-warn btn-sm" onclick="openContractorPage('missing-license')">미제출 관리</button>
         </div>`).join('') + (licenseMissing.length > 6 ? `<div style="font-size:12px;color:var(--warn);margin-top:4px;">외 ${licenseMissing.length-6}개사</div>` : '');
     } else { licInner.style.display = 'none'; }
 
@@ -1037,7 +1182,21 @@ function updateMsdsBatchBar() {
   const wait = msdsFileQueue.filter(f => f.status === 'waiting').length;
   document.getElementById('msdsBatchInfo').innerHTML = `<strong>${msdsFileQueue.length}개</strong> 파일 · 대기 ${wait} · 완료 ${done}${err ? ` · <span style="color:var(--danger)">오류 ${err}</span>` : ''}`;
   document.getElementById('parseAllBtn').disabled = wait === 0;
+  const retryBtn = document.getElementById('retryMsdsBtn');
+  if (retryBtn) retryBtn.style.display = err ? '' : 'none';
 }
+
+window.retryMsdsErrors = function() {
+  msdsFileQueue.forEach(item => {
+    if (item.status === 'error') {
+      item.status = 'waiting';
+      item.error = null;
+    }
+  });
+  renderMsdsFileQueue();
+  updateMsdsBatchBar();
+  parseAllFiles();
+};
 
 // ═══════════════════════════════════════════════
 // Parse & Save MSDS
@@ -1086,9 +1245,10 @@ window.parseAllFiles = async function() {
     await new Promise(r => setTimeout(r, 300));
   }
   await loadMsdsRecords();
-  toast(`${saved}개 저장 완료${msdsFileQueue.some(f=>f.status==='error') ? ', 일부 오류 발생' : ''}`, saved > 0 ? 'success' : 'error');
-  document.getElementById('parseAllBtn').disabled = false;
-  if (saved > 0) setTimeout(() => { closeModal('msdsRegisterModal'); msdsFileQueue = []; renderMsdsFileQueue(); updateMsdsBatchBar(); }, 800);
+  const hasErrors = msdsFileQueue.some(f => f.status === 'error');
+  toast(`${saved}개 저장 완료${hasErrors ? ', 실패 파일은 다시 시도할 수 있습니다' : ''}`, saved > 0 ? (hasErrors ? 'warn' : 'success') : 'error');
+  document.getElementById('parseAllBtn').disabled = !msdsFileQueue.some(f => f.status === 'waiting');
+  if (saved > 0 && !hasErrors) setTimeout(() => { closeModal('msdsRegisterModal'); msdsFileQueue = []; renderMsdsFileQueue(); updateMsdsBatchBar(); }, 800);
 };
 
 async function callParseFunction(base64Data, mediaType) {
@@ -2354,8 +2514,12 @@ async function uploadMeasurePdf(recId, fileName, base64Data) {
   const path = `${currentWS.id}/${recId}.pdf`;
   const blob = base64ToBlob(base64Data, 'application/pdf');
   const { error } = await supabase.storage.from('measure-pdfs').upload(path, blob, { contentType: 'application/pdf', upsert: true });
-  if (error) { console.warn('PDF 업로드 실패:', error.message); return; }
-  await supabase.from('measure_results').update({ file_path: path }).eq('id', recId);
+  if (error) throw new Error('원본 PDF 업로드 실패: ' + error.message);
+  const { error: updateError } = await supabase.from('measure_results').update({ file_path: path }).eq('id', recId);
+  if (updateError) {
+    await supabase.storage.from('measure-pdfs').remove([path]);
+    throw new Error('원본 PDF 연결 실패: ' + updateError.message);
+  }
 }
 
 function showMeasureResult(d) {
@@ -2745,13 +2909,20 @@ window.deleteHealthRecord = async function(id) {
 };
 
 window.saveHealthRecord = async function() {
-  closeModal('healthConfirmModal');
+  const btn = document.getElementById('healthSaveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
   const { error } = await supabase.from('health_records').insert({
     workspace_id: currentWS.id, uploaded_by: user.id,
     round: healthCurrentRound, entries: healthConfirmData,
   });
-  if (error) { toast('저장 실패: ' + error.message + ' — health_records.sql 실행 여부를 확인하세요', 'error'); return; }
+  if (error) {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 대장에 저장'; }
+    toast('저장 실패: ' + error.message + ' — 입력 내용은 그대로 유지됩니다', 'error');
+    return;
+  }
   await loadHealthRecords();
+  closeModal('healthConfirmModal');
+  if (btn) { btn.disabled = false; btn.textContent = '💾 대장에 저장'; }
   toast(`건강진단 결과 ${healthConfirmData.length}명 저장 완료`, 'success');
 };
 
@@ -2824,6 +2995,7 @@ let placementCodeSet = [];   // 발견된 판정코드 목록
 let placementFiltered = [];  // 추출 결과
 
 window.switchHealthSub = function(which) {
+  activeHealthSub = which;
   document.getElementById('hsub-result').classList.toggle('active', which === 'result');
   document.getElementById('hsub-placement').classList.toggle('active', which === 'placement');
   document.getElementById('hsub-sorting').classList.toggle('active', which === 'sorting');
@@ -3602,6 +3774,7 @@ async function loadBusinessLicenses() {
   businessLicenses = data || [];
   renderBusinessLicenseStatus();
   renderLicenseAlert();
+  renderContractorTags();
 }
 
 function renderBusinessLicenseStatus() {
@@ -3619,9 +3792,13 @@ function renderBusinessLicenseStatus() {
   if (missing.length) {
     html += `<div style="margin-bottom:14px;">
       <div style="font-size:12.5px;font-weight:700;color:var(--danger);margin-bottom:6px;">⚠️ 미제출 협력사</div>
-      <div class="tag-list">${missing.map(c => `<span class="tag" style="border-color:#FECACA;color:var(--danger);background:var(--danger-light);">${c.name}
-        <button onclick="event.stopPropagation();document.getElementById('manualLicenseContractor').value='${c.id}';document.getElementById('manualLicenseInput').click()" style="background:none;border:none;color:inherit;cursor:pointer;margin-left:4px;font-weight:700;">+업로드</button>
-      </span>`).join('')}</div>
+      <div class="license-missing-list">${missing.map(c => `<div class="license-missing-item">
+        <span>${c.name}</span>
+        <div>
+          <button class="btn btn-outline btn-sm" onclick="openContractorUploadLink('${c.id}')">링크 관리</button>
+          <button class="btn btn-primary btn-sm" onclick="uploadLicenseForContractor('${c.id}')">등록증 업로드</button>
+        </div>
+      </div>`).join('')}</div>
     </div>`;
   }
   if (businessLicenses.length) {
@@ -3660,7 +3837,7 @@ function renderLicenseAlert() {
   wrap.style.display = '';
   list.innerHTML = `<div style="font-size:13px;color:var(--text2);">
     ${missing.map(c => c.name).join(', ')} — 사업자등록증 미제출
-    <button class="btn btn-outline btn-sm" style="margin-left:8px;" onclick="showPage('settings')">관리</button>
+    <button class="btn btn-outline btn-sm" style="margin-left:8px;" onclick="openContractorPage('missing-license')">미제출 관리</button>
   </div>`;
 }
 
@@ -3678,7 +3855,10 @@ window.handleManualLicenseUpload = async function(e) {
   const { error } = await supabase.from('business_licenses').upsert({
     workspace_id: currentWS.id, contractor_id: conId, file_name: file.name, file_path: path, uploaded_by: 'manager',
   }, { onConflict: 'contractor_id' });
-  if (error) { toast('저장 실패: ' + error.message, 'error'); e.target.value=''; return; }
+  if (error) {
+    await supabase.storage.from('business-licenses').remove([path]);
+    toast('저장 실패: ' + error.message, 'error'); e.target.value=''; return;
+  }
 
   e.target.value = '';
   await loadBusinessLicenses();
@@ -3697,8 +3877,10 @@ window.deleteLicense = async function(id) {
   const lic = businessLicenses.find(l => l.id === id);
   if (!lic) return;
   if (!confirm(`${lic.contractor?.name} 사업자등록증을 삭제하시겠습니까?`)) return;
-  await supabase.storage.from('business-licenses').remove([lic.file_path]);
-  await supabase.from('business_licenses').delete().eq('id', id);
+  const { error: storageError } = await supabase.storage.from('business-licenses').remove([lic.file_path]);
+  if (storageError) { toast('파일 삭제 실패: ' + storageError.message, 'error'); return; }
+  const { error } = await supabase.from('business_licenses').delete().eq('id', id);
+  if (error) { toast('등록증 정보 삭제 실패: ' + error.message, 'error'); return; }
   await loadBusinessLicenses();
   toast('삭제됐습니다');
 };
@@ -5041,7 +5223,7 @@ function renderVulGroups() {
         <button class="btn btn-outline btn-sm" onclick="downloadVulImage('${def.key}')" ${rows.length?'':'disabled'}>📷 카톡용 이미지</button>
       </div>
       <div id="vulCapture-${def.key}" style="background:#fff;padding:6px 2px;">
-        <div style="display:none;font-weight:800;font-size:16px;color:${def.color};padding:8px 6px;" class="vul-cap-title">${def.title} — ${rows.length}명 (기준일 ${baseDate}) · 성동자이리버뷰</div>
+        <div style="display:none;font-weight:800;font-size:16px;color:${def.color};padding:8px 6px;" class="vul-cap-title">${def.title} — ${rows.length}명 (기준일 ${baseDate}) · ${currentWS?.name || '현장'}</div>
         <table class="vul-table">
           <thead><tr><th style="width:30px;">No</th><th>협력회사</th><th>성명</th><th>직종</th><th>나이</th><th>국적</th><th>${VUL_DEFS[0].key==='g1'?'':''}${def.key==='g1'?'전입일':'혈압'}</th><th>메모</th></tr></thead>
           <tbody>${body}</tbody>
@@ -5076,7 +5258,7 @@ window.downloadVulSignSheet = function() {
     const rows = groups[def.key];
     const aoa = [
       [`${def.title} 확인 서명대지`],
-      [`현장: 성동자이리버뷰 · 기준일: ${vulGroups.baseDate} · 대상 ${rows.length}명`],
+      [`현장: ${currentWS?.name || '현장'} · 기준일: ${vulGroups.baseDate} · 대상 ${rows.length}명`],
       [],
       ['No', '협력회사', '성명', '직종', '나이', '국적', '서명'],
       ...rows.map((r, i) => [i+1, r['협력회사']||'', r['성명']||'', r['직종']||'', vulAge(r), r['국적']||'', '']),
@@ -5171,7 +5353,7 @@ window.downloadBpImage = async function() {
   const el = document.getElementById('bpCapture');
   if (!el || typeof html2canvas === 'undefined') { toast('이미지 모듈 로드 실패 — 새로고침 후 시도하세요', 'error'); return; }
   const t = document.getElementById('bpCapTitle');
-  t.textContent = `🩺 고령근로자 혈압측정 대상 명단 — ${bpList.length}명 (매주 월·화 측정 · 기준일 ${bpBaseDate}) · 성동자이리버뷰`;
+  t.textContent = `🩺 고령근로자 혈압측정 대상 명단 — ${bpList.length}명 (매주 월·화 측정 · 기준일 ${bpBaseDate}) · ${currentWS?.name || '현장'}`;
   t.style.display = 'block';
   try {
     const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
@@ -5193,7 +5375,7 @@ window.downloadBpSheet = function() {
   const fmt = d => `${d.getMonth()+1}/${d.getDate()}`;
   const aoa = [
     ['고령근로자 주간 혈압측정 기록지'],
-    [`현장: 성동자이리버뷰 · 측정주간: ${fmt(monD)}(월) ~ ${fmt(tueD)}(화) · 대상 ${bpList.length}명`],
+    [`현장: ${currentWS?.name || '현장'} · 측정주간: ${fmt(monD)}(월) ~ ${fmt(tueD)}(화) · 대상 ${bpList.length}명`],
     [],
     ['No','협력회사','성명','직종','나이', `${fmt(monD)}(월) 혈압`, '서명', `${fmt(tueD)}(화) 혈압`, '서명'],
     ...bpList.map((r, i) => [i+1, r['협력회사']||'', r['성명']||'', r['직종']||'', vulAge(r), '', '', '', '']),
@@ -5255,18 +5437,83 @@ window.clauseQuick = function(q) {
 function clauseCardHtml(title, bodyHtml, badge) {
   return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
     <div style="background:var(--primary);color:#fff;padding:10px 14px;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between;">
-      <span>${title}</span>${badge ? `<span style="font-size:11px;font-weight:600;opacity:.85;">${badge}</span>` : ''}
+      <span>${escapeHtml(title)}</span>${badge ? `<span style="font-size:11px;font-weight:600;opacity:.85;">${escapeHtml(badge)}</span>` : ''}
     </div>
     <div style="max-height:260px;overflow-y:auto;padding:10px 14px;">${bodyHtml}</div>
   </div>`;
 }
 
 window.clauseSearchStore = []; // 팝업에서 참조할 최근 검색 결과 (법령별 원문 보관) — inline onclick에서 접근해야 해서 window에 부착
+window.koshaGuideSearchStore = [];
+let clauseSearchQuery = '';
+
+function highlightedSearchHtml(value, query = clauseSearchQuery) {
+  const text = String(value ?? '');
+  const keyword = String(query ?? '').trim();
+  if (!keyword) return escapeHtml(text);
+
+  const source = text.toLocaleLowerCase('ko');
+  const target = keyword.toLocaleLowerCase('ko');
+  let cursor = 0;
+  let index = source.indexOf(target);
+  if (index < 0) return escapeHtml(text);
+
+  let html = '';
+  while (index >= 0) {
+    html += escapeHtml(text.slice(cursor, index));
+    html += `<mark class="search-keyword-mark">${escapeHtml(text.slice(index, index + keyword.length))}</mark>`;
+    cursor = index + keyword.length;
+    index = source.indexOf(target, cursor);
+  }
+  return html + escapeHtml(text.slice(cursor));
+}
 
 window.openClauseDetail = function(lawName, jo, title, content) {
   document.getElementById('clauseDetailTitle').textContent = `${lawName} 제${jo}조${title ? ' ' + title : ''}`;
-  document.getElementById('clauseDetailBody').textContent = content;
+  document.getElementById('clauseDetailKeyword').innerHTML = `검색어 <b>${escapeHtml(clauseSearchQuery)}</b>가 강조되어 있습니다.`;
+  document.getElementById('clauseDetailBody').innerHTML = highlightedSearchHtml(content);
   openModal('clauseDetailModal');
+};
+
+window.openKoshaGuideDetail = function(index) {
+  const guide = window.koshaGuideSearchStore[index];
+  if (!guide) return;
+
+  document.getElementById('koshaGuideDetailTitle').innerHTML = highlightedSearchHtml(guide.title || 'KOSHA GUIDE');
+  const meta = [
+    guide.guideNo ? `<span><b>지침번호</b> ${escapeHtml(guide.guideNo)}</span>` : '',
+    guide.category ? `<span><b>분야</b> ${escapeHtml(guide.category)}</span>` : '',
+    guide.date ? `<span><b>공표일</b> ${escapeHtml(guide.date)}</span>` : '',
+  ].filter(Boolean).join('');
+  document.getElementById('koshaGuideDetailMeta').innerHTML = meta || '<span>상세 정보 없음</span>';
+  document.getElementById('koshaGuideDetailKeyword').innerHTML = `검색어 <b>${escapeHtml(clauseSearchQuery)}</b>로 원문 검색을 시도합니다.`;
+
+  const frame = document.getElementById('koshaGuideDetailFrame');
+  const empty = document.getElementById('koshaGuideDetailEmpty');
+  const originalBtn = document.getElementById('koshaGuideOriginalBtn');
+  if (guide.url) {
+    const base = (import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+    const proxyUrl = `${base}/functions/v1/kosha-guide-search?file=${encodeURIComponent(guide.url)}`;
+    const fragment = clauseSearchQuery ? `#search=${encodeURIComponent(clauseSearchQuery)}` : '';
+    frame.src = proxyUrl + fragment;
+    frame.style.display = 'block';
+    empty.style.display = 'none';
+    originalBtn.href = guide.url;
+    originalBtn.style.display = 'inline-flex';
+  } else {
+    frame.src = 'about:blank';
+    frame.style.display = 'none';
+    empty.style.display = 'flex';
+    originalBtn.removeAttribute('href');
+    originalBtn.style.display = 'none';
+  }
+  openModal('koshaGuideDetailModal');
+};
+
+window.closeKoshaGuideDetail = function() {
+  const frame = document.getElementById('koshaGuideDetailFrame');
+  if (frame) frame.src = 'about:blank';
+  closeModal('koshaGuideDetailModal');
 };
 
 window.runClauseSearch = async function() {
@@ -5274,6 +5521,7 @@ window.runClauseSearch = async function() {
   const out = document.getElementById('clauseResults');
   const btn = document.getElementById('clauseSearchBtn');
   if (!q) { toast('검색어를 입력하세요', 'error'); return; }
+  clauseSearchQuery = q;
   btn.disabled = true; btn.textContent = '검색 중...';
   out.innerHTML = `<div class="mp-empty" style="padding:16px;">법령 여러 건을 훑는 중이라 몇 초 걸릴 수 있어요...</div>`;
   try {
@@ -5288,37 +5536,45 @@ window.runClauseSearch = async function() {
 
     const cards = laws.map((l, li) => {
       if (l.error) {
-        return clauseCardHtml(l.lawName, `<div style="color:var(--text3);font-size:12px;">${l.error}</div>`);
+        return clauseCardHtml(l.lawName, `<div style="color:var(--text3);font-size:12px;">${escapeHtml(l.error)}</div>`);
       }
       if (!l.articles.length) {
         return clauseCardHtml(l.lawName, `<div style="color:var(--text3);font-size:12px;">일치하는 조문 없음</div>`);
       }
       const body = l.articles.map((a, ai) => `
-        <div style="padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClauseDetail(clauseSearchStore[${li}].lawName, clauseSearchStore[${li}].articles[${ai}].jo, clauseSearchStore[${li}].articles[${ai}].title, clauseSearchStore[${li}].articles[${ai}].content)">
-          <div style="font-weight:700;font-size:13px;margin-bottom:2px;">제${a.jo}조 ${a.title || ''}</div>
-          <div style="font-size:12px;color:var(--text2);line-height:1.6;">${a.snippet}</div>
-        </div>`).join('');
+        <button type="button" class="clause-result-item" onclick="openClauseDetail(clauseSearchStore[${li}].lawName, clauseSearchStore[${li}].articles[${ai}].jo, clauseSearchStore[${li}].articles[${ai}].title, clauseSearchStore[${li}].articles[${ai}].content)">
+          <div style="font-weight:700;font-size:13px;margin-bottom:2px;">제${escapeHtml(a.jo)}조 ${highlightedSearchHtml(a.title || '', q)}</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;">${highlightedSearchHtml(a.snippet, q)}</div>
+        </button>`).join('');
       return clauseCardHtml(l.lawName, body, `${l.articles.length}건`);
     });
 
     // KOSHA GUIDE: 실시간 API 우선, 실패 시에만 업로드된 CSV 카탈로그로 폴백
-    let kgList = null, kgSource = 'api';
+    let kgList = null, kgSource = 'api', kgFailure = '';
     if (!kgRes.error && !kgRes.data?.error) {
       kgList = (kgRes.data.result.list || []).slice(0, 15);
     } else {
+      kgFailure = kgRes.error?.message || kgRes.data?.error || 'KOSHA GUIDE API 응답을 받지 못했습니다.';
       await loadKgCatalog();
       kgSource = 'catalog';
       const ql = q.toLowerCase();
       kgList = (kgCatalog || []).filter(g => [g.guide_no, g.title, g.category, g.committee, g.code].join(' ').toLowerCase().includes(ql)).slice(0, 15)
         .map(g => ({ guideNo: g.guide_no, title: g.title, category: g.category, date: '', url: '' }));
     }
+    window.koshaGuideSearchStore = kgList || [];
     const kgBody = !kgList.length
-      ? `<div style="color:var(--text3);font-size:12px;">${kgSource === 'catalog' ? '일치하는 지침 없음 (실시간 API 실패 — CSV 카탈로그 기준)' : '일치하는 지침 없음'}</div>`
-      : kgList.map(g => `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
-          <div style="font-weight:700;font-size:13px;">${g.title}</div>
-          <div style="font-size:12px;color:var(--text3);">${g.guideNo || ''}${g.category ? ' · ' + g.category : ''}${g.date ? ' · ' + g.date : ''}</div>
-        </div>`).join('');
-    cards.push(clauseCardHtml('KOSHA GUIDE' + (kgSource === 'catalog' ? ' (CSV)' : ''), kgBody, kgList.length ? `${kgList.length}건` : ''));
+      ? (kgSource === 'catalog'
+        ? `<div class="kg-api-error"><b>실시간 API 연결 실패</b><span>${escapeHtml(kgFailure)}</span><small>CSV 예비 데이터에도 일치하는 지침이 없습니다. Supabase 함수 배포와 KOSHA_API_KEY 설정을 확인하세요.</small></div>`
+        : `<div style="color:var(--text3);font-size:12px;">일치하는 지침 없음</div>`)
+      : kgList.map((g, gi) => `<button type="button" class="kg-result-item" onclick="openKoshaGuideDetail(${gi})">
+          <span class="kg-result-title">${highlightedSearchHtml(g.title, q)}</span>
+          <span class="kg-result-meta">${escapeHtml(g.guideNo || '')}${g.category ? ' · ' + escapeHtml(g.category) : ''}${g.date ? ' · ' + escapeHtml(g.date) : ''}</span>
+          <span class="kg-result-action">원문 보기 ›</span>
+        </button>`).join('');
+    const kgBadge = kgSource === 'catalog'
+      ? (kgList.length ? `${kgList.length}건 · API 오류/CSV 대체` : 'API 오류')
+      : (kgList.length ? `${kgList.length}건 · 실시간` : '실시간');
+    cards.push(clauseCardHtml('KOSHA GUIDE' + (kgSource === 'catalog' ? ' (CSV 대체)' : ''), kgBody, kgBadge));
 
     out.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">${cards.join('')}</div>`;
   } catch (e) {
