@@ -2,10 +2,6 @@
 // 앱 전역에서 쓰는 고정 상수 (재할당 없음 — 상태 아님)
 // ═══════════════════════════════════════════════
 
-export const AUTO_LOGIN_KEY = 'fms_auto_login';
-export const b64enc = s => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
-export const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s), c => c.charCodeAt(0)));
-
 export const PAGES = ['home', 'calendar', 'msds', 'warning', 'upload-link', 'measure', 'health', 'photos', 'manpower', 'weather', 'vulnerable', 'bp', 'library', 'settings'];
 export const MOBILE_TABS = ['home', 'calendar', 'msds', 'health', 'settings'];
 

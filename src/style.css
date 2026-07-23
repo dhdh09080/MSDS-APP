@@ -2985,6 +2985,18 @@ details > summary::-webkit-details-marker {
 }
 
 @media (max-width: 768px) {
+  .btn,
+  .health-subtab,
+  .btn-sm {
+    min-height: 44px;
+  }
+
+  .legal-check {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
   .sidebar {
     display: none;
   }

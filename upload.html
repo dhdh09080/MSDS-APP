@@ -473,7 +473,8 @@ window.startUpload = async function() {
         for (let i=0;i<bytes.length;i++) arr[i]=bytes.charCodeAt(i);
         const blob = new Blob([arr],{type:item.mediaType});
         const { error: stErr } = await supabase.storage.from('msds-pdfs').upload(path, blob, {contentType:item.mediaType,upsert:true});
-        hasPdf = !stErr;
+        if (stErr) throw new Error('원본 파일 업로드 실패: ' + stErr.message);
+        hasPdf = true;
       } catch {}
       const { error: dbErr } = await supabase.from('msds_records').insert({
         id: recId,
@@ -506,7 +507,10 @@ window.startUpload = async function() {
         version: 1, history: [],
         has_pdf: hasPdf, pdf_name: hasPdf ? item.name : null, pdf_path: hasPdf ? path : null,
       });
-      if (dbErr) throw new Error('저장 실패: ' + dbErr.message);
+      if (dbErr) {
+        await supabase.storage.from('msds-pdfs').remove([path]);
+        throw new Error('저장 실패: ' + dbErr.message);
+      }
       saved++; item.status = 'done';
     } catch (err) { item.status = 'error'; item.error = err.message; console.error(err); }
     renderFileList();

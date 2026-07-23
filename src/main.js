@@ -3,7 +3,7 @@ import { generateCode, generateToken, base64ToBlob, downloadBlob, guessFromPath,
 import { ghsPictogramWithLabel, decodeHCodes, decodePCodes, GHS_NAMES, applyPictogramRules, condensePCodes } from './lib/ghs.js';
 import { CAS_MEASUREMENT, CAS_HEALTH_EXAM, CAS_MANAGE, CAS_PERMIT, CAS_SPECIAL, CAS_EXAM_CYCLE } from './data/cas-lists.js';
 import { openModal, closeModal, toast, openPrintWindow, buildPrintHtml } from './lib/ui.js';
-import { AUTO_LOGIN_KEY, b64enc, b64dec, PAGES, MOBILE_TABS, WARN_SIZES, CAL_CATEGORY_COLOR, CAL_CATEGORY_LABEL, PHOTO_FOLDER_PRESETS } from './data/constants.js';
+import { PAGES, MOBILE_TABS, WARN_SIZES, CAL_CATEGORY_COLOR, CAL_CATEGORY_LABEL, PHOTO_FOLDER_PRESETS } from './data/constants.js';
 import qrcode from 'qrcode-generator';
 
 // ═══════════════════════════════════════════════
@@ -36,45 +36,35 @@ let currentMeasureData = null;
 // ═══════════════════════════════════════════════
 // Init
 // ═══════════════════════════════════════════════
-// ── 자동 로그인 (이 기기에 저장) ──
-// (AUTO_LOGIN_KEY, b64enc, b64dec → src/data/constants.js 로 이동)
-function getSavedLogin() {
-  try {
-    const raw = localStorage.getItem(AUTO_LOGIN_KEY);
-    if (!raw) return null;
-    const { e, p } = JSON.parse(b64dec(raw));
-    return { email: e, password: p };
-  } catch { return null; }
+let passwordRecoveryMode = false;
+
+function isPasswordRecoveryUrl() {
+  const query = new URLSearchParams(window.location.search);
+  return query.get('type') === 'recovery' || window.location.hash.includes('type=recovery');
 }
-function saveLogin(email, password) {
-  try { localStorage.setItem(AUTO_LOGIN_KEY, b64enc(JSON.stringify({ e: email, p: password }))); } catch {}
-}
-function clearSavedLogin() { localStorage.removeItem(AUTO_LOGIN_KEY); }
 
 async function init() {
   const { data: { session } } = await supabase.auth.getSession();
-  if (session?.user) {
+  if (isPasswordRecoveryUrl()) {
+    passwordRecoveryMode = true;
+    showAuth();
+    switchTab('reset');
+  } else if (session?.user) {
     user = session.user;
     await showWorkspaces(true);
   } else {
-    const saved = getSavedLogin();
-    if (saved) {
-      const { error } = await supabase.auth.signInWithPassword(saved);
-      if (!error) {
-        user = (await supabase.auth.getUser()).data.user;
-        await showWorkspaces(true);
-        document.getElementById('loadingScreen').style.display = 'none';
-        return;
-      }
-      // 비밀번호가 바뀌었거나 실패 → 저장 삭제 후 로그인 화면
-      clearSavedLogin();
-    }
     showAuth();
   }
   document.getElementById('loadingScreen').style.display = 'none';
 }
 
 supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    passwordRecoveryMode = true;
+    showAuth();
+    switchTab('reset');
+    return;
+  }
   if (event === 'SIGNED_IN' && session?.user) {
     user = session.user;
   }
@@ -87,40 +77,16 @@ function showAuth() {
   document.getElementById('authScreen').style.display = 'block';
   document.getElementById('workspaceScreen').style.display = 'none';
   document.getElementById('appScreen').style.display = 'none';
-  const saved = getSavedLogin();
-  const savedBtn = document.getElementById('savedLoginBtn');
-  if (saved) {
-    document.getElementById('loginEmail').value = saved.email;
-    document.getElementById('autoLoginChk').checked = true;
-    if (savedBtn) { savedBtn.style.display = 'block'; savedBtn.textContent = `⚡ ${saved.email} (으)로 바로 로그인`; }
-  } else if (savedBtn) savedBtn.style.display = 'none';
 }
 
-window.loginWithSaved = async function() {
-  const saved = getSavedLogin();
-  if (!saved) return;
-  const btn = document.getElementById('savedLoginBtn');
-  btn.disabled = true; btn.textContent = '로그인 중...';
-  const { error } = await supabase.auth.signInWithPassword(saved);
-  btn.disabled = false;
-  if (error) {
-    clearSavedLogin(); btn.style.display = 'none';
-    const msg = document.getElementById('loginMsg');
-    msg.className = 'auth-msg error'; msg.textContent = '저장된 정보로 로그인 실패 — 비밀번호를 다시 입력하세요';
-    return;
-  }
-  user = (await supabase.auth.getUser()).data.user;
-  await showWorkspaces(true);
-};
-
 window.switchTab = function(tab) {
-  ['login','signup','forgot'].forEach(t => {
+  ['login','signup','forgot','reset'].forEach(t => {
     document.getElementById(t+'Form').style.display = t === tab ? 'flex' : 'none';
   });
   const tabs = document.querySelectorAll('.auth-tab');
   tabs[0].classList.toggle('active', tab === 'login');
   tabs[1].classList.toggle('active', tab === 'signup');
-  if (tab === 'forgot') { tabs[0].classList.remove('active'); tabs[1].classList.remove('active'); }
+  if (tab === 'forgot' || tab === 'reset') { tabs[0].classList.remove('active'); tabs[1].classList.remove('active'); }
 };
 
 window.handleLogin = async function() {
@@ -133,8 +99,6 @@ window.handleLogin = async function() {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   btn.disabled = false; btn.textContent = '로그인';
   if (error) { msg.className='auth-msg error'; msg.textContent=translateAuthError(error.message); return; }
-  if (document.getElementById('autoLoginChk')?.checked) saveLogin(email, password);
-  else clearSavedLogin();
   user = (await supabase.auth.getUser()).data.user;
   await showWorkspaces(true);
 };
@@ -166,8 +130,26 @@ window.handleForgot = async function() {
   msg.className='auth-msg success'; msg.textContent='재설정 링크를 전송했습니다. 이메일을 확인하세요.';
 };
 
+window.handlePasswordUpdate = async function() {
+  const password = document.getElementById('resetPassword').value;
+  const confirmPassword = document.getElementById('resetPasswordConfirm').value;
+  const msg = document.getElementById('resetMsg');
+  const btn = document.getElementById('resetBtn');
+  if (!passwordRecoveryMode) { msg.className='auth-msg error'; msg.textContent='유효한 비밀번호 재설정 링크로 다시 접속하세요'; return; }
+  if (password.length < 6) { msg.className='auth-msg error'; msg.textContent='비밀번호는 6자 이상이어야 합니다'; return; }
+  if (password !== confirmPassword) { msg.className='auth-msg error'; msg.textContent='비밀번호 확인이 일치하지 않습니다'; return; }
+  btn.disabled = true; btn.textContent = '변경 중...';
+  const { error } = await supabase.auth.updateUser({ password });
+  btn.disabled = false; btn.textContent = '비밀번호 변경';
+  if (error) { msg.className='auth-msg error'; msg.textContent=translateAuthError(error.message); return; }
+  passwordRecoveryMode = false;
+  history.replaceState({}, document.title, window.location.pathname);
+  msg.className='auth-msg success'; msg.textContent='비밀번호가 변경됐습니다. 새 비밀번호로 로그인하세요.';
+  await supabase.auth.signOut();
+  setTimeout(() => switchTab('login'), 1200);
+};
+
 window.handleLogout = async function() {
-  clearSavedLogin(); // 로그아웃 = 자동 로그인도 해제 (아니면 새로고침 시 다시 로그인됨)
   await supabase.auth.signOut();
   user = null; currentWS = null; contractors = []; workTypes = []; msdsRecords = [];
   showAuth();
@@ -1071,11 +1053,12 @@ window.parseAllFiles = async function() {
   let saved = 0;
   for (const item of waiting) {
     item.status = 'parsing'; renderMsdsFileQueue();
+    let recId = null;
     try {
       const parsed = await callParseFunction(item.data, item.mediaType);
       const conName = item.guessCon || contractors.find(c => c.id === batchConId)?.name || '';
       const workTypeName = item.guessWork || batchWork || '';
-      const recId = await saveMsdsRecord({
+      recId = await saveMsdsRecord({
         product_name: parsed.productName || item.name.replace(/\.(pdf|jpg|jpeg|png)$/i,''),
         supplier: parsed.supplier||'', supplier_contact: parsed.supplierContact||'',
         contractor: conName, work_type: workTypeName,
@@ -1092,7 +1075,13 @@ window.parseAllFiles = async function() {
       });
       await uploadMsdsFile(recId, item.name, item.data, item.mediaType);
       saved++; item.status = 'done';
-    } catch (err) { item.status = 'error'; item.error = err.message; }
+    } catch (err) {
+      if (recId) {
+        const { error: rollbackError } = await supabase.from('msds_records').delete().eq('id', recId);
+        if (rollbackError) console.error('파일 업로드 실패 후 레코드 정리 실패:', rollbackError.message);
+      }
+      item.status = 'error'; item.error = err.message;
+    }
     renderMsdsFileQueue(); updateMsdsBatchBar();
     await new Promise(r => setTimeout(r, 300));
   }
@@ -1125,8 +1114,13 @@ async function uploadMsdsFile(recId, fileName, base64Data, mediaType) {
   const path = `${currentWS.id}/${recId}.${ext}`;
   const blob = base64ToBlob(base64Data, mediaType);
   const { error } = await supabase.storage.from('msds-pdfs').upload(path, blob, { contentType: mediaType, upsert: true });
-  if (error) { console.warn('파일 업로드 실패:', error.message); return; }
-  await supabase.from('msds_records').update({ has_pdf: true, pdf_name: fileName, pdf_path: path }).eq('id', recId);
+  if (error) throw new Error('원본 파일 업로드 실패: ' + error.message);
+  const { error: updateError } = await supabase.from('msds_records')
+    .update({ has_pdf: true, pdf_name: fileName, pdf_path: path }).eq('id', recId);
+  if (updateError) {
+    await supabase.storage.from('msds-pdfs').remove([path]);
+    throw new Error('파일 정보 저장 실패: ' + updateError.message);
+  }
 }
 
 // ═══════════════════════════════════════════════
