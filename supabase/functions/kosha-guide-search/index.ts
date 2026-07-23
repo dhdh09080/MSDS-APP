@@ -2,8 +2,8 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, range',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
 // 한국산업안전보건공단 기술지원규정(KOSHA GUIDE) 조회 서비스
@@ -95,8 +95,58 @@ function xmlError(text: string): string {
   return '';
 }
 
+function isAllowedKoshaFileUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'portal.kosha.or.kr'
+      && url.pathname.startsWith('/openapi/v1/file/down/');
+  } catch {
+    return false;
+  }
+}
+
+async function proxyKoshaPdf(req: Request): Promise<Response> {
+  const fileUrl = new URL(req.url).searchParams.get('file') || '';
+  if (!isAllowedKoshaFileUrl(fileUrl)) {
+    return json({ error: '허용되지 않은 KOSHA 원문 주소입니다.' }, 400);
+  }
+
+  const upstreamHeaders = new Headers();
+  const range = req.headers.get('range');
+  if (range) upstreamHeaders.set('range', range);
+
+  const upstream = await fetch(fileUrl, {
+    headers: upstreamHeaders,
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!upstream.ok && upstream.status !== 206) {
+    return json({ error: `KOSHA 원문을 불러오지 못했습니다. (HTTP ${upstream.status})` }, 502);
+  }
+
+  const headers = new Headers(corsHeaders);
+  headers.set('Content-Type', upstream.headers.get('content-type') || 'application/pdf');
+  headers.set('Content-Disposition', 'inline; filename="kosha-guide.pdf"');
+  headers.set('Cache-Control', 'public, max-age=3600');
+  for (const name of ['accept-ranges', 'content-range', 'content-length', 'etag', 'last-modified']) {
+    const value = upstream.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  return new Response(upstream.body, { status: upstream.status, headers });
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method === 'GET') {
+    try {
+      return await proxyKoshaPdf(req);
+    } catch (error) {
+      return json({
+        error: error instanceof Error ? error.message : String(error),
+        code: 'KOSHA_GUIDE_FILE_FAILED',
+      }, 502);
+    }
+  }
   if (req.method !== 'POST') return json({ error: 'POST 요청만 지원합니다.' }, 405);
 
   try {

@@ -5437,18 +5437,83 @@ window.clauseQuick = function(q) {
 function clauseCardHtml(title, bodyHtml, badge) {
   return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
     <div style="background:var(--primary);color:#fff;padding:10px 14px;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between;">
-      <span>${title}</span>${badge ? `<span style="font-size:11px;font-weight:600;opacity:.85;">${badge}</span>` : ''}
+      <span>${escapeHtml(title)}</span>${badge ? `<span style="font-size:11px;font-weight:600;opacity:.85;">${escapeHtml(badge)}</span>` : ''}
     </div>
     <div style="max-height:260px;overflow-y:auto;padding:10px 14px;">${bodyHtml}</div>
   </div>`;
 }
 
 window.clauseSearchStore = []; // 팝업에서 참조할 최근 검색 결과 (법령별 원문 보관) — inline onclick에서 접근해야 해서 window에 부착
+window.koshaGuideSearchStore = [];
+let clauseSearchQuery = '';
+
+function highlightedSearchHtml(value, query = clauseSearchQuery) {
+  const text = String(value ?? '');
+  const keyword = String(query ?? '').trim();
+  if (!keyword) return escapeHtml(text);
+
+  const source = text.toLocaleLowerCase('ko');
+  const target = keyword.toLocaleLowerCase('ko');
+  let cursor = 0;
+  let index = source.indexOf(target);
+  if (index < 0) return escapeHtml(text);
+
+  let html = '';
+  while (index >= 0) {
+    html += escapeHtml(text.slice(cursor, index));
+    html += `<mark class="search-keyword-mark">${escapeHtml(text.slice(index, index + keyword.length))}</mark>`;
+    cursor = index + keyword.length;
+    index = source.indexOf(target, cursor);
+  }
+  return html + escapeHtml(text.slice(cursor));
+}
 
 window.openClauseDetail = function(lawName, jo, title, content) {
   document.getElementById('clauseDetailTitle').textContent = `${lawName} 제${jo}조${title ? ' ' + title : ''}`;
-  document.getElementById('clauseDetailBody').textContent = content;
+  document.getElementById('clauseDetailKeyword').innerHTML = `검색어 <b>${escapeHtml(clauseSearchQuery)}</b>가 강조되어 있습니다.`;
+  document.getElementById('clauseDetailBody').innerHTML = highlightedSearchHtml(content);
   openModal('clauseDetailModal');
+};
+
+window.openKoshaGuideDetail = function(index) {
+  const guide = window.koshaGuideSearchStore[index];
+  if (!guide) return;
+
+  document.getElementById('koshaGuideDetailTitle').innerHTML = highlightedSearchHtml(guide.title || 'KOSHA GUIDE');
+  const meta = [
+    guide.guideNo ? `<span><b>지침번호</b> ${escapeHtml(guide.guideNo)}</span>` : '',
+    guide.category ? `<span><b>분야</b> ${escapeHtml(guide.category)}</span>` : '',
+    guide.date ? `<span><b>공표일</b> ${escapeHtml(guide.date)}</span>` : '',
+  ].filter(Boolean).join('');
+  document.getElementById('koshaGuideDetailMeta').innerHTML = meta || '<span>상세 정보 없음</span>';
+  document.getElementById('koshaGuideDetailKeyword').innerHTML = `검색어 <b>${escapeHtml(clauseSearchQuery)}</b>로 원문 검색을 시도합니다.`;
+
+  const frame = document.getElementById('koshaGuideDetailFrame');
+  const empty = document.getElementById('koshaGuideDetailEmpty');
+  const originalBtn = document.getElementById('koshaGuideOriginalBtn');
+  if (guide.url) {
+    const base = (import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+    const proxyUrl = `${base}/functions/v1/kosha-guide-search?file=${encodeURIComponent(guide.url)}`;
+    const fragment = clauseSearchQuery ? `#search=${encodeURIComponent(clauseSearchQuery)}` : '';
+    frame.src = proxyUrl + fragment;
+    frame.style.display = 'block';
+    empty.style.display = 'none';
+    originalBtn.href = guide.url;
+    originalBtn.style.display = 'inline-flex';
+  } else {
+    frame.src = 'about:blank';
+    frame.style.display = 'none';
+    empty.style.display = 'flex';
+    originalBtn.removeAttribute('href');
+    originalBtn.style.display = 'none';
+  }
+  openModal('koshaGuideDetailModal');
+};
+
+window.closeKoshaGuideDetail = function() {
+  const frame = document.getElementById('koshaGuideDetailFrame');
+  if (frame) frame.src = 'about:blank';
+  closeModal('koshaGuideDetailModal');
 };
 
 window.runClauseSearch = async function() {
@@ -5456,6 +5521,7 @@ window.runClauseSearch = async function() {
   const out = document.getElementById('clauseResults');
   const btn = document.getElementById('clauseSearchBtn');
   if (!q) { toast('검색어를 입력하세요', 'error'); return; }
+  clauseSearchQuery = q;
   btn.disabled = true; btn.textContent = '검색 중...';
   out.innerHTML = `<div class="mp-empty" style="padding:16px;">법령 여러 건을 훑는 중이라 몇 초 걸릴 수 있어요...</div>`;
   try {
@@ -5470,16 +5536,16 @@ window.runClauseSearch = async function() {
 
     const cards = laws.map((l, li) => {
       if (l.error) {
-        return clauseCardHtml(l.lawName, `<div style="color:var(--text3);font-size:12px;">${l.error}</div>`);
+        return clauseCardHtml(l.lawName, `<div style="color:var(--text3);font-size:12px;">${escapeHtml(l.error)}</div>`);
       }
       if (!l.articles.length) {
         return clauseCardHtml(l.lawName, `<div style="color:var(--text3);font-size:12px;">일치하는 조문 없음</div>`);
       }
       const body = l.articles.map((a, ai) => `
-        <div style="padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClauseDetail(clauseSearchStore[${li}].lawName, clauseSearchStore[${li}].articles[${ai}].jo, clauseSearchStore[${li}].articles[${ai}].title, clauseSearchStore[${li}].articles[${ai}].content)">
-          <div style="font-weight:700;font-size:13px;margin-bottom:2px;">제${a.jo}조 ${a.title || ''}</div>
-          <div style="font-size:12px;color:var(--text2);line-height:1.6;">${a.snippet}</div>
-        </div>`).join('');
+        <button type="button" class="clause-result-item" onclick="openClauseDetail(clauseSearchStore[${li}].lawName, clauseSearchStore[${li}].articles[${ai}].jo, clauseSearchStore[${li}].articles[${ai}].title, clauseSearchStore[${li}].articles[${ai}].content)">
+          <div style="font-weight:700;font-size:13px;margin-bottom:2px;">제${escapeHtml(a.jo)}조 ${highlightedSearchHtml(a.title || '', q)}</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;">${highlightedSearchHtml(a.snippet, q)}</div>
+        </button>`).join('');
       return clauseCardHtml(l.lawName, body, `${l.articles.length}건`);
     });
 
@@ -5495,14 +5561,16 @@ window.runClauseSearch = async function() {
       kgList = (kgCatalog || []).filter(g => [g.guide_no, g.title, g.category, g.committee, g.code].join(' ').toLowerCase().includes(ql)).slice(0, 15)
         .map(g => ({ guideNo: g.guide_no, title: g.title, category: g.category, date: '', url: '' }));
     }
+    window.koshaGuideSearchStore = kgList || [];
     const kgBody = !kgList.length
       ? (kgSource === 'catalog'
         ? `<div class="kg-api-error"><b>실시간 API 연결 실패</b><span>${escapeHtml(kgFailure)}</span><small>CSV 예비 데이터에도 일치하는 지침이 없습니다. Supabase 함수 배포와 KOSHA_API_KEY 설정을 확인하세요.</small></div>`
         : `<div style="color:var(--text3);font-size:12px;">일치하는 지침 없음</div>`)
-      : kgList.map(g => `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
-          <div style="font-weight:700;font-size:13px;">${g.url ? `<a href="${escapeHtml(g.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(g.title)}</a>` : escapeHtml(g.title)}</div>
-          <div style="font-size:12px;color:var(--text3);">${escapeHtml(g.guideNo || '')}${g.category ? ' · ' + escapeHtml(g.category) : ''}${g.date ? ' · ' + escapeHtml(g.date) : ''}</div>
-        </div>`).join('');
+      : kgList.map((g, gi) => `<button type="button" class="kg-result-item" onclick="openKoshaGuideDetail(${gi})">
+          <span class="kg-result-title">${highlightedSearchHtml(g.title, q)}</span>
+          <span class="kg-result-meta">${escapeHtml(g.guideNo || '')}${g.category ? ' · ' + escapeHtml(g.category) : ''}${g.date ? ' · ' + escapeHtml(g.date) : ''}</span>
+          <span class="kg-result-action">원문 보기 ›</span>
+        </button>`).join('');
     const kgBadge = kgSource === 'catalog'
       ? (kgList.length ? `${kgList.length}건 · API 오류/CSV 대체` : 'API 오류')
       : (kgList.length ? `${kgList.length}건 · 실시간` : '실시간');

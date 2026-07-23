@@ -1419,10 +1419,35 @@
       <button class="modal-close" onclick="closeModal('clauseDetailModal')">✕</button>
     </div>
     <div class="modal-body">
+      <div class="search-highlight-banner" id="clauseDetailKeyword"></div>
       <div id="clauseDetailBody" style="font-size:14px;line-height:1.8;white-space:pre-wrap;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-primary btn-sm" onclick="closeModal('clauseDetailModal')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- KOSHA GUIDE 원문 미니 팝업 -->
+<div class="modal-backdrop" id="koshaGuideDetailModal">
+  <div class="modal wide kosha-guide-modal">
+    <div class="modal-header">
+      <div class="modal-title" id="koshaGuideDetailTitle">KOSHA GUIDE 원문</div>
+      <button class="modal-close" onclick="closeKoshaGuideDetail()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="kosha-guide-detail-meta" id="koshaGuideDetailMeta"></div>
+      <div class="search-highlight-banner" id="koshaGuideDetailKeyword"></div>
+      <div class="kosha-guide-preview-wrap">
+        <iframe id="koshaGuideDetailFrame" class="kosha-guide-preview-frame" title="KOSHA GUIDE 원문 PDF"></iframe>
+        <div class="kosha-guide-preview-empty" id="koshaGuideDetailEmpty" style="display:none;">
+          원문 미리보기를 제공하지 않는 자료입니다. 아래 원문 열기 버튼을 이용해 주세요.
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <a class="btn btn-outline btn-sm" id="koshaGuideOriginalBtn" target="_blank" rel="noopener noreferrer">새 창에서 원문 열기</a>
+      <button class="btn btn-primary btn-sm" onclick="closeKoshaGuideDetail()">닫기</button>
     </div>
   </div>
 </div>

@@ -250,6 +250,131 @@ body {
   color: var(--text3);
 }
 
+.clause-result-item,
+.kg-result-item {
+  display: block;
+  width: 100%;
+  padding: 10px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s;
+}
+
+.clause-result-item:hover,
+.kg-result-item:hover {
+  background: var(--surface2);
+}
+
+.clause-result-item:focus-visible,
+.kg-result-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.kg-result-item {
+  position: relative;
+  padding-right: 76px;
+}
+
+.kg-result-title,
+.kg-result-meta {
+  display: block;
+}
+
+.kg-result-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.kg-result-meta {
+  margin-top: 4px;
+  color: var(--text3);
+  font-size: 12px;
+}
+
+.kg-result-action {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.search-keyword-mark {
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: #fde68a;
+  color: #713f12;
+  font-weight: 800;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.search-highlight-banner {
+  margin-bottom: 12px;
+  padding: 9px 11px;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-sm);
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.kosha-guide-modal {
+  width: min(920px, calc(100vw - 24px));
+}
+
+.kosha-guide-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.kosha-guide-detail-meta span {
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--text2);
+  font-size: 12px;
+}
+
+.kosha-guide-preview-wrap {
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #f3f4f6;
+}
+
+.kosha-guide-preview-frame {
+  display: block;
+  width: 100%;
+  height: min(62vh, 680px);
+  border: 0;
+  background: #fff;
+}
+
+.kosha-guide-preview-empty {
+  min-height: 360px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--text3);
+  font-size: 13px;
+  text-align: center;
+}
+
 .auth-input {
   background: var(--surface2);
   border: 1.5px solid var(--border);
