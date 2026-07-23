@@ -39,6 +39,13 @@
       <div id="loginForm" class="auth-form">
         <input type="email" id="loginEmail" class="auth-input" placeholder="이메일" autocomplete="email">
         <input type="password" id="loginPassword" class="auth-input" placeholder="비밀번호" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()">
+        <label class="auto-login-row">
+          <input type="checkbox" id="autoLoginChk" checked>
+          <span>
+            <b>이 기기에서 자동 로그인</b>
+            <small>비밀번호는 저장하지 않고 로그인 세션만 유지합니다.</small>
+          </span>
+        </label>
         <button class="auth-btn" onclick="handleLogin()" id="loginBtn">로그인</button>
         <button class="auth-link" onclick="switchTab('forgot')">비밀번호를 잊으셨나요?</button>
         <div class="auth-msg" id="loginMsg"></div>

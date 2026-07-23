@@ -1,4 +1,4 @@
-import { supabase } from './lib/supabase.js';
+import { supabase, isAutoLoginEnabled, setAutoLoginEnabled } from './lib/supabase.js';
 import { generateCode, generateToken, base64ToBlob, downloadBlob, guessFromPath, today } from './lib/utils.js';
 import { ghsPictogramWithLabel, decodeHCodes, decodePCodes, GHS_NAMES, applyPictogramRules, condensePCodes } from './lib/ghs.js';
 import { CAS_MEASUREMENT, CAS_HEALTH_EXAM, CAS_MANAGE, CAS_PERMIT, CAS_SPECIAL, CAS_EXAM_CYCLE } from './data/cas-lists.js';
@@ -79,6 +79,8 @@ function showAuth() {
   document.getElementById('authScreen').style.display = 'block';
   document.getElementById('workspaceScreen').style.display = 'none';
   document.getElementById('appScreen').style.display = 'none';
+  const autoLogin = document.getElementById('autoLoginChk');
+  if (autoLogin) autoLogin.checked = isAutoLoginEnabled();
 }
 
 window.switchTab = function(tab) {
@@ -97,6 +99,7 @@ window.handleLogin = async function() {
   const msg = document.getElementById('loginMsg');
   const btn = document.getElementById('loginBtn');
   if (!email || !password) { msg.className='auth-msg error'; msg.textContent='이메일과 비밀번호를 입력하세요'; return; }
+  setAutoLoginEnabled(document.getElementById('autoLoginChk')?.checked !== false);
   btn.disabled = true; btn.textContent = '로그인 중...';
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   btn.disabled = false; btn.textContent = '로그인';
@@ -5481,10 +5484,11 @@ window.runClauseSearch = async function() {
     });
 
     // KOSHA GUIDE: 실시간 API 우선, 실패 시에만 업로드된 CSV 카탈로그로 폴백
-    let kgList = null, kgSource = 'api';
+    let kgList = null, kgSource = 'api', kgFailure = '';
     if (!kgRes.error && !kgRes.data?.error) {
       kgList = (kgRes.data.result.list || []).slice(0, 15);
     } else {
+      kgFailure = kgRes.error?.message || kgRes.data?.error || 'KOSHA GUIDE API 응답을 받지 못했습니다.';
       await loadKgCatalog();
       kgSource = 'catalog';
       const ql = q.toLowerCase();
@@ -5492,12 +5496,17 @@ window.runClauseSearch = async function() {
         .map(g => ({ guideNo: g.guide_no, title: g.title, category: g.category, date: '', url: '' }));
     }
     const kgBody = !kgList.length
-      ? `<div style="color:var(--text3);font-size:12px;">${kgSource === 'catalog' ? '일치하는 지침 없음 (실시간 API 실패 — CSV 카탈로그 기준)' : '일치하는 지침 없음'}</div>`
+      ? (kgSource === 'catalog'
+        ? `<div class="kg-api-error"><b>실시간 API 연결 실패</b><span>${escapeHtml(kgFailure)}</span><small>CSV 예비 데이터에도 일치하는 지침이 없습니다. Supabase 함수 배포와 KOSHA_API_KEY 설정을 확인하세요.</small></div>`
+        : `<div style="color:var(--text3);font-size:12px;">일치하는 지침 없음</div>`)
       : kgList.map(g => `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
-          <div style="font-weight:700;font-size:13px;">${g.title}</div>
-          <div style="font-size:12px;color:var(--text3);">${g.guideNo || ''}${g.category ? ' · ' + g.category : ''}${g.date ? ' · ' + g.date : ''}</div>
+          <div style="font-weight:700;font-size:13px;">${g.url ? `<a href="${escapeHtml(g.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(g.title)}</a>` : escapeHtml(g.title)}</div>
+          <div style="font-size:12px;color:var(--text3);">${escapeHtml(g.guideNo || '')}${g.category ? ' · ' + escapeHtml(g.category) : ''}${g.date ? ' · ' + escapeHtml(g.date) : ''}</div>
         </div>`).join('');
-    cards.push(clauseCardHtml('KOSHA GUIDE' + (kgSource === 'catalog' ? ' (CSV)' : ''), kgBody, kgList.length ? `${kgList.length}건` : ''));
+    const kgBadge = kgSource === 'catalog'
+      ? (kgList.length ? `${kgList.length}건 · API 오류/CSV 대체` : 'API 오류')
+      : (kgList.length ? `${kgList.length}건 · 실시간` : '실시간');
+    cards.push(clauseCardHtml('KOSHA GUIDE' + (kgSource === 'catalog' ? ' (CSV 대체)' : ''), kgBody, kgBadge));
 
     out.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">${cards.join('')}</div>`;
   } catch (e) {

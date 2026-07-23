@@ -6,81 +6,190 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// 한국산업안전보건공단_기술지원규정(KOSHA GUIDE) 조회 서비스 (data.go.kr 15144147)
+// 한국산업안전보건공단 기술지원규정(KOSHA GUIDE) 조회 서비스
+// https://www.data.go.kr/data/15144147/openapi.do
 const BASE = 'https://apis.data.go.kr/B552468/koshaguide';
-const CALL_API_ID = '1050'; // 고정값 (기술지원규정 호출)
+const CALL_API_ID = '1050';
 
-// XML 어디에 있든 <item> 블록들을 찾아 필드명 그대로 객체로 변환 (필드명을 100% 확신 못해 방어적으로 전부 수집)
-function xmlItems(xml: string): Record<string, string>[] {
-  const items: Record<string, string>[] = [];
-  const itemRe = /<item>([\s\S]*?)<\/item>/g;
-  let m;
-  while ((m = itemRe.exec(xml)) !== null) {
-    const obj: Record<string, string> = {};
-    const fieldRe = /<(\w+)>([\s\S]*?)<\/\1>/g;
-    let f;
-    while ((f = fieldRe.exec(m[1])) !== null) {
-      obj[f[1]] = f[2].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim();
-    }
-    items.push(obj);
-  }
-  return items;
+type JsonRecord = Record<string, unknown>;
+
+function json(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' },
+  });
 }
 
-function pick(obj: Record<string, string>, keys: string[]): string {
-  for (const k of keys) if (obj[k]) return obj[k];
+function isRecord(value: unknown): value is JsonRecord {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+}
+
+function pick(item: JsonRecord, exactKeys: string[], keyPattern?: RegExp): string {
+  for (const key of exactKeys) {
+    const value = stringValue(item[key]);
+    if (value) return value;
+  }
+  if (keyPattern) {
+    for (const [key, rawValue] of Object.entries(item)) {
+      const value = stringValue(rawValue);
+      if (value && keyPattern.test(key)) return value;
+    }
+  }
+  return '';
+}
+
+function findItemArray(value: unknown): JsonRecord[] {
+  if (Array.isArray(value)) {
+    const records = value.filter(isRecord);
+    if (records.length) return records;
+    for (const child of value) {
+      const found = findItemArray(child);
+      if (found.length) return found;
+    }
+    return [];
+  }
+  if (!isRecord(value)) return [];
+
+  for (const preferred of ['items', 'item', 'list', 'data', 'result']) {
+    if (preferred in value) {
+      const found = findItemArray(value[preferred]);
+      if (found.length) return found;
+    }
+  }
+  for (const child of Object.values(value)) {
+    const found = findItemArray(child);
+    if (found.length) return found;
+  }
+  return [];
+}
+
+function findByKey(value: unknown, wantedKeys: string[]): unknown {
+  if (Array.isArray(value)) {
+    for (const child of value) {
+      const found = findByKey(child, wantedKeys);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  if (!isRecord(value)) return undefined;
+  for (const key of wantedKeys) {
+    if (value[key] !== undefined) return value[key];
+  }
+  for (const child of Object.values(value)) {
+    const found = findByKey(child, wantedKeys);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+function xmlError(text: string): string {
+  const resultCode = text.match(/<resultCode>([\s\S]*?)<\/resultCode>/i)?.[1]?.trim();
+  const resultMsg = text.match(/<resultMsg>([\s\S]*?)<\/resultMsg>/i)?.[1]?.trim();
+  const gatewayMsg = text.match(/<(?:returnAuthMsg|errMsg)>([\s\S]*?)<\/(?:returnAuthMsg|errMsg)>/i)?.[1]?.trim();
+  if (gatewayMsg) return gatewayMsg;
+  if (resultCode && !['0', '00'].includes(resultCode)) return `${resultCode}: ${resultMsg || 'API 요청 실패'}`;
   return '';
 }
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return json({ error: 'POST 요청만 지원합니다.' }, 405);
+
   try {
-    const KEY = Deno.env.get('KOSHA_API_KEY');
-    if (!KEY) {
-      return new Response(JSON.stringify({
-        error: 'KOSHA_API_KEY 미설정 — 이미 등록하셨다면 그대로 재사용됩니다. 안 되면 data.go.kr에서 발급받은 일반 인증키(Decoding)를 supabase secrets set KOSHA_API_KEY=발급키 로 등록하세요.'
-      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-    const { query } = await req.json();
-    const q = String(query || '').trim();
-    const url = `${BASE}/getKoshaGuide?serviceKey=${encodeURIComponent(KEY)}`
-      + `&callApiId=${CALL_API_ID}&pageNo=1&numOfRows=50`
-      + (q ? `&techGdlnNm=${encodeURIComponent(q)}` : '');
-    const res = await fetch(url);
-    const xml = await res.text();
-
-    const resultCode = xml.match(/<resultCode>(\w+)<\/resultCode>/)?.[1];
-    if (resultCode && resultCode !== '00' && resultCode !== '0') {
-      const resultMsg = xml.match(/<resultMsg>([\s\S]*?)<\/resultMsg>/)?.[1] || '';
-      throw new Error(`KOSHA GUIDE API 오류 (${resultCode}): ${resultMsg}`);
-    }
-    // data.go.kr 게이트웨이 공통 에러 envelope (서비스키 미승인 등) — resultCode와 태그명이 달라 별도 체크
-    const gwErrMsg = xml.match(/<errMsg>([\s\S]*?)<\/errMsg>/)?.[1];
-    const gwAuthMsg = xml.match(/<returnAuthMsg>([\s\S]*?)<\/returnAuthMsg>/)?.[1];
-    if (gwErrMsg || gwAuthMsg) {
-      throw new Error(`데이터포털 게이트웨이 오류: ${gwAuthMsg || gwErrMsg} — 활용신청이 이 API(15144147)에도 승인됐는지 확인하세요`);
+    const apiKey = Deno.env.get('KOSHA_API_KEY');
+    if (!apiKey) {
+      return json({
+        error: 'Supabase에 KOSHA_API_KEY가 설정되지 않았습니다. data.go.kr의 API 15144147 활용신청 후 일반 인증키(Decoding)를 Supabase Secret에 등록하세요.',
+        code: 'KOSHA_API_KEY_MISSING',
+      });
     }
 
-    const raw = xmlItems(xml);
-    const list = raw.map(it => ({
-      title: pick(it, ['techGdlnNm', 'title', 'gdlnNm']),
-      guideNo: pick(it, ['techGdlnNo', 'guideNo', 'gdlnNo']),
-      date: pick(it, ['ofancYmd', 'regDate', 'pblcnYmd']),
-      category: pick(it, ['techGdlnSeNm', 'category', 'fieldNm', 'clNm']),
-      url: pick(it, ['techGdlnUrl', 'flDwnUrl', 'dwnldUrl', 'fileUrl', 'atchFileUrl']),
-      raw: it, // 매핑 안 된 필드도 프런트에서 확인 가능하도록 원본 보존
-    }));
+    const body = await req.json().catch(() => ({}));
+    const query = String(body?.query || '').trim();
+    const url = new URL(`${BASE}/getKoshaGuide`);
+    url.searchParams.set('serviceKey', apiKey);
+    url.searchParams.set('callApiId', CALL_API_ID);
+    url.searchParams.set('pageNo', '1');
+    url.searchParams.set('numOfRows', '100');
+    if (query) url.searchParams.set('techGdlnNm', query);
 
-    const totalCount = xml.match(/<totalCount>(\d+)<\/totalCount>/)?.[1];
-    return new Response(JSON.stringify({
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(15000),
+    });
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      throw new Error(`KOSHA GUIDE API HTTP ${response.status}: ${responseText.slice(0, 180)}`);
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(responseText);
+    } catch {
+      const gatewayError = xmlError(responseText);
+      if (gatewayError) {
+        throw new Error(`데이터포털 인증 오류: ${gatewayError}. API 15144147의 활용승인과 Decoding 인증키를 확인하세요.`);
+      }
+      throw new Error('KOSHA GUIDE API가 JSON이 아닌 응답을 반환했습니다.');
+    }
+
+    const resultCode = stringValue(findByKey(payload, ['resultCode', 'returnReasonCode']));
+    const resultMessage = stringValue(findByKey(payload, ['resultMsg', 'resultMessage', 'returnAuthMsg', 'errMsg']));
+    if (resultCode && !['0', '00', '0000'].includes(resultCode)) {
+      throw new Error(`KOSHA GUIDE API 오류 (${resultCode}): ${resultMessage || '요청 실패'}`);
+    }
+    if (resultMessage && /SERVICE KEY|AUTH|인증|승인|등록되지/i.test(resultMessage)) {
+      throw new Error(`데이터포털 인증 오류: ${resultMessage}`);
+    }
+
+    const rawItems = findItemArray(payload);
+    const normalized = rawItems.map((item) => ({
+      title: pick(item,
+        ['techGdlnNm', 'techGuidelineName', 'guideNm', 'gdlnNm', 'title', 'name'],
+        /(?:tech)?(?:gdln|guide).*(?:nm|name|title)|^title$/i),
+      guideNo: pick(item,
+        ['techGdlnNo', 'techGuidelineNo', 'guideNo', 'gdlnNo', 'code'],
+        /(?:tech)?(?:gdln|guide).*(?:no|number|code)|^code$/i),
+      date: pick(item,
+        ['ofancYmd', 'pblcnYmd', 'regYmd', 'regDate', 'publicationDate', 'date'],
+        /(?:date|ymd|published|publication)/i),
+      category: pick(item,
+        ['techGdlnSeNm', 'category', 'fieldNm', 'clNm', 'divisionName'],
+        /(?:category|field|division|seNm|clNm)/i),
+      url: pick(item,
+        ['techGdlnUrl', 'flDwnUrl', 'dwnldUrl', 'downloadUrl', 'fileUrl', 'atchFileUrl', 'url'],
+        /(?:download|dwn|file|atch|gdln).*url|^url$/i),
+      raw: item,
+    })).filter((item) => item.title || item.guideNo);
+
+    const queryLower = query.toLocaleLowerCase('ko');
+    const list = queryLower
+      ? normalized.filter((item) =>
+          [item.title, item.guideNo, item.category, JSON.stringify(item.raw)]
+            .join(' ')
+            .toLocaleLowerCase('ko')
+            .includes(queryLower))
+      : normalized;
+
+    const totalRaw = findByKey(payload, ['totalCount', 'totalCnt', 'total']);
+    const totalCount = Number(totalRaw);
+
+    return json({
       result: {
         list,
-        totalCount: totalCount ? Number(totalCount) : list.length,
-        debug: list.length === 0 ? xml.slice(0, 400) : undefined, // 결과 0건일 때 원인 파악용 (정상 응답이면 프런트에서 무시)
-      }
-    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-  } catch (e) {
-    return new Response(JSON.stringify({ error: e?.message || String(e) }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        totalCount: Number.isFinite(totalCount) ? totalCount : list.length,
+        source: 'data.go.kr/15144147',
+      },
+    });
+  } catch (error) {
+    return json({
+      error: error instanceof Error ? error.message : String(error),
+      code: 'KOSHA_GUIDE_API_FAILED',
+    });
   }
 });

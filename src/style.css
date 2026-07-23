@@ -193,6 +193,63 @@ body {
   gap: 12px;
 }
 
+.auto-login-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 2px;
+  color: var(--text2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.auto-login-row input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--primary);
+  flex: 0 0 auto;
+}
+
+.auto-login-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  line-height: 1.35;
+}
+
+.auto-login-row b {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.auto-login-row small {
+  color: var(--text3);
+  font-size: 11px;
+}
+
+.kg-api-error {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-sm);
+  background: #fff7f7;
+  color: #991b1b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.kg-api-error span {
+  overflow-wrap: anywhere;
+}
+
+.kg-api-error small {
+  color: var(--text3);
+}
+
 .auth-input {
   background: var(--surface2);
   border: 1.5px solid var(--border);
