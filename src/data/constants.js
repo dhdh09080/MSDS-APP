@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════
 
 export const PAGES = ['home', 'calendar', 'msds', 'warning', 'upload-link', 'measure', 'health', 'photos', 'manpower', 'weather', 'vulnerable', 'bp', 'library', 'contractors', 'settings'];
-export const MOBILE_TABS = ['home', 'calendar', 'msds', 'health', 'settings'];
+export const MOBILE_TABS = ['home', 'library', 'msds', 'health'];
 
 // 경고표지 라벨 크기 프리셋 (A4 용지 분할 기준, 고시 제2023-9호 별표 규격 대응)
 export const WARN_SIZES = {

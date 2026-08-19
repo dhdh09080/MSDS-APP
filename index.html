@@ -126,10 +126,6 @@
         <div class="nav-item active" id="nav-home" onclick="showPage('home')">
           <span class="nav-icon">🏠</span> 홈
         </div>
-        <div class="nav-item" id="nav-calendar" onclick="showPage('calendar')">
-          <span class="nav-icon">📅</span> 일정관리
-        </div>
-
         <div class="nav-section">화학물질</div>
         <div class="nav-item" id="nav-msds" onclick="showPage('msds')">
           <span class="nav-icon">🧪</span> MSDS 대장
@@ -208,6 +204,20 @@
         </div>
         <div class="content-scroll">
 
+          <div class="card home-legal-card" style="margin-bottom:18px;">
+            <div class="dash-section-header">
+              <div>
+                <div class="dash-section-title">📚 법령 · KOSHA GUIDE</div>
+                <div class="form-note">보건관리 업무 중 궁금한 물질·작업·조문을 바로 검색하세요.</div>
+              </div>
+              <button class="btn btn-outline btn-sm" onclick="showPage('library')">자료실 전체 보기</button>
+            </div>
+            <div class="home-legal-search">
+              <input class="form-input" id="homeLawQuery" placeholder="예) 톨루엔, 밀폐공간, 산업안전보건기준" onkeydown="if(event.key==='Enter')searchLawFromHome()">
+              <button class="btn btn-primary" onclick="searchLawFromHome()">법령·지침 통합검색</button>
+            </div>
+          </div>
+
           <!-- ① 경고 배너 (접기 가능) -->
           <div id="dashAlertWrap" style="display:none;margin-bottom:20px;">
             <div class="dash-alert-bar" id="dashAlertBar" onclick="toggleDashAlerts()">
@@ -237,38 +247,6 @@
           <!-- ①.5 체감온도 (혹서기) -->
           <div class="card" id="dashWeatherCard" style="display:none;margin-bottom:18px;cursor:pointer;" onclick="showPage('weather')">
             <div id="dashWeatherBody"></div>
-          </div>
-
-          <!-- ② 이번 주 일정 (가장 크게) -->
-          <div class="card dash-calendar-card" style="margin-bottom:18px;">
-            <div class="dash-section-header">
-              <div class="dash-section-title">📅 이번 주 일정</div>
-              <button class="btn btn-outline btn-sm" onclick="showPage('calendar')">캘린더 보기</button>
-            </div>
-            <div id="dashWeekSchedule"></div>
-          </div>
-
-          <!-- ③ 오늘 할 일 + 루틴 업무 (2열) -->
-          <div class="dash-two-col" style="margin-bottom:18px;">
-            <div class="card">
-              <div class="dash-section-header">
-                <div class="dash-section-title">✅ 오늘 할 일</div>
-              </div>
-              <div class="add-tag-row" style="margin-bottom:10px;">
-                <input type="text" id="newTodoInput" placeholder="할 일 입력 후 Enter" onkeydown="if(event.key==='Enter')addTodo()">
-                <button class="btn btn-primary btn-sm" onclick="addTodo()">추가</button>
-              </div>
-              <div id="todoList"></div>
-            </div>
-            <div class="card">
-              <div class="dash-section-header">
-                <div class="dash-section-title">🔁 루틴 업무</div>
-                <button class="btn btn-outline btn-sm" onclick="showPage('settings')">관리</button>
-              </div>
-              <div id="routineTaskDashList">
-                <div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">등록된 루틴 업무가 없습니다</div>
-              </div>
-            </div>
           </div>
 
           <!-- ④ 통계 (작게, 클릭하면 해당 페이지로) -->
@@ -1136,7 +1114,7 @@
         <div class="page-header">
           <div>
             <div class="page-title">설정</div>
-            <div class="page-subtitle">현장 · 루틴 업무 · 팀원 · 계정 관리</div>
+            <div class="page-subtitle">현장 · 팀원 · AI 분석 · 계정 관리</div>
           </div>
         </div>
         <div class="content-scroll">
@@ -1162,44 +1140,6 @@
             <input type="hidden" id="wsLongitudeEdit">
             <div class="form-note" style="margin:10px 0 12px;">주소 검색은 Kakao 우편번호 서비스를 사용하며, 좌표 및 날씨 조회를 위해 선택한 주소·좌표가 좌표 변환 서비스와 Open-Meteo에 전달됩니다.</div>
             <button class="btn btn-primary btn-sm" onclick="updateWorkspaceInfo()">현장 정보 저장</button>
-          </div>
-
-          <div class="card">
-            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-              <span><span class="card-title-icon">🔁</span> 루틴 업무 관리</span>
-            </div>
-            <div class="form-note" style="margin-bottom:12px;">매주/매월 반복되는 업무를 등록하면 대시보드에 주기적으로 표시됩니다.</div>
-            <div id="routineTaskList" style="margin-bottom:14px;"></div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-              <div class="form-field" style="flex:2;min-width:160px;">
-                <label class="form-label">업무 내용</label>
-                <input class="form-input" id="newRoutineTitle" placeholder="예) 위험성평가 현장 점검">
-              </div>
-              <div class="form-field" style="flex:1;min-width:110px;">
-                <label class="form-label">주기</label>
-                <select class="form-input" id="newRoutineFreq" onchange="toggleRoutineFreqInput()">
-                  <option value="weekly">매주</option>
-                  <option value="monthly">매월</option>
-                </select>
-              </div>
-              <div class="form-field" id="routineWeekdayField" style="flex:1;min-width:110px;">
-                <label class="form-label">요일</label>
-                <select class="form-input" id="newRoutineWeekday">
-                  <option value="1">월요일</option>
-                  <option value="2">화요일</option>
-                  <option value="3">수요일</option>
-                  <option value="4">목요일</option>
-                  <option value="5">금요일</option>
-                  <option value="6">토요일</option>
-                  <option value="0">일요일</option>
-                </select>
-              </div>
-              <div class="form-field" id="routineDayField" style="flex:1;min-width:110px;display:none;">
-                <label class="form-label">매월 며칠</label>
-                <input class="form-input" id="newRoutineDay" type="number" min="1" max="31" value="1">
-              </div>
-              <button class="btn btn-primary btn-sm" onclick="addRoutineTask()">추가</button>
-            </div>
           </div>
 
           <div class="card">
@@ -1259,9 +1199,9 @@
         <span class="mobile-tab-label">MSDS</span>
         <span class="mobile-tab-badge" id="mBadgeMsds" style="display:none">0</span>
       </button>
-      <button class="mobile-tab" id="mtab-calendar" onclick="showPage('calendar')">
-        <span class="mobile-tab-icon">📅</span>
-        <span class="mobile-tab-label">일정</span>
+      <button class="mobile-tab" id="mtab-library" onclick="showPage('library')">
+        <span class="mobile-tab-icon">📚</span>
+        <span class="mobile-tab-label">법령</span>
       </button>
       <button class="mobile-tab" id="mtab-health" onclick="showPage('health')">
         <span class="mobile-tab-icon">🏥</span>
@@ -1485,7 +1425,8 @@
     <div class="modal-footer msds-detail-footer">
       <div class="footer-group">
         <button class="btn btn-secondary btn-sm" id="detailViewFileBtn" style="display:none">📄 원본 보기</button>
-        <button class="btn btn-outline btn-sm" onclick="printWarningFromDetail()">🏷️ 경고표지 생성</button>
+      <button class="btn btn-outline btn-sm" onclick="printWarningFromDetail()">🏷️ 경고표지 생성</button>
+        <button class="btn btn-primary btn-sm" id="msdsReanalyzeBtn" onclick="reanalyzeCurrentMsds()">✨ 원본 다시 분석</button>
         <button class="btn btn-outline btn-sm" id="msdsRenewBtn" onclick="openMsdsRenewPicker()">🔄 새 MSDS로 갱신</button>
         <button class="btn btn-outline btn-sm" onclick="openMsdsFileReplacePicker()">📎 파일만 교체</button>
         <input type="file" id="msdsRenewFileInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleMsdsRenewFile(event)">
@@ -1496,6 +1437,27 @@
         <button class="btn btn-danger btn-sm" id="detailDeleteBtn">🗑 삭제</button>
         <button class="btn btn-primary btn-sm" onclick="closeModal('msdsDetailModal')">닫기</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 기존 원본 재분석 결과 비교 -->
+<div class="modal-backdrop" id="msdsReanalysisModal">
+  <div class="modal wide">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">✨ MSDS 원본 재분석 결과</div>
+        <div class="form-note">법령 변경이나 누락 항목 확인을 위해 기존 값과 새 분석값을 비교합니다.</div>
+      </div>
+      <button class="modal-close" onclick="cancelMsdsReanalysis()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="reanalyze-summary" id="msdsReanalysisSummary"></div>
+      <div class="reanalyze-compare" id="msdsReanalysisCompare"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="cancelMsdsReanalysis()">취소</button>
+      <button class="btn btn-primary" id="applyMsdsReanalysisBtn" onclick="applyMsdsReanalysis()">변경사항 반영</button>
     </div>
   </div>
 </div>

@@ -25,6 +25,7 @@ let measureFileData = null, measureFileName_val = null;
 let contractorFilter = 'all';
 let activeHealthSub = 'result';
 let aiSettingsState = null;
+let pendingMsdsReanalysis = null;
 
 // 전역 붙여넣기 캐치: 사진 업로드 모달이 열려있을 때 어디서 Ctrl+V를 눌러도 잡히도록 보강
 document.addEventListener('paste', (e) => {
@@ -98,7 +99,7 @@ function showDevFeaturePreview(page) {
     { id: 'wt-3', contractor_id: 'con-3', name: '도장' },
   ];
   msdsRecords = [
-    { id: 'msds-1', product_name: '에폭시 프라이머', contractor: '성우도장', receipt_status: 'received', supplier: '안전화학', supplier_contact: '02-1234-5678', signal_word: '위험', pictograms: 'GHS02 GHS05 GHS07 GHS08', h_codes: 'H225 H304 H315 H317 H318 H336 H351 H373 H411', p_codes: 'P201 P202 P210 P233 P240 P241 P242 P243 P260 P273 P280 P301+P310 P304+P340 P305+P351+P338 P403 P405 P501', protective_equipment: '보호장갑, 보안경, 방독마스크', legal_special: 'Y' },
+    { id: 'msds-1', product_name: '에폭시 프라이머', contractor: '성우도장', receipt_status: 'received', supplier: '안전화학', supplier_contact: '02-1234-5678', signal_word: '위험', pictograms: 'GHS02 GHS05 GHS07 GHS08', h_codes: 'H225 H304 H315 H317 H318 H336 H351 H373 H411', p_codes: 'P201 P202 P210 P233 P240 P241 P242 P243 P260 P273 P280 P301+P310 P304+P340 P305+P351+P338 P403 P405 P501', protective_equipment: '보호장갑, 보안경, 방독마스크', legal_special: 'Y', has_pdf: true, pdf_path: 'preview/msds-1.pdf', pdf_name: '에폭시프라이머_MSDS.pdf', submission_no_valid: 'N', version: 1, history: [] },
     { id: 'msds-2', product_name: '실리콘 실란트', contractor: '새길설비', receipt_status: 'pending', supplier: '한국실란트', signal_word: '경고', pictograms: 'GHS07', h_codes: 'H315 H319', p_codes: 'P264 P280 P302+P352 P305+P351+P338', legal_special: 'N' },
   ];
   businessLicenses = [{ id: 'license-1', contractor_id: 'con-1', file_name: '대한건설_사업자등록증.pdf', uploaded_by: 'manager', uploaded_at: new Date().toISOString(), contractor: { name: '대한건설' } }];
@@ -111,13 +112,18 @@ function showDevFeaturePreview(page) {
   document.getElementById('wsNameEdit').value = currentWS.name;
   hydrateWorkspaceLocationInputs();
   populateContractorSelects();
-  const target = ['contractors', 'weather', 'warning', 'settings'].includes(page) ? page : 'contractors';
+  const target = ['home', 'msds', 'contractors', 'weather', 'warning', 'settings'].includes(page) ? page : 'contractors';
   if (target === 'warning') {
     warnSelected = new Set(['msds-1']);
     warnPreviewSingle = 'msds-1';
   }
   // 모듈 하단에 정의된 날씨 렌더러까지 초기화된 뒤 미리보기 화면을 연다.
-  setTimeout(() => window.showPage(target), 0);
+  setTimeout(() => {
+    updateStats();
+    renderMsdsTable();
+    renderHomeDashboard();
+    window.showPage(target);
+  }, 0);
 }
 
 function mountAiSettingsCard() {
@@ -343,7 +349,7 @@ window.enterWorkspace = async function(wsId) {
   document.getElementById('sidebarAvatar').textContent = name.charAt(0).toUpperCase();
   document.getElementById('accountInfo').innerHTML = `이메일: ${user.email}<br>이름: ${name}<br>가입일: ${new Date(user.created_at).toLocaleDateString('ko-KR')}`;
   await Promise.all([loadContractors(), loadWorkTypes(), loadMembers(), loadTokens(), loadPublicLink()]);
-  await Promise.all([loadMsdsRecords(), loadPlacementSnapshots(), loadTodos(), loadRoutineTasks(), loadBusinessLicenses(), loadMeasureRounds(), loadMeasureResults(), loadNotifications(), loadHealthRecords()]);
+  await Promise.all([loadMsdsRecords(), loadPlacementSnapshots(), loadBusinessLicenses(), loadMeasureRounds(), loadMeasureResults(), loadNotifications(), loadHealthRecords()]);
   subscribeNotifications();
   renderHomeDashboard(); // 알림(재업로드 도착) 로드 후 대시보드 갱신
   loadDashWeather();
@@ -664,6 +670,17 @@ window.showPage = function(id) {
     const btn = document.getElementById('reanalyzeLegalBtn');
     if (btn) btn.textContent = `⚖️ 법정물질 일괄 재판정 (${msdsRecords.length}건)`;
   }
+};
+
+window.searchLawFromHome = function() {
+  const query = document.getElementById('homeLawQuery')?.value.trim();
+  if (!query) { toast('검색어를 입력하세요', 'error'); return; }
+  showPage('library');
+  setTimeout(() => {
+    const target = document.getElementById('clauseSearchQuery');
+    if (target) target.value = query;
+    window.runClauseSearch?.();
+  }, 50);
 };
 
 // ═══════════════════════════════════════════════
@@ -1434,6 +1451,7 @@ window.renderMsdsTable = function() {
       <td>
         <div style="display:flex;gap:4px;">
           <button class="btn btn-secondary btn-sm btn-icon" onclick="showMsdsDetail('${r.id}')" title="상세">👁</button>
+          <button class="btn btn-primary btn-sm btn-icon" onclick="reanalyzeMsds('${r.id}')" title="등록된 원본을 AI로 다시 분석">✨</button>
           <button class="btn btn-secondary btn-sm btn-icon" onclick="startMsdsEdit('${r.id}')" title="수정">✏️</button>
           <button class="btn ${r.reupload_requested?'btn-warn':'btn-secondary'} btn-sm btn-icon" onclick="${r.reupload_requested?`cancelReupload('${r.id}')`:`requestReupload('${r.id}')`}" title="${r.reupload_requested?'재업로드 요청 취소':'협력사에 재업로드 요청'}">🔁</button>
           <button class="btn btn-danger btn-sm btn-icon" onclick="deleteMsdsRecord('${r.id}')" title="삭제">🗑</button>
@@ -1750,6 +1768,128 @@ window.showMsdsDetail = function(id) {
 };
 
 window.editMsdsRecord = function() { closeModal('msdsDetailModal'); startMsdsEdit(currentDetailId); };
+
+const REANALYSIS_FIELDS = [
+  ['product_name', '제품명', 'productName'], ['supplier', '공급업체', 'supplier'],
+  ['supplier_contact', '공급업체 연락처', 'supplierContact'], ['cas_no', 'CAS No.', 'casNo'],
+  ['components', '구성성분', 'components'], ['signal_word', '신호어', 'signalWord'],
+  ['h_codes', 'H코드', 'hCodes'], ['p_codes', 'P코드', 'pCodes'],
+  ['pictograms', 'GHS 그림문자', 'pictograms'], ['issue_date', 'MSDS 개정일', 'issueDate'],
+  ['protective_equipment', '추천 보호구', 'protectiveEquipment'],
+  ['submission_no', 'MSDS 제출번호', 'submissionNo'],
+  ['legal_measurement', '작업환경측정 대상', 'legalMeasurement'],
+  ['legal_exam', '특수건강진단 대상', 'legalExam'],
+  ['legal_exam_cycle', '특수검진 주기', 'legalExamCycle'],
+  ['legal_manage', '관리대상 유해물질', 'legalManage'],
+  ['legal_permit', '허가대상 유해물질', 'legalPermit'],
+  ['legal_special', '특별관리물질', 'legalSpecial'],
+  ['legal_dangerous', '위험물 규제', 'legalDangerous'],
+];
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+window.reanalyzeCurrentMsds = function() {
+  if (currentDetailId) reanalyzeMsds(currentDetailId);
+};
+
+window.reanalyzeMsds = async function(id) {
+  const record = msdsRecords.find(item => item.id === id);
+  if (!record?.has_pdf || !record.pdf_path) {
+    toast('재분석할 원본 파일이 없습니다. 먼저 파일을 등록해주세요.', 'error');
+    return;
+  }
+  const detailBtn = document.getElementById('msdsReanalyzeBtn');
+  if (detailBtn) { detailBtn.disabled = true; detailBtn.textContent = '⏳ 원본 분석 중...'; }
+  toast('원본 MSDS를 다시 분석하고 있습니다.', 'info');
+  try {
+    let parsed;
+    if (getDevPreviewPage()) {
+      await new Promise(resolve => setTimeout(resolve, 250));
+      parsed = {
+        productName: record.product_name, supplier: record.supplier, supplierContact: record.supplier_contact,
+        casNo: record.cas_no || '108-88-3', components: record.components || '톨루엔(108-88-3) 25%',
+        signalWord: record.signal_word, hCodes: record.h_codes, pCodes: record.p_codes,
+        pictograms: record.pictograms, issueDate: record.issue_date || '2026-08-01',
+        protectiveEquipment: record.protective_equipment, submissionNo: 'AA-2026-123456', submissionNoValid: 'Y',
+        legalMeasurement: 'Y', legalExam: 'Y', legalExamCycle: '배치후 1차: 6개월, 이후: 12개월',
+        legalManage: 'Y', legalPermit: 'N', legalSpecial: record.legal_special || 'N', legalDangerous: 'N',
+      };
+    } else {
+      const { data: blob, error: downloadError } = await supabase.storage.from('msds-pdfs').download(record.pdf_path);
+      if (downloadError || !blob) throw new Error(downloadError?.message || '원본 파일을 내려받지 못했습니다.');
+      parsed = await callParseFunction(await blobToBase64(blob), blob.type || (record.pdf_name?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'));
+    }
+    const updates = {};
+    const changes = [];
+    for (const [dbKey, label, parsedKey] of REANALYSIS_FIELDS) {
+      let next = parsed[parsedKey] ?? '';
+      if (dbKey === 'submission_no') next = String(next).trim();
+      const before = record[dbKey] ?? '';
+      updates[dbKey] = next;
+      if (String(before).trim() !== String(next).trim()) changes.push({ dbKey, label, before, next });
+    }
+    updates.submission_no_valid = parsed.submissionNoValid || 'N';
+    updates.special = parsed.legalSpecial === 'Y' ? 'Y_special' : 'N';
+    pendingMsdsReanalysis = { id, record, updates, changes };
+    document.getElementById('msdsReanalysisSummary').innerHTML = changes.length
+      ? `<b>${escapeHtml(record.product_name)}</b>에서 <strong>${changes.length}개 항목</strong>의 차이를 찾았습니다. 확인 후 반영하세요.`
+      : `<b>${escapeHtml(record.product_name)}</b>의 기존 정보와 새 분석 결과가 같습니다.`;
+    document.getElementById('msdsReanalysisCompare').innerHTML = changes.length ? changes.map(change => `
+      <div class="reanalyze-row">
+        <div class="reanalyze-label">${escapeHtml(change.label)}</div>
+        <div class="reanalyze-values">
+          <div><span>기존</span><p>${escapeHtml(change.before || '없음')}</p></div>
+          <div class="reanalyze-next"><span>새 분석</span><p>${escapeHtml(change.next || '없음')}</p></div>
+        </div>
+      </div>`).join('') : '<div class="mp-empty">변경할 항목이 없습니다.</div>';
+    document.getElementById('applyMsdsReanalysisBtn').disabled = changes.length === 0;
+    closeModal('msdsDetailModal');
+    openModal('msdsReanalysisModal');
+  } catch (error) {
+    handleAiError(error);
+  } finally {
+    if (detailBtn) { detailBtn.disabled = false; detailBtn.textContent = '✨ 원본 다시 분석'; }
+  }
+};
+
+window.cancelMsdsReanalysis = function() {
+  pendingMsdsReanalysis = null;
+  closeModal('msdsReanalysisModal');
+};
+
+window.applyMsdsReanalysis = async function() {
+  if (!pendingMsdsReanalysis) return;
+  const { id, record, updates, changes } = pendingMsdsReanalysis;
+  const button = document.getElementById('applyMsdsReanalysisBtn');
+  button.disabled = true; button.textContent = '반영 중...';
+  try {
+    const nextVersion = (record.version || 1) + 1;
+    const history = [...(record.history || []), {
+      version: record.version || 1,
+      date: new Date().toISOString().slice(0, 10),
+      note: `원본 AI 재분석 (${changes.length}개 항목 변경)`,
+    }];
+    const { error } = await supabase.from('msds_records').update({
+      ...updates, version: nextVersion, history, updated_at: new Date().toISOString(),
+    }).eq('id', id);
+    if (error) throw error;
+    cancelMsdsReanalysis();
+    await loadMsdsRecords();
+    showMsdsDetail(id);
+    toast(`재분석 결과를 반영했습니다 (v${nextVersion})`, 'success');
+  } catch (error) {
+    toast('재분석 결과 반영 실패: ' + error.message, 'error');
+  } finally {
+    button.disabled = false; button.textContent = '변경사항 반영';
+  }
+};
 
 // ─── MSDS 대장 상세 → 경고표지 탭으로 이동, 해당 물질 선택 상태로 진입 ───
 window.printWarningFromDetail = function() {
