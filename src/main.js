@@ -13,6 +13,7 @@ let user = null, profile = null;
 let workspaces = [], currentWS = null;
 let contractors = [], workTypes = [], msdsRecords = [];
 let tokens = [], members = [];
+let businessLicenses = [];
 let msdsFileQueue = [], healthFileQueue = [];
 let editingMsdsId = null, currentDetailId = null, receiptEditId = null;
 let warnSelected = new Set();
@@ -23,6 +24,7 @@ let pendingInvites = [];
 let measureFileData = null, measureFileName_val = null;
 let contractorFilter = 'all';
 let activeHealthSub = 'result';
+let aiSettingsState = null;
 
 // 전역 붙여넣기 캐치: 사진 업로드 모달이 열려있을 때 어디서 Ctrl+V를 눌러도 잡히도록 보강
 document.addEventListener('paste', (e) => {
@@ -45,7 +47,93 @@ function isPasswordRecoveryUrl() {
   return query.get('type') === 'recovery' || window.location.hash.includes('type=recovery');
 }
 
+function isDevAiPreview() {
+  return getDevPreviewPage() === 'ai-settings';
+}
+
+function getDevPreviewPage() {
+  return import.meta.env.DEV ? new URLSearchParams(window.location.search).get('preview') : null;
+}
+
+function showDevAiPreview() {
+  user = { id: 'preview-user', email: 'preview@example.com', user_metadata: { name: '미리보기' } };
+  currentWS = { id: 'preview-workspace', name: 'AI 설정 미리보기' };
+  profile = { name: '미리보기 사용자' };
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('workspaceScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'block';
+  document.getElementById('sidebarWSName').textContent = currentWS.name;
+  document.getElementById('sidebarName').textContent = profile.name;
+  document.getElementById('sidebarEmail').textContent = user.email;
+  document.getElementById('accountInfo').innerHTML = '<b>개발용 화면 미리보기</b><br>실제 계정이나 API 키는 사용하지 않습니다.';
+  document.getElementById('memberList').innerHTML = '<div class="form-note">미리보기 모드</div>';
+  aiSettingsState = {
+    preferredProvider: 'claude',
+    providers: {
+      claude: { configured: true, status: 'active', keyHint: 'sk-a••••1234' },
+      openai: { configured: true, status: 'error', keyHint: 'sk-p••••5678', lastError: 'GPT API 사용 한도에 도달했습니다. 토큰·크레딧·사용량 제한을 확인해주세요.' },
+      gemini: { configured: false },
+    },
+  };
+  showPage('settings');
+  renderAiSettings();
+}
+
+function showDevFeaturePreview(page) {
+  user = { id: 'preview-user', email: 'preview@example.com', user_metadata: { name: '미리보기' } };
+  currentWS = {
+    id: 'preview-workspace', name: '성동 안전현장',
+    address: '서울특별시 성동구 천호대로 416', latitude: 37.5663, longitude: 127.0541,
+  };
+  profile = { name: '현장 관리자' };
+  contractors = [
+    { id: 'con-1', name: '대한건설' },
+    { id: 'con-2', name: '한빛전기' },
+    { id: 'con-3', name: '성우도장' },
+    { id: 'con-4', name: '새길설비' },
+  ];
+  workTypes = [
+    { id: 'wt-1', contractor_id: 'con-1', name: '골조' },
+    { id: 'wt-2', contractor_id: 'con-2', name: '전기' },
+    { id: 'wt-3', contractor_id: 'con-3', name: '도장' },
+  ];
+  msdsRecords = [
+    { id: 'msds-1', product_name: '에폭시 프라이머', contractor: '성우도장', receipt_status: 'received', supplier: '안전화학', supplier_contact: '02-1234-5678', signal_word: '위험', pictograms: 'GHS02 GHS05 GHS07 GHS08', h_codes: 'H225 H304 H315 H317 H318 H336 H351 H373 H411', p_codes: 'P201 P202 P210 P233 P240 P241 P242 P243 P260 P273 P280 P301+P310 P304+P340 P305+P351+P338 P403 P405 P501', protective_equipment: '보호장갑, 보안경, 방독마스크', legal_special: 'Y' },
+    { id: 'msds-2', product_name: '실리콘 실란트', contractor: '새길설비', receipt_status: 'pending', supplier: '한국실란트', signal_word: '경고', pictograms: 'GHS07', h_codes: 'H315 H319', p_codes: 'P264 P280 P302+P352 P305+P351+P338', legal_special: 'N' },
+  ];
+  businessLicenses = [{ id: 'license-1', contractor_id: 'con-1', file_name: '대한건설_사업자등록증.pdf', uploaded_by: 'manager', uploaded_at: new Date().toISOString(), contractor: { name: '대한건설' } }];
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('workspaceScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'block';
+  document.getElementById('sidebarWSName').textContent = currentWS.name;
+  document.getElementById('sidebarName').textContent = profile.name;
+  document.getElementById('sidebarEmail').textContent = user.email;
+  document.getElementById('wsNameEdit').value = currentWS.name;
+  hydrateWorkspaceLocationInputs();
+  populateContractorSelects();
+  const target = ['contractors', 'weather', 'warning', 'settings'].includes(page) ? page : 'contractors';
+  if (target === 'warning') {
+    warnSelected = new Set(['msds-1']);
+    warnPreviewSingle = 'msds-1';
+  }
+  // 모듈 하단에 정의된 날씨 렌더러까지 초기화된 뒤 미리보기 화면을 연다.
+  setTimeout(() => window.showPage(target), 0);
+}
+
+function mountAiSettingsCard() {
+  const card = document.getElementById('aiSettingsCard');
+  const settingsContent = document.querySelector('#page-settings > .content-scroll');
+  if (card && settingsContent && card.parentElement !== settingsContent) settingsContent.prepend(card);
+}
+
 async function init() {
+  mountAiSettingsCard();
+  const previewPage = getDevPreviewPage();
+  if (previewPage) {
+    previewPage === 'ai-settings' ? showDevAiPreview() : showDevFeaturePreview(previewPage);
+    document.getElementById('loadingScreen').style.display = 'none';
+    return;
+  }
   const { data: { session } } = await supabase.auth.getSession();
   if (isPasswordRecoveryUrl()) {
     passwordRecoveryMode = true;
@@ -247,6 +335,7 @@ window.enterWorkspace = async function(wsId) {
   document.getElementById('homeTitle').textContent = currentWS.name;
   document.getElementById('homeDate').textContent = new Date().toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
   document.getElementById('wsNameEdit').value = currentWS.name;
+  hydrateWorkspaceLocationInputs();
   document.getElementById('warningSite').value = currentWS.name;
   const name = user.user_metadata?.name || user.email.split('@')[0];
   document.getElementById('sidebarName').textContent = name;
@@ -268,16 +357,277 @@ window.goWorkspaces = function() {
   loadWorkspaces();
 };
 
-window.updateWSName = async function() {
+function hydrateWorkspaceLocationInputs() {
+  const address = document.getElementById('wsAddressEdit');
+  const lat = document.getElementById('wsLatitudeEdit');
+  const lng = document.getElementById('wsLongitudeEdit');
+  if (address) address.value = currentWS?.address || '';
+  if (lat) lat.value = currentWS?.latitude ?? '';
+  if (lng) lng.value = currentWS?.longitude ?? '';
+  renderSiteCoordinateResult();
+}
+
+function renderSiteCoordinateResult() {
+  const box = document.getElementById('siteCoordinateResult');
+  const text = document.getElementById('siteCoordinateText');
+  if (!box || !text) return;
+  const lat = Number(document.getElementById('wsLatitudeEdit')?.value);
+  const lng = Number(document.getElementById('wsLongitudeEdit')?.value);
+  const ready = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
+  box.classList.toggle('found', ready);
+  text.textContent = ready
+    ? `좌표 확인됨 · 위도 ${lat.toFixed(5)}, 경도 ${lng.toFixed(5)}`
+    : '주소를 입력하고 좌표를 확인해주세요.';
+}
+
+window.clearSiteCoordinateResult = function() {
+  const address = document.getElementById('wsAddressEdit')?.value.trim() || '';
+  if (address === (currentWS?.address || '')) return;
+  document.getElementById('wsLatitudeEdit').value = '';
+  document.getElementById('wsLongitudeEdit').value = '';
+  renderSiteCoordinateResult();
+};
+
+window.openSiteAddressSearch = function() {
+  const applyAddress = async (address, zonecode = '') => {
+    const input = document.getElementById('wsAddressEdit');
+    if (!input) return;
+    input.value = address;
+    document.getElementById('wsLatitudeEdit').value = '';
+    document.getElementById('wsLongitudeEdit').value = '';
+    renderSiteCoordinateResult();
+    const found = await findSiteCoordinates({ silent: true });
+    if (found) toast(`${zonecode ? `[${zonecode}] ` : ''}주소와 좌표를 확인했습니다. 현장 정보를 저장해주세요`, 'success');
+    else toast('주소는 선택했지만 좌표를 찾지 못했습니다. 다른 주소 결과를 선택해주세요', 'error');
+  };
+
+  if (getDevPreviewPage()) {
+    applyAddress('서울특별시 성동구 천호대로 416', '04808');
+    return;
+  }
+  if (!window.kakao?.Postcode) {
+    toast('주소 검색 서비스를 불러오지 못했습니다. 인터넷 연결 후 다시 시도해주세요', 'error');
+    return;
+  }
+  new window.kakao.Postcode({
+    oncomplete(data) {
+      const address = data.userSelectedType === 'R'
+        ? (data.roadAddress || data.address)
+        : (data.jibunAddress || data.address);
+      applyAddress(address, data.zonecode || '');
+    },
+  }).open();
+};
+
+window.findSiteCoordinates = async function(options = {}) {
+  const address = document.getElementById('wsAddressEdit')?.value.trim();
+  if (!address) { if (!options.silent) toast('현장 주소를 입력하세요', 'error'); return null; }
+  const btn = document.getElementById('siteGeocodeBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '좌표 확인 중...'; }
+  try {
+    const result = getDevPreviewPage()
+      ? { address, latitude: 37.5663, longitude: 127.0541 }
+      : await (async () => {
+          const { data, error } = await supabase.functions.invoke('site-weather', { body: { action: 'geocode', address } });
+          if (error || data?.error) throw new Error(error?.message || data?.error);
+          return data.result;
+        })();
+    document.getElementById('wsAddressEdit').value = result.address || address;
+    document.getElementById('wsLatitudeEdit').value = result.latitude;
+    document.getElementById('wsLongitudeEdit').value = result.longitude;
+    renderSiteCoordinateResult();
+    if (!options.silent) toast('현장 좌표를 찾았습니다. 저장 버튼을 눌러주세요', 'success');
+    return result;
+  } catch (error) {
+    if (!options.silent) toast(`좌표를 찾지 못했습니다: ${error.message}`, 'error');
+    return null;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔍 주소 검색'; }
+  }
+};
+
+window.updateWorkspaceInfo = async function() {
   const name = document.getElementById('wsNameEdit').value.trim();
   if (!name) { toast('현장명을 입력하세요', 'error'); return; }
-  const { error } = await supabase.from('workspaces').update({ name }).eq('id', currentWS.id);
+  const address = document.getElementById('wsAddressEdit')?.value.trim() || '';
+  let latitude = Number(document.getElementById('wsLatitudeEdit')?.value);
+  let longitude = Number(document.getElementById('wsLongitudeEdit')?.value);
+  if (address && (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !latitude || !longitude)) {
+    const found = await findSiteCoordinates({ silent: true });
+    if (!found) { toast('주소의 좌표를 먼저 확인해주세요', 'error'); return; }
+    latitude = Number(found.latitude); longitude = Number(found.longitude);
+  }
+  const payload = {
+    name,
+    address: address || null,
+    latitude: address ? latitude : null,
+    longitude: address ? longitude : null,
+  };
+  if (getDevPreviewPage()) {
+    Object.assign(currentWS, payload);
+    hydrateWorkspaceLocationInputs();
+    toast('미리보기에서 현장 정보가 저장됐습니다', 'success');
+    return;
+  }
+  const { error } = await supabase.from('workspaces').update(payload).eq('id', currentWS.id);
   if (error) { toast('저장 실패', 'error'); return; }
-  currentWS.name = name;
+  Object.assign(currentWS, payload);
   document.getElementById('sidebarWSName').textContent = name;
   document.getElementById('homeTitle').textContent = name;
   document.getElementById('warningSite').value = name;
-  toast('저장됐습니다', 'success');
+  wxForecast = null;
+  toast('현장 정보와 위치가 저장됐습니다', 'success');
+};
+
+window.updateWSName = window.updateWorkspaceInfo;
+
+window.openSiteLocationSettings = function() {
+  showPage('settings');
+  setTimeout(() => document.getElementById('siteLocationSettingsCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+};
+
+// ═══════════════════════════════════════════════
+// 사용자별 AI API 설정
+// ═══════════════════════════════════════════════
+const AI_PROVIDER_LABEL = { claude: 'Claude', openai: 'GPT', gemini: 'Gemini' };
+const AI_SETUP_CODES = new Set(['AI_KEY_REQUIRED', 'AI_KEY_INVALID', 'AI_BILLING_REQUIRED', 'AI_QUOTA_EXCEEDED']);
+
+async function invokeEdgeJson(functionName, body) {
+  const { data, error } = await supabase.functions.invoke(functionName, { body });
+  if (error) {
+    let payload = null;
+    try { payload = error.context ? await error.context.json() : null; } catch {}
+    const err = new Error(payload?.error || error.message || '서버 요청에 실패했습니다.');
+    err.code = payload?.code || 'EDGE_FUNCTION_ERROR';
+    throw err;
+  }
+  if (data?.error) {
+    const err = new Error(data.error);
+    err.code = data.code || 'EDGE_FUNCTION_ERROR';
+    throw err;
+  }
+  return data;
+}
+
+function showAiRequiredWarning(message, code = 'AI_KEY_REQUIRED') {
+  const el = document.getElementById('aiRequiredMessage');
+  if (el) el.textContent = message || 'AI 분석을 사용하려면 개인 API 키를 먼저 등록해야 합니다.';
+  openModal('aiRequiredModal');
+  if (AI_SETUP_CODES.has(code)) aiSettingsState = null;
+}
+
+window.goToAiSettings = function() {
+  closeModal('aiRequiredModal');
+  showPage('settings');
+  setTimeout(() => document.getElementById('aiSettingsCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+};
+
+function handleAiError(error, prefix = '분석 실패') {
+  if (AI_SETUP_CODES.has(error?.code)) {
+    showAiRequiredWarning(error.message, error.code);
+  } else {
+    toast(`${prefix}: ${error?.message || '알 수 없는 오류'}`, 'error');
+  }
+}
+
+window.loadAiSettings = async function() {
+  if (!user) return;
+  const warning = document.getElementById('aiSettingsWarning');
+  if (warning) { warning.style.display = ''; warning.textContent = 'API 설정을 확인하는 중입니다...'; }
+  try {
+    aiSettingsState = await invokeEdgeJson('ai-settings', { action: 'status' });
+    renderAiSettings();
+  } catch (error) {
+    if (warning) {
+      warning.style.display = '';
+      warning.textContent = 'API 설정을 불러오지 못했습니다: ' + error.message;
+    }
+  }
+};
+
+function renderAiSettings() {
+  if (!aiSettingsState) return;
+  const preferred = aiSettingsState.preferredProvider || 'claude';
+  const configured = Object.values(aiSettingsState.providers || {}).filter(item => item.configured);
+  document.querySelectorAll('.ai-provider-card').forEach(card => card.classList.toggle('selected', card.dataset.provider === preferred));
+  const selected = document.querySelector(`input[name="aiProvider"][value="${preferred}"]`);
+  if (selected) selected.checked = true;
+
+  ['claude', 'openai', 'gemini'].forEach(provider => {
+    const status = aiSettingsState.providers?.[provider] || { configured: false };
+    const el = document.getElementById(`aiStatus-${provider}`);
+    if (!el) return;
+    el.className = 'ai-provider-status' + (status.status === 'error' ? ' error' : status.configured ? ' ok' : '');
+    if (!status.configured) el.textContent = '미설정 — API 키를 입력해주세요.';
+    else if (status.status === 'error') el.textContent = status.lastError || `오류 — ${status.keyHint}`;
+    else el.textContent = `연결됨 · ${status.keyHint}${provider === preferred ? ' · 현재 사용' : ''}`;
+  });
+
+  const warning = document.getElementById('aiSettingsWarning');
+  if (!warning) return;
+  if (!configured.length) {
+    warning.style.display = '';
+    warning.textContent = '⚠️ 등록된 API가 없어 AI 분석을 사용할 수 없습니다. 아래 제공자 중 하나의 키를 등록해주세요.';
+  } else if (aiSettingsState.providers?.[preferred]?.status === 'error') {
+    warning.style.display = '';
+    warning.textContent = '⚠️ 현재 선택한 API에 오류가 있습니다. 연결을 확인하거나 정상인 다른 제공자를 선택해주세요.';
+  } else {
+    warning.style.display = 'none';
+  }
+}
+
+window.saveAiKey = async function(provider) {
+  const input = document.getElementById(`aiKey-${provider}`);
+  const apiKey = input?.value.trim();
+  if (!apiKey) { toast('API 키를 붙여넣어 주세요', 'error'); input?.focus(); return; }
+  const button = input?.nextElementSibling;
+  if (button) { button.disabled = true; button.textContent = '확인 중...'; }
+  try {
+    const result = await invokeEdgeJson('ai-settings', { action: 'save', provider, apiKey });
+    input.value = '';
+    toast(result.message || 'API 키가 저장됐습니다', 'success');
+    await loadAiSettings();
+  } catch (error) {
+    toast(error.message, 'error');
+  } finally {
+    if (button) { button.disabled = false; button.textContent = '저장'; }
+  }
+};
+
+window.testAiKey = async function(provider) {
+  try {
+    const result = await invokeEdgeJson('ai-settings', { action: 'test', provider });
+    toast(result.message || 'API 연결이 정상입니다', 'success');
+    await loadAiSettings();
+  } catch (error) {
+    toast(error.message, 'error');
+    await loadAiSettings();
+  }
+};
+
+window.selectAiProvider = async function(provider) {
+  if (!aiSettingsState?.providers?.[provider]?.configured) {
+    toast(`${AI_PROVIDER_LABEL[provider]} API 키를 먼저 저장해주세요`, 'error');
+    renderAiSettings();
+    document.getElementById(`aiKey-${provider}`)?.focus();
+    return;
+  }
+  try {
+    await invokeEdgeJson('ai-settings', { action: 'select', provider });
+    aiSettingsState.preferredProvider = provider;
+    renderAiSettings();
+    toast(`${AI_PROVIDER_LABEL[provider]}로 분석합니다`, 'success');
+  } catch (error) { toast(error.message, 'error'); renderAiSettings(); }
+};
+
+window.deleteAiKey = async function(provider) {
+  if (!aiSettingsState?.providers?.[provider]?.configured) { toast('저장된 API 키가 없습니다'); return; }
+  if (!confirm(`${AI_PROVIDER_LABEL[provider]} API 키를 삭제하시겠습니까?`)) return;
+  try {
+    await invokeEdgeJson('ai-settings', { action: 'delete', provider });
+    toast('API 키를 삭제했습니다', 'success');
+    await loadAiSettings();
+  } catch (error) { toast(error.message, 'error'); }
 };
 
 // ═══════════════════════════════════════════════
@@ -306,7 +656,10 @@ window.showPage = function(id) {
   if (id === 'contractors') { renderContractorTags(); renderBusinessLicenseStatus(); }
   document.getElementById('mainContent')?.scrollTo(0, 0);
   if (id === 'settings') {
-    loadMembers();
+    if (!getDevPreviewPage()) {
+      loadMembers();
+      loadAiSettings();
+    }
     // 재판정 버튼 건수 업데이트
     const btn = document.getElementById('reanalyzeLegalBtn');
     if (btn) btn.textContent = `⚖️ 법정물질 일괄 재판정 (${msdsRecords.length}건)`;
@@ -383,6 +736,11 @@ async function insertContractor(name) {
   const cleanName = name.trim().replace(/\s+/g, ' ');
   const existing = contractors.find(c => normalizeContractorName(c.name) === normalizeContractorName(cleanName));
   if (existing) return { contractor: existing, created: false };
+  if (getDevPreviewPage()) {
+    const contractor = { id: `preview-con-${Date.now()}`, name: cleanName };
+    contractors.push(contractor);
+    return { contractor, created: true };
+  }
   const { data, error } = await supabase.from('contractors')
     .insert({ workspace_id: currentWS.id, name: cleanName }).select().single();
   if (error) throw error;
@@ -502,8 +860,23 @@ window.openContractorPage = function(filter = 'all') {
 };
 
 window.focusNewContractor = function() {
+  toggleNewContractorForm(true);
   document.getElementById('newContractorCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   setTimeout(() => document.getElementById('newContractor')?.focus(), 250);
+};
+
+window.toggleNewContractorForm = function(force) {
+  const panel = document.getElementById('newContractorCard');
+  const btn = document.getElementById('contractorAddToggleBtn');
+  if (!panel) return;
+  const open = typeof force === 'boolean' ? force : panel.hidden;
+  panel.hidden = !open;
+  if (btn) {
+    btn.textContent = open ? '등록 취소' : '+ 협력사 등록';
+    btn.classList.toggle('btn-secondary', open);
+    btn.classList.toggle('btn-primary', !open);
+  }
+  if (open) setTimeout(() => document.getElementById('newContractor')?.focus(), 50);
 };
 
 window.prefillNewContractor = function() {
@@ -593,7 +966,8 @@ window.addContractor = async function() {
     document.getElementById('conMgrSearch').value = '';
     setContractorFilter('all');
     populateContractorSelects();
-    toast(`${contractor.name} 등록 완료`, 'success');
+    toggleNewContractorForm(false);
+    toast(`${contractor.name} 등록 완료 — 목록에서 공종·등록증·링크를 관리하세요`, 'success');
   } catch (error) {
     toast('협력사 등록 실패: ' + error.message, 'error');
   }
@@ -1153,7 +1527,7 @@ function renderMsdsFileQueue() {
   if (msdsFileQueue.length === 0) { el.style.display = 'none'; return; }
   el.style.display = 'flex';
   const icons = { waiting:'📄', parsing:'⏳', done:'✅', error:'❌' };
-  const st = { waiting:'대기 중', parsing:'Claude AI 분석 중...', done:'완료 — 저장됨', error:'' };
+  const st = { waiting:'대기 중', parsing:'AI 분석 중...', done:'완료 — 저장됨', error:'' };
   el.innerHTML = msdsFileQueue.map(item => {
     const guess = (item.guessCon || item.guessWork) ? ` · ${[item.guessCon, item.guessWork].filter(Boolean).join(' / ')}` : '';
     const statusText = item.status === 'error' ? '오류: ' + (item.error||'알수없음') : (st[item.status] + (item.status === 'waiting' ? guess : ''));
@@ -1240,6 +1614,11 @@ window.parseAllFiles = async function() {
         if (rollbackError) console.error('파일 업로드 실패 후 레코드 정리 실패:', rollbackError.message);
       }
       item.status = 'error'; item.error = err.message;
+      if (AI_SETUP_CODES.has(err.code)) {
+        renderMsdsFileQueue(); updateMsdsBatchBar();
+        handleAiError(err);
+        break;
+      }
     }
     renderMsdsFileQueue(); updateMsdsBatchBar();
     await new Promise(r => setTimeout(r, 300));
@@ -1254,9 +1633,7 @@ window.parseAllFiles = async function() {
 async function callParseFunction(base64Data, mediaType) {
   const mb = (base64Data.length * 0.75 / 1024 / 1024).toFixed(1);
   if (mb > 20) throw new Error(`파일이 너무 큽니다 (${mb}MB)`);
-  const { data, error } = await supabase.functions.invoke('parse-msds', { body: { fileBase64: base64Data, mediaType } });
-  if (error) throw new Error('파싱 오류: ' + error.message);
-  if (data.error) throw new Error(data.error);
+  const data = await invokeEdgeJson('parse-msds', { fileBase64: base64Data, mediaType });
   return data.result;
 }
 
@@ -1782,13 +2159,19 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
 
   const hList = decodeHCodes(r.h_codes);
   const pRaw = decodePCodes(r.p_codes);
-  // A4 전면은 전체 기재, 축소 라벨은 법정 허용 범위(예방·대응·저장·폐기 각 1개 포함 6개)로 축약
-  const { list: pList, condensed } = size === 'a4' ? { list: pRaw, condensed: false } : condensePCodes(pRaw);
-  const hHtml = hList.length ? hList.map(h => `<li><span style="color:#888;font-size:0.85em;">[${h.code}]</span> ${h.text}</li>`).join('') : '<li>해당 정보 없음</li>';
+  // 한 라벨의 안전영역을 넘지 않도록 크기별 대표 문구 수를 제한한다.
+  // 예방조치문구는 예방·대응·저장·폐기 범주가 빠지지 않도록 condensePCodes가 먼저 선별한다.
+  const hLimit = { a4: 8, a5: 5, a6: 3 }[size] || 8;
+  const hShown = hList.slice(0, hLimit);
+  const hCondensed = hShown.length < hList.length;
+  const { list: pList, condensed: pCondensed } = condensePCodes(pRaw);
+  const autoFit = hCondensed || pCondensed;
+  const hHtml = (hShown.length ? hShown.map(h => `<li><span style="color:#888;font-size:0.85em;">[${h.code}]</span> ${h.text}</li>`).join('') : '<li>해당 정보 없음</li>')
+    + (hCondensed ? `<li class="wl-condensed-note" data-kind="hazard">그 밖의 유해·위험 문구 ${hList.length - hShown.length}건은 MSDS 참조</li>` : '');
   const pHtml = (pList.length ? pList.map(p => `<li><span style="color:#888;font-size:0.85em;">[${p.code}]</span> ${p.text}</li>`).join('') : '<li>해당 정보 없음</li>')
-    + (condensed ? '<li style="font-weight:700;">그 밖의 예방조치 문구는 MSDS 참조</li>' : '');
+    + (pCondensed ? `<li class="wl-condensed-note" data-kind="precaution">그 밖의 예방조치 문구 ${pRaw.length - pList.length}건은 MSDS 참조</li>` : '');
 
-  return `<div class="wlabel wlabel--${size}">
+  return `<div class="wlabel wlabel--${size}${autoFit ? ' wl-auto-fit' : ''}" data-warning-autofit="true">
     <div class="wl-top">(산업안전보건법 제115조 규정에 의한 경고표지)</div>
     <div class="wl-name-box">${r.product_name}</div>
     <div class="wl-picto-row">${pictoHtml}</div>
@@ -1850,6 +2233,8 @@ function warnLabelCss() {
     .wlabel--a5 .wl-list{font-size:9.5px;line-height:1.5;padding:4px 7px 4px 18px;column-gap:8px;}
     .wlabel--a6 .wl-list{font-size:8.5px;line-height:1.4;padding:3px 6px 3px 15px;columns:1;}
     .wl-list li{break-inside:avoid;}
+    .wl-condensed-note{font-weight:800;color:#7c2d12;}
+    .wl-auto-fit .wl-list{line-height:1.48;}
     .wl-pe{padding:6px 11px;font-size:11.5px;font-weight:600;columns:2;column-gap:12px;}
     .wlabel--a5 .wl-pe{font-size:9.5px;padding:4px 7px;}
     .wl-special{background:#FFF3CD;border:1.5px solid #FFC107;border-radius:4px;padding:7px;margin:7px 0;font-size:11.5px;font-weight:800;color:#856404;text-align:center;}
@@ -1871,6 +2256,33 @@ function warnLabelCss() {
     .wl-qr-img svg{width:100%;height:100%;display:block;}
     .wl-qr-cap{font-size:8.5px;font-weight:700;color:#333;line-height:1.3;margin-top:3px;}
   `;
+}
+
+function warningAutoFitPrintScript() {
+  return `<script>
+    function fitWarningLabels(){
+      document.querySelectorAll('[data-warning-autofit="true"]').forEach(function(label){
+        var lists=Array.from(label.querySelectorAll('.wl-list'));
+        var removed={hazard:0,precaution:0};
+        var guard=40;
+        while(label.scrollHeight>label.clientHeight&&guard-->0){
+          var target=lists.slice().sort(function(a,b){return b.children.length-a.children.length})[0];
+          var items=Array.from(target.children).filter(function(li){return !li.classList.contains('wl-condensed-note')});
+          if(!target||items.length<=1)break;
+          var kind=target.parentElement.querySelector('.wl-block-head').textContent.indexOf('예방')>=0?'precaution':'hazard';
+          items[items.length-1].remove();removed[kind]++;
+        }
+        Object.keys(removed).forEach(function(kind){
+          if(!removed[kind])return;
+          var list=kind==='hazard'?lists[0]:lists[1];
+          var note=list.querySelector('[data-kind="'+kind+'"]');
+          if(note){note.textContent=note.textContent.replace(/(\\d+)건/,function(_,n){return Number(n)+removed[kind]+'건'});}
+          else{note=document.createElement('li');note.className='wl-condensed-note';note.textContent='그 밖의 '+(kind==='hazard'?'유해·위험':'예방조치')+' 문구 '+removed[kind]+'건은 MSDS 참조';list.appendChild(note);}
+        });
+      });
+    }
+    window.addEventListener('load',function(){requestAnimationFrame(fitWarningLabels)});
+  <\/script>`;
 }
 
 // 라벨 목록 → A4 분할 시트 HTML로 묶기
@@ -1922,7 +2334,7 @@ window.printWarnings = function() {
     *{box-sizing:border-box;}
     body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;}
     ${warnLabelCss()}
-  </style></head><body>${sheets.join('')}</body></html>`);
+  </style></head><body>${sheets.join('')}${warningAutoFitPrintScript()}</body></html>`);
   const cfg = WARN_SIZES[warnLabelSize];
   const copyTxt = warnCopies > 1 ? ` × ${warnCopies}매` : '';
   toast(`${records.length}건${copyTxt} · ${cfg.name} · A4 ${sheets.length}장 인쇄 준비 완료`, 'success');
@@ -1986,7 +2398,7 @@ window.printAllWarningsByContractor = function() {
     .cover-name{font-size:48px;font-weight:900;color:#111;border:4px solid #111;border-radius:10px;padding:30px 50px;letter-spacing:2px;}
     .cover-sub{font-size:15px;color:#555;margin-top:20px;font-weight:600;}
     ${warnLabelCss()}
-  </style></head><body>${htmlPages.join('')}</body></html>`);
+  </style></head><body>${htmlPages.join('')}${warningAutoFitPrintScript()}</body></html>`);
   toast(`협력사 ${groups.length}곳 · 물질 ${sorted.length}건 · ${WARN_SIZES[warnLabelSize].name} 인쇄 준비 완료 (양면인쇄 설정을 켜주세요)`, 'success');
 };
 
@@ -2461,8 +2873,7 @@ window.analyzeMeasure = async function() {
   const btn = document.getElementById('measureAnalyzeBtn');
   btn.disabled = true; btn.textContent = '🤖 AI 분석 중...';
   try {
-    const { data, error } = await supabase.functions.invoke('parse-msds', {
-      body: {
+    const data = await invokeEdgeJson('parse-msds', {
         fileBase64: measureFileB64, mediaType: 'application/pdf',
         mode: 'measure',
         prompt: `이 작업환경측정 결과 보고서에서 분진 측정결과와 소음 측정결과를 추출하세요. JSON만 응답:
@@ -2474,9 +2885,7 @@ window.analyzeMeasure = async function() {
   "noiseExceeded": false,
   "mixedExceeded": false
 }`
-      }
     });
-    if (error || data.error) throw new Error((error||data).message || data.error);
     currentMeasureData = { round, period, ...data.result };
     closeModal('measureUploadModal');
     showMeasureResult(currentMeasureData);
@@ -2493,7 +2902,7 @@ window.analyzeMeasure = async function() {
       console.error('측정결과 저장 실패:', saveErr);
       toast('분석은 완료됐지만 저장에 실패했습니다. 다운로드로 결과를 보관해주세요.', 'warn');
     }
-  } catch (err) { toast('분석 실패: ' + err.message, 'error'); }
+  } catch (err) { handleAiError(err); }
   finally { btn.disabled = false; btn.textContent = '🤖 AI 분석 시작'; }
 };
 
@@ -2741,8 +3150,7 @@ window.analyzeHealth = async function() {
   for (const item of healthFileQueue) {
     item.status = 'parsing'; renderHealthFileQueue();
     try {
-      const { data, error } = await supabase.functions.invoke('parse-msds', {
-        body: {
+      const data = await invokeEdgeJson('parse-msds', {
           fileBase64: item.data, mediaType: item.mediaType,
           mode: 'health',
           prompt: `이 건강진단 결과 문서에서 근로자별 정보를 추출하세요. 여러 명이면 모두 추출. JSON 배열만 응답:
@@ -2755,13 +3163,14 @@ window.analyzeHealth = async function() {
   "resultCode":"A|B|C1|C2|CN|D1|D2|DN|R|U|V",
   "hazardResult":"유해인자별 판정이 A가 아닌 것만. 예: 소음(우) D1, 소음(좌) C1"
 }]`
-        }
       });
-      if (error || data.error) throw new Error((error||data).message || data.error);
       const parsed = Array.isArray(data.result) ? data.result : [data.result];
       healthConfirmData.push(...parsed);
       item.status = 'done';
-    } catch (err) { item.status = 'error'; console.error(err); }
+    } catch (err) {
+      item.status = 'error'; item.error = err.message; console.error(err);
+      if (AI_SETUP_CODES.has(err.code)) { handleAiError(err); break; }
+    }
     renderHealthFileQueue();
     await new Promise(r => setTimeout(r, 200));
   }
@@ -3765,8 +4174,6 @@ window.toggleRoutineDone = async function(taskId, done) {
 // ═══════════════════════════════════════════════
 // 사업자등록증 관리
 // ═══════════════════════════════════════════════
-let businessLicenses = [];
-
 async function loadBusinessLicenses() {
   const { data, error } = await supabase.from('business_licenses')
     .select('*, contractor:contractor_id(name)').eq('workspace_id', currentWS.id);
@@ -5049,12 +5456,117 @@ function wxStage(fl) {
 let wxForecast = null;   // {hours:[{hour,feel}]} — 기상청 예보 (엣지펑션)
 let wxTab = 'forecast';
 let wxPosterCache = {};
+let wxPosterSvg = '';
+let wxPosterObjectUrl = '';
 
 async function fetchWxForecast() {
-  const { data, error } = await supabase.functions.invoke('kma-senta', { body: {} });
+  if (getDevPreviewPage()) {
+    return {
+      date: today(), latitude: currentWS.latitude, longitude: currentWS.longitude, address: currentWS.address,
+      hours: [
+        { hour: 7, feel: 28.4, temp: 27.1, humidity: 71 }, { hour: 9, feel: 30.2, temp: 29.0, humidity: 67 },
+        { hour: 11, feel: 32.7, temp: 31.3, humidity: 62 }, { hour: 13, feel: 34.4, temp: 32.5, humidity: 61 },
+        { hour: 15, feel: 35.6, temp: 33.0, humidity: 64 }, { hour: 17, feel: 34.1, temp: 31.8, humidity: 68 },
+        { hour: 19, feel: 31.5, temp: 29.7, humidity: 72 },
+      ], source: 'preview',
+    };
+  }
+  const latitude = Number(currentWS?.latitude);
+  const longitude = Number(currentWS?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !latitude || !longitude) {
+    throw new Error('현장 주소와 좌표를 먼저 설정해주세요');
+  }
+  const { data, error } = await supabase.functions.invoke('site-weather', {
+    body: { action: 'forecast', address: currentWS.address, latitude, longitude },
+  });
   if (error || data?.error) throw new Error(error?.message || data.error);
   return data.result;
 }
+
+function renderWxSiteSummary() {
+  const name = document.getElementById('wxSiteName');
+  const address = document.getElementById('wxSiteAddress');
+  const warning = document.getElementById('wxLocationWarning');
+  if (!name || !address || !warning) return false;
+  const latitude = Number(currentWS?.latitude);
+  const longitude = Number(currentWS?.longitude);
+  const ready = !!currentWS?.address && Number.isFinite(latitude) && Number.isFinite(longitude) && latitude !== 0 && longitude !== 0;
+  name.textContent = currentWS?.name || '현장명 미설정';
+  address.textContent = ready
+    ? `${currentWS.address} · ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+    : '저장된 현장 주소·좌표가 없습니다.';
+  warning.style.display = ready ? 'none' : 'flex';
+  return ready;
+}
+
+function wxPosterGuidance(stage) {
+  if (stage.includes('전면')) return ['즉시 모든 작업을 중지하세요', '근로자를 시원한 장소로 이동', '응급 증상자를 즉시 확인하세요'];
+  if (stage.includes('옥외')) return ['옥외 작업을 중지하세요', '작업 시간대를 조정하세요', '취약 근로자를 우선 보호하세요'];
+  if (stage.includes('20분')) return ['매 2시간마다 20분 이상 휴식', '시원한 물을 자주 섭취', '그늘·휴게시설 상태를 확인하세요'];
+  if (stage.includes('주의')) return ['물·그늘·휴식 준비상태 확인', '취약 근로자 건강상태 확인', '체감온도를 수시로 확인하세요'];
+  return ['물을 충분히 섭취하세요', '작업 전 건강상태를 확인하세요', '기온 상승에 대비하세요'];
+}
+
+function buildWxPosterSvg(fc) {
+  const nowH = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
+  const cur = fc.hours.reduce((best, h) => Math.abs(h.hour - nowH) < Math.abs(best.hour - nowH) ? h : best, fc.hours[0]);
+  const max = fc.hours.reduce((best, h) => h.feel > best.feel ? h : best, fc.hours[0]);
+  const stage = wxStage(cur.feel);
+  const guide = wxPosterGuidance(stage.label);
+  const shown = fc.hours.filter(h => h.hour >= 7 && h.hour <= 19).slice(0, 7);
+  const cellW = 104;
+  const hourCells = shown.map((h, i) => {
+    const x = 64 + i * (cellW + 12);
+    return `<g transform="translate(${x} 545)"><rect width="${cellW}" height="132" rx="18" fill="${wxColor(h.feel)}"/><text x="${cellW/2}" y="40" text-anchor="middle" fill="white" font-size="22" font-weight="700">${h.hour}시</text><text x="${cellW/2}" y="86" text-anchor="middle" fill="white" font-size="34" font-weight="900">${Math.round(h.feel)}°</text><text x="${cellW/2}" y="114" text-anchor="middle" fill="white" font-size="15">체감</text></g>`;
+  }).join('');
+  const safeName = escapeHtml(currentWS?.name || '현장');
+  const safeAddress = escapeHtml((currentWS?.address || fc.address || '').slice(0, 52));
+  const dateLabel = new Date(`${fc.date || today()}T00:00:00`).toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200" viewBox="0 0 900 1200">
+    <rect width="900" height="1200" fill="#f8fafc"/>
+    <rect x="34" y="34" width="832" height="1132" rx="32" fill="white" stroke="#e2e8f0" stroke-width="3"/>
+    <rect x="34" y="34" width="832" height="176" rx="32" fill="#0f172a"/>
+    <text x="72" y="92" fill="#fbbf24" font-size="24" font-weight="800">혹서기 안전 예보</text>
+    <text x="72" y="142" fill="white" font-size="42" font-weight="900">${safeName}</text>
+    <text x="72" y="180" fill="#cbd5e1" font-size="18">${safeAddress}</text>
+    <text x="828" y="92" text-anchor="end" fill="white" font-size="20" font-weight="700">${dateLabel}</text>
+    <text x="72" y="286" fill="#64748b" font-size="22" font-weight="700">현재 체감온도</text>
+    <text x="72" y="402" fill="${stage.color}" font-size="118" font-weight="900">${cur.feel.toFixed(1)}°</text>
+    <rect x="545" y="284" width="255" height="82" rx="41" fill="${stage.color}"/>
+    <text x="672" y="337" text-anchor="middle" fill="white" font-size="25" font-weight="900">${stage.label}</text>
+    <text x="545" y="405" fill="#475569" font-size="22">오늘 최고 <tspan fill="${wxColor(max.feel)}" font-weight="900">${max.feel.toFixed(1)}°C</tspan> · ${max.hour}시</text>
+    <line x1="64" x2="836" y1="490" y2="490" stroke="#e2e8f0" stroke-width="2"/>
+    ${hourCells}
+    <rect x="64" y="730" width="772" height="312" rx="28" fill="#fff7ed" stroke="#fed7aa" stroke-width="2"/>
+    <text x="104" y="792" fill="#9a3412" font-size="28" font-weight="900">오늘의 현장 조치</text>
+    ${guide.map((g, i) => `<circle cx="112" cy="${850+i*62}" r="15" fill="#f97316"/><text x="112" y="${856+i*62}" text-anchor="middle" fill="white" font-size="18" font-weight="900">${i+1}</text><text x="148" y="${857+i*62}" fill="#431407" font-size="24" font-weight="700">${escapeHtml(g)}</text>`).join('')}
+    <text x="64" y="1100" fill="#64748b" font-size="17">체감온도는 현장 저장 좌표(${Number(fc.latitude).toFixed(4)}, ${Number(fc.longitude).toFixed(4)}) 기준 · 출처 Open-Meteo</text>
+    <text x="836" y="1132" text-anchor="end" fill="#94a3b8" font-size="16">현장관리시스템 자동 생성</text>
+  </svg>`;
+}
+
+function renderWxSitePoster(fc) {
+  wxPosterSvg = buildWxPosterSvg(fc);
+  if (wxPosterObjectUrl) URL.revokeObjectURL(wxPosterObjectUrl);
+  wxPosterObjectUrl = URL.createObjectURL(new Blob([wxPosterSvg], { type: 'image/svg+xml;charset=utf-8' }));
+  document.getElementById('wxLatestPoster').innerHTML = `<img class="wx-site-poster" src="${wxPosterObjectUrl}" alt="${escapeHtml(currentWS?.name || '현장')} 혹서기 예보 포스터"><div style="font-size:12px;color:var(--text3);margin-top:8px;">저장된 현장 좌표를 기준으로 생성했습니다. PNG로 저장해 카카오톡 등에 공유할 수 있습니다.</div>`;
+  document.getElementById('wxDownloadPosterBtn').style.display = 'inline-flex';
+}
+
+window.downloadWxSitePoster = function() {
+  if (!wxPosterSvg) { toast('포스터를 먼저 생성해주세요', 'error'); return; }
+  const url = URL.createObjectURL(new Blob([wxPosterSvg], { type: 'image/svg+xml;charset=utf-8' }));
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 900; canvas.height = 1200;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+    canvas.toBlob(blob => blob && downloadBlob(blob, `혹서기_예보_${currentWS?.name || '현장'}_${today()}.png`), 'image/png');
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast('포스터 저장에 실패했습니다', 'error'); };
+  img.src = url;
+};
 
 async function fetchWxPosterList(kind) {
   if (!wxPosterCache[kind]) {
@@ -5087,7 +5599,7 @@ function wxHourlyHtml(fc) {
       </div>
     </div>
     <div class="wx-hours">${strip}</div>
-    <div style="font-size:11.5px;color:var(--text3);margin-top:8px;">기준: 체감 31°C↑ 주의 · 33°C↑ 매 2시간 20분 휴식 · 35°C↑ 옥외작업 중지 · 38°C↑ 전면중지 · 출처: 기상청 건설현장 체감온도(A48)</div>`;
+    <div style="font-size:11.5px;color:var(--text3);margin-top:8px;">기준: 체감 31°C↑ 주의 · 33°C↑ 매 2시간 20분 휴식 · 35°C↑ 옥외작업 중지 · 38°C↑ 전면중지 · ${escapeHtml(currentWS?.name || '현재 현장')} 저장 좌표 기준</div>`;
 }
 
 async function loadDashWeather() {
@@ -5099,41 +5611,31 @@ async function loadDashWeather() {
     if (!wxForecast) wxForecast = await fetchWxForecast();
     card.style.display = 'block';
     body.innerHTML = head + wxHourlyHtml(wxForecast);
-  } catch {
-    // 엣지펑션 미배포/키 미설정 시 → 최신 예보 포스터 썸네일로 대체
-    try {
-      const list = await fetchWxPosterList('forecast');
-      if (!list.length) { card.style.display = 'none'; return; }
-      card.style.display = 'block';
-      body.innerHTML = head + `<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">
-        <img src="${list[0].download_url}" style="display:block;width:120px;max-width:100%;height:auto;border-radius:8px;border:1px solid var(--border);flex-shrink:0;">
-        <div style="font-size:13px;color:var(--text2);min-width:0;flex:1;">최신 예보 포스터가 도착했어요.<br>클릭해서 크게 보고 카톡으로 공유하세요.</div>
-      </div>`;
-    } catch { card.style.display = 'none'; }
-  }
+  } catch { card.style.display = 'none'; }
 }
 
 window.loadWeatherPage = async function(force) {
   if (force) { wxForecast = null; wxPosterCache = {}; }
-  // ① 최신 예보 포스터 크게
+  const ready = renderWxSiteSummary();
   const latest = document.getElementById('wxLatestPoster');
-  try {
-    const list = await fetchWxPosterList('forecast');
-    if (list.length) {
-      latest.innerHTML = `<img src="${list[0].download_url}" style="max-width:min(480px,100%);border-radius:12px;border:1.5px solid var(--border);cursor:pointer;" onclick="window.open('${list[0].download_url}','_blank')">
-        <div style="font-size:12px;color:var(--text3);margin-top:6px;">${list[0].name} · 클릭하면 원본 (길게 눌러 카톡 공유)</div>`;
-    } else latest.innerHTML = '<div class="mp-empty">예보 포스터가 아직 없습니다</div>';
-  } catch (e) { latest.innerHTML = `<div class="mp-empty">${e.message}</div>`; }
-  // ② 시간별 예보 (엣지펑션 있을 때만)
   const el = document.getElementById('wxTodayBody');
-  try {
-    if (!wxForecast) wxForecast = await fetchWxForecast();
-    document.getElementById('wxHourlyCard').style.display = 'block';
-    el.innerHTML = wxHourlyHtml(wxForecast);
-  } catch (e) {
-    el.innerHTML = `<div class="mp-empty" style="padding:14px;">시간별 예보 미사용 — kma-senta 엣지펑션 배포 + KMA_API_KEY 등록 시 표시됩니다<br><span style="font-size:11px;color:var(--text3);">(${e.message})</span></div>`;
+  const downloadBtn = document.getElementById('wxDownloadPosterBtn');
+  if (!ready) {
+    latest.innerHTML = '<div class="mp-empty">현장 주소를 설정하면 이곳에 현장 전용 포스터가 생성됩니다.</div>';
+    el.innerHTML = '<div class="mp-empty" style="padding:14px;">현장 위치 설정 후 시간별 체감온도를 확인할 수 있습니다.</div>';
+    downloadBtn.style.display = 'none';
+  } else {
+    try {
+      if (!wxForecast) wxForecast = await fetchWxForecast();
+      renderWxSitePoster(wxForecast);
+      document.getElementById('wxHourlyCard').style.display = 'block';
+      el.innerHTML = wxHourlyHtml(wxForecast);
+    } catch (e) {
+      latest.innerHTML = `<div class="mp-empty">현장 포스터를 만들지 못했습니다<br><span style="font-size:11px;">${escapeHtml(e.message)}</span></div>`;
+      el.innerHTML = `<div class="mp-empty" style="padding:14px;">시간별 예보를 불러오지 못했습니다<br><span style="font-size:11px;">${escapeHtml(e.message)}</span></div>`;
+      downloadBtn.style.display = 'none';
+    }
   }
-  // ③ 아카이브
   loadWxPosters(force);
 };
 
