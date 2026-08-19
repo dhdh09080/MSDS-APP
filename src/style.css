@@ -2549,6 +2549,17 @@ details > summary::-webkit-details-marker {
   overflow: hidden;
 }
 
+.warn-autofit-note {
+  margin-bottom: 9px;
+  padding: 8px 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-sm);
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
 .warn-preview-scroll {
   max-height: 600px;
   overflow-y: auto;
@@ -2642,6 +2653,15 @@ details > summary::-webkit-details-marker {
   padding: 12px 14px 12px 32px;
   font-size: 14px;
   line-height: 1.7;
+}
+
+.wl-condensed-note {
+  color: #7c2d12;
+  font-weight: 800;
+}
+
+.wl-auto-fit .wl-list {
+  line-height: 1.48;
 }
 
 .wl-pe {
@@ -3354,6 +3374,10 @@ details > summary::-webkit-details-marker {
     grid-template-columns: 1fr 1fr;
   }
 
+  .contractor-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .stat-card {
     padding: 13px 14px;
   }
@@ -3366,6 +3390,48 @@ details > summary::-webkit-details-marker {
     padding: 13px 20px;
     font-size: 15px;
   }
+}
+
+/* ═══ 사용자별 AI API 설정 ═══ */
+.ai-settings-card { border: 1.5px solid #bfdbfe; background: linear-gradient(180deg,#fff 0%,#f8fbff 100%); }
+.ai-settings-title { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.ai-security-badge { padding:5px 9px; border-radius:999px; background:#ecfdf5; color:#047857; font-size:11px; font-weight:800; white-space:nowrap; }
+.ai-settings-warning { margin-bottom:14px; padding:12px 14px; border:1px solid #fbbf24; border-radius:10px; background:#fffbeb; color:#92400e; font-size:13px; font-weight:700; line-height:1.55; }
+.ai-privacy-notice { display:flex; gap:8px; align-items:flex-start; margin-bottom:14px; padding:11px 13px; border:1px solid #fecaca; border-radius:10px; background:#fff7f7; color:#991b1b; font-size:12px; line-height:1.55; }
+.ai-privacy-notice b { white-space:nowrap; }
+.ai-provider-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:14px; }
+.ai-provider-card { border:1.5px solid var(--border); border-radius:12px; padding:14px; background:#fff; transition:border-color .15s,box-shadow .15s; }
+.ai-provider-card.selected { border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+.ai-provider-select { display:flex; align-items:flex-start; gap:9px; cursor:pointer; margin-bottom:10px; }
+.ai-provider-select input { margin-top:4px; accent-color:var(--primary); width:16px; height:16px; }
+.ai-provider-select span { display:flex; flex-direction:column; gap:2px; }
+.ai-provider-select b { font-size:15px; color:var(--text); }
+.ai-provider-select small { font-size:11px; color:var(--text3); }
+.ai-provider-status { min-height:34px; margin-bottom:9px; padding:7px 9px; border-radius:8px; background:var(--surface2); color:var(--text2); font-size:12px; line-height:1.45; }
+.ai-provider-status.ok { background:#ecfdf5; color:#047857; }
+.ai-provider-status.error { background:#fef2f2; color:#b91c1c; }
+.ai-key-row { display:flex; gap:6px; align-items:center; }
+.ai-key-row .form-input { min-width:0; }
+.ai-provider-actions { display:flex; gap:6px; margin-top:8px; }
+.ai-guide { border:1px solid var(--border); border-radius:10px; background:#fff; overflow:hidden; }
+.ai-guide summary { padding:12px 14px; cursor:pointer; font-size:13px; font-weight:800; color:var(--text2); }
+.ai-guide-body { padding:0 16px 15px; color:var(--text2); font-size:13px; line-height:1.65; }
+.ai-guide-body ol { margin:4px 0 12px; padding-left:20px; }
+.ai-guide-links { display:flex; flex-wrap:wrap; gap:8px; }
+.ai-guide-links a { padding:8px 10px; border:1px solid #bfdbfe; border-radius:8px; color:#1d4ed8; background:#eff6ff; font-weight:700; text-decoration:none; }
+.ai-guide-body p { margin:12px 0 0; padding:10px 12px; border-radius:8px; background:#f8fafc; color:#475569; }
+.ai-required-icon { text-align:center; font-size:42px; margin:6px 0 10px; }
+.ai-required-message { text-align:center; font-size:15px; font-weight:800; color:var(--text); line-height:1.6; }
+
+@media (max-width: 900px) {
+  .ai-provider-grid { grid-template-columns:1fr; }
+}
+
+@media (max-width: 480px) {
+  .ai-settings-title { align-items:flex-start; flex-direction:column; }
+  .ai-key-row { align-items:stretch; flex-direction:column; }
+  .ai-key-row .btn { min-height:44px; }
+  .ai-provider-actions .btn { flex:1; min-height:42px; }
 }
 
 /* ── 인쇄 ── */
@@ -3710,6 +3776,83 @@ details > summary::-webkit-details-marker {
   font-size: 13px;
 }
 
+.wx-site-card {
+  border-left: 4px solid var(--primary);
+}
+
+.wx-site-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wx-site-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--primary-light);
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.wx-site-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.wx-site-kicker {
+  color: var(--text3);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.wx-site-name {
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.wx-site-address {
+  margin-top: 3px;
+  color: var(--text2);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.wx-location-warning {
+  margin-top: 12px;
+  padding: 11px 12px;
+  border: 1px solid #fed7aa;
+  border-radius: var(--radius-sm);
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 13px;
+  font-weight: 700;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wx-archive-summary {
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.wx-site-poster {
+  display: block;
+  width: min(520px, 100%);
+  margin: 0 auto;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, .08);
+  background: #fff;
+}
+
 /* ═══ 취약자 명단 ═══ */
 
 .vul-card {
@@ -3810,9 +3953,86 @@ details > summary::-webkit-details-marker {
 
 .contractor-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
+  grid-template-columns: minmax(0, 1fr) 190px;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.contractor-search-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.contractor-add-panel {
+  margin: 0 0 14px;
+  padding: 14px;
+  border: 1.5px solid #bfdbfe;
+  border-radius: var(--radius-sm);
+  background: #f8fbff;
+}
+
+.contractor-add-panel[hidden] {
+  display: none;
+}
+
+.contractor-add-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.contractor-add-panel-head strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.contractor-add-panel-head span {
+  display: block;
+  margin-top: 3px;
+  color: var(--text2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.site-address-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.site-coordinate-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  color: var(--text2);
+  font-size: 12.5px;
+}
+
+.site-coordinate-result.found {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.site-coordinate-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  flex-shrink: 0;
+}
+
+.site-coordinate-result.found .site-coordinate-dot {
+  background: #22c55e;
 }
 
 .contractor-stat-card {
@@ -3821,6 +4041,10 @@ details > summary::-webkit-details-marker {
   text-align: left;
   font-family: inherit;
   border: 1.5px solid var(--border);
+}
+
+.contractor-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .contractor-stat-card.active {
@@ -3942,6 +4166,12 @@ details > summary::-webkit-details-marker {
   color: var(--danger);
   font-size: 13.5px;
   font-weight: 700;
+}
+
+@media (max-width: 480px) {
+  .contractor-stats {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .license-missing-item > div {
@@ -4078,6 +4308,25 @@ select.filter-select {
   .contractor-add-grid,
   .contractor-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .contractor-search-main,
+  .site-address-row {
+    grid-template-columns: 1fr;
+  }
+
+  .wx-site-summary {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .wx-site-copy {
+    min-width: calc(100% - 58px);
+  }
+
+  .wx-location-warning {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .contractor-row {

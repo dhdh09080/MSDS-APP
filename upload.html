@@ -276,12 +276,14 @@ let wsData = null, tokenData = null, contractorData = null;
 let workTypes = [], selectedWorkType = '', fileQueue = [];
 let licenseData = null;
 let publicLinkData = null, contractorList = [];
+let currentUploadToken = '';
 
 // ─── 초기화 ───
 async function init() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('token');
   const ptoken = params.get('ptoken');
+  currentUploadToken = token || ptoken || '';
 
   if (!token && !ptoken) { showError('링크에 토큰이 없습니다.'); return; }
 
@@ -447,6 +449,19 @@ function renderFileList() {
     </div>`).join('');
 }
 
+async function invokeAiParse(body) {
+  const { data, error } = await supabase.functions.invoke('parse-msds', {
+    body: { ...body, uploadToken: currentUploadToken }
+  });
+  if (error) {
+    let payload = null;
+    try { payload = error.context ? await error.context.json() : null; } catch {}
+    throw new Error(payload?.error || error.message || 'AI 분석 요청에 실패했습니다.');
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
 window.removeFile = function(id) { fileQueue = fileQueue.filter(f => f.id !== id); renderFileList(); };
 
 // ─── 업로드 ───
@@ -459,10 +474,7 @@ window.startUpload = async function() {
     item.status = 'uploading'; renderFileList();
     try {
       // Edge Function 호출
-      const { data, error } = await supabase.functions.invoke('parse-msds', {
-        body: { fileBase64: item.data, mediaType: item.mediaType }
-      });
-      if (error || data.error) throw new Error((error?.message || data.error));
+      const data = await invokeAiParse({ fileBase64: item.data, mediaType: item.mediaType });
       const parsed = data.result;
       // 파일을 먼저 스토리지에 올리고, PDF 정보를 포함해 한 번에 저장
       // (기존 방식은 저장 후 UPDATE였는데, 비로그인 권한으로는 UPDATE가 조용히 실패해 has_pdf가 항상 false로 남는 버그가 있었음)
@@ -705,10 +717,7 @@ async function doReupload(recordId, file) {
       r.readAsDataURL(file);
     });
     // 2) AI 분석
-    const { data, error } = await supabase.functions.invoke('parse-msds', {
-      body: { fileBase64: base64, mediaType: file.type }
-    });
-    if (error || data.error) throw new Error(error?.message || data.error);
+    const data = await invokeAiParse({ fileBase64: base64, mediaType: file.type });
     const parsed = data.result;
     // 3) 스토리지 교체
     const ext = file.type === 'application/pdf' ? 'pdf' : (file.type.split('/')[1]||'jpg');
