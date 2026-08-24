@@ -3,7 +3,7 @@ import { generateCode, generateToken, base64ToBlob, downloadBlob, guessFromPath,
 import { ghsPictogramWithLabel, decodeHCodes, decodePCodes, GHS_NAMES, applyPictogramRules, condensePCodes } from './lib/ghs.js';
 import { CAS_MEASUREMENT, CAS_HEALTH_EXAM, CAS_MANAGE, CAS_PERMIT, CAS_SPECIAL, CAS_EXAM_CYCLE } from './data/cas-lists.js';
 import { openModal, closeModal, toast, openPrintWindow, buildPrintHtml } from './lib/ui.js';
-import { PAGES, MOBILE_TABS, WARN_SIZES, CAL_CATEGORY_COLOR, CAL_CATEGORY_LABEL, PHOTO_FOLDER_PRESETS } from './data/constants.js';
+import { PAGES, MOBILE_TABS, WARN_SIZES, PHOTO_FOLDER_PRESETS } from './data/constants.js';
 import qrcode from 'qrcode-generator';
 
 // ═══════════════════════════════════════════════
@@ -26,6 +26,11 @@ let contractorFilter = 'all';
 let activeHealthSub = 'result';
 let aiSettingsState = null;
 let pendingMsdsReanalysis = null;
+let feedbackPosts = [], feedbackComments = [];
+let feedbackLoaded = false, isSystemAdmin = false, feedbackCurrentId = null;
+const ANNOUNCEMENT_CACHE_TTL_MS = 60_000;
+let announcements = [], announcementsLoaded = false, announcementCurrentId = null;
+let announcementsLoadedAt = 0, announcementsWorkspaceId = null;
 
 // 전역 붙여넣기 캐치: 사진 업로드 모달이 열려있을 때 어디서 Ctrl+V를 눌러도 잡히도록 보강
 document.addEventListener('paste', (e) => {
@@ -70,6 +75,7 @@ function showDevAiPreview() {
   document.getElementById('memberList').innerHTML = '<div class="form-note">미리보기 모드</div>';
   aiSettingsState = {
     preferredProvider: 'claude',
+    privacy: { allowSensitiveDocuments: false, geminiPaidDataProtectionConfirmed: false, monthlyRequestLimit: 0, monthlyUsed: 4 },
     providers: {
       claude: { configured: true, status: 'active', keyHint: 'sk-a••••1234' },
       openai: { configured: true, status: 'error', keyHint: 'sk-p••••5678', lastError: 'GPT API 사용 한도에 도달했습니다. 토큰·크레딧·사용량 제한을 확인해주세요.' },
@@ -102,7 +108,58 @@ function showDevFeaturePreview(page) {
     { id: 'msds-1', product_name: '에폭시 프라이머', contractor: '성우도장', receipt_status: 'received', supplier: '안전화학', supplier_contact: '02-1234-5678', signal_word: '위험', pictograms: 'GHS02 GHS05 GHS07 GHS08', h_codes: 'H225 H304 H315 H317 H318 H336 H351 H373 H411', p_codes: 'P201 P202 P210 P233 P240 P241 P242 P243 P260 P273 P280 P301+P310 P304+P340 P305+P351+P338 P403 P405 P501', protective_equipment: '보호장갑, 보안경, 방독마스크', legal_special: 'Y', has_pdf: true, pdf_path: 'preview/msds-1.pdf', pdf_name: '에폭시프라이머_MSDS.pdf', submission_no_valid: 'N', version: 1, history: [] },
     { id: 'msds-2', product_name: '실리콘 실란트', contractor: '새길설비', receipt_status: 'pending', supplier: '한국실란트', signal_word: '경고', pictograms: 'GHS07', h_codes: 'H315 H319', p_codes: 'P264 P280 P302+P352 P305+P351+P338', legal_special: 'N' },
   ];
+  Object.assign(msdsRecords[0], {
+    cas_no: '108-88-3, 67-64-1', components: '톨루엔 20~30%, 아세톤 10~15%', issue_date: '2026-08-01',
+    legal_measurement: 'Y', legal_exam: 'Y', legal_manage: 'Y', legal_permit: 'N', legal_dangerous: 'Y',
+    analysis_provider: 'gemini', analysis_model: 'gemini-2.5-flash',
+    component_details: [
+      { casNo: '108-88-3', substanceName: '톨루엔', minContent: '20', maxContent: '30', unit: '%', basis: '3항 구성성분' },
+      { casNo: '67-64-1', substanceName: '아세톤', minContent: '10', maxContent: '15', unit: '%', basis: '3항 구성성분' },
+    ],
+    dangerous_goods_details: { status: '해당', classNo: '제4류', flammableLiquid: { status: '해당', detail: '인화성액체', basis: '9항 및 15항' }, category: '제1석유류', waterSolubility: '비수용성액체', designatedQuantity: '200 L', detail: '제4류 제1석유류', basis: '15항 위험물안전관리법' },
+    occupational_safety_details: {
+      managementTarget: { status: '해당', detail: '톨루엔 함유', basis: '15항' }, specialManagement: { status: '내용없음', detail: '문서에서 특별관리물질 표기를 확인하지 못함', basis: '' },
+      workEnvironmentMeasurement: { status: '해당', detail: '작업환경측정 대상', basis: '15항' }, exposureLimit: { status: '해당', detail: '톨루엔 TWA 50 ppm', basis: '8항' },
+      permissibleLimit: { status: '내용없음', detail: '', basis: '' }, localExhaustInspection: { status: '조건부', detail: '밀폐설비·국소배기 설치 및 점검 여부는 실제 공정 확인 필요', basis: '현장 조건 필요' },
+      specialHealthExam: { status: '해당', detail: '특수건강진단 대상, 기본주기 12개월', basis: '15항' }, permitTarget: { status: '해당없음', detail: '', basis: '15항' },
+      prohibitedTarget: { status: '해당없음', detail: '', basis: '15항' }, psm: { status: '조건부', detail: '공정 및 규정수량 이상 취급 여부 확인 필요', basis: '취급량·공정 조건 필요' },
+    },
+    chemical_regulation_details: {
+      toxic: { status: '해당', detail: '유독물질 함유', basis: '15항' }, restricted: { status: '해당없음', detail: '', basis: '15항' },
+      prohibited: { status: '해당없음', detail: '', basis: '15항' }, accidentPreparedness: { status: '조건부', detail: '혼합물 함유량 기준 확인 필요', basis: '15항' },
+    },
+  });
   businessLicenses = [{ id: 'license-1', contractor_id: 'con-1', file_name: '대한건설_사업자등록증.pdf', uploaded_by: 'manager', uploaded_at: new Date().toISOString(), contractor: { name: '대한건설' } }];
+  aiSettingsState = {
+    preferredProvider: 'claude',
+    privacy: { allowSensitiveDocuments: false, geminiPaidDataProtectionConfirmed: false, monthlyRequestLimit: 0, monthlyUsed: 4 },
+    providers: {
+      claude: { configured: true, status: 'active', keyHint: 'sk-a••••1234' },
+      openai: { configured: false },
+      gemini: { configured: false },
+    },
+  };
+  isSystemAdmin = true;
+  announcementsLoaded = true;
+  announcements = [
+    {
+      id: 'announcement-1',
+      workspace_id: 'preview-workspace',
+      title: 'MSDS 분석 결과는 원문과 함께 확인해주세요',
+      content: 'AI 분석 결과는 업무를 돕는 초안입니다. 법적 분류와 조치사항은 반드시 최신 법령 및 원문을 확인한 뒤 확정해주세요.',
+      is_important: true,
+      starts_at: new Date(Date.now() - 86400000).toISOString(),
+      ends_at: null,
+      created_at: new Date(Date.now() - 86400000).toISOString(),
+      updated_at: new Date(Date.now() - 86400000).toISOString(),
+    },
+  ];
+  feedbackLoaded = true;
+  feedbackPosts = [
+    { id: 'feedback-1', author_id: 'preview-user', author_name: '구다희', category: 'bug', feature_area: 'MSDS 대장', urgency: 'urgent', title: 'MSDS 재분석 후 비교 화면이 열리지 않습니다', content: 'PDF를 선택하고 다시 분석하기를 눌렀는데 로딩 후 화면이 그대로입니다.', reproduction_steps: '1. MSDS 대장 이동\n2. 제품 상세 열기\n3. 다시 분석하기 클릭', expected_result: '기존 결과와 새 결과의 비교 화면이 보여야 합니다.', status: 'reviewing', created_at: new Date(Date.now() - 86400000).toISOString() },
+    { id: 'feedback-2', author_id: 'preview-user', author_name: '구다희', category: 'improvement', feature_area: '건강진단', urgency: 'normal', title: '검진 결과 엑셀 내보내기를 추가해주세요', content: '특수검진 대상자 목록을 엑셀로 내려받아 협력사에 전달하고 싶습니다.', status: 'received', created_at: new Date(Date.now() - 3600000).toISOString() },
+  ];
+  feedbackComments = [{ id: 'comment-1', post_id: 'feedback-1', admin_name: '시스템 관리자', content: '확인 중입니다. 재현 환경을 점검한 뒤 처리 일정을 안내하겠습니다.', created_at: new Date().toISOString() }];
   document.getElementById('authScreen').style.display = 'none';
   document.getElementById('workspaceScreen').style.display = 'none';
   document.getElementById('appScreen').style.display = 'block';
@@ -112,7 +169,7 @@ function showDevFeaturePreview(page) {
   document.getElementById('wsNameEdit').value = currentWS.name;
   hydrateWorkspaceLocationInputs();
   populateContractorSelects();
-  const target = ['home', 'msds', 'contractors', 'weather', 'warning', 'settings'].includes(page) ? page : 'contractors';
+  const target = PAGES.includes(page) ? page : 'contractors';
   if (target === 'warning') {
     warnSelected = new Set(['msds-1']);
     warnPreviewSingle = 'msds-1';
@@ -122,6 +179,9 @@ function showDevFeaturePreview(page) {
     updateStats();
     renderMsdsTable();
     renderHomeDashboard();
+    renderAiSettings();
+    if (target === 'announcements') window.renderAnnouncements();
+    if (target === 'feedback') renderFeedbackBoard();
     window.showPage(target);
   }, 0);
 }
@@ -250,7 +310,9 @@ window.handlePasswordUpdate = async function() {
 
 window.handleLogout = async function() {
   await supabase.auth.signOut();
-  user = null; currentWS = null; contractors = []; workTypes = []; msdsRecords = [];
+  user = null; profile = null; workspaces = []; currentWS = null;
+  resetWorkspaceScopedState();
+  feedbackPosts = []; feedbackComments = []; feedbackLoaded = false; isSystemAdmin = false; feedbackCurrentId = null;
   showAuth();
 };
 
@@ -265,6 +327,88 @@ function translateAuthError(m) {
 // ═══════════════════════════════════════════════
 // Workspace
 // ═══════════════════════════════════════════════
+function resetWorkspaceScopedState() {
+  contractors = [];
+  workTypes = [];
+  msdsRecords = [];
+  tokens = [];
+  members = [];
+  businessLicenses = [];
+  pendingInvites = [];
+  msdsFileQueue = [];
+  healthFileQueue = [];
+  editingMsdsId = null;
+  currentDetailId = null;
+  receiptEditId = null;
+  pendingMsdsReanalysis = null;
+
+  measureFileData = null;
+  measureFileName_val = null;
+  measureFileB64 = null;
+  currentMeasureData = null;
+  measureResults = [];
+  measureRounds = [];
+
+  healthConfirmData = [];
+  healthExcelData = null;
+  healthExcelName_val = null;
+  healthCurrentRound = null;
+  healthRecordsList = [];
+
+  placementRawRows = [];
+  placementCodeSet = [];
+  placementFiltered = [];
+  placementSnapshots = [];
+  activeSnapshotId = null;
+
+  publicLink = null;
+  sortingRows = [];
+  mpMonth = '';
+  mpRecords = [];
+  mpSelected = new Set();
+  mpFilter = '전체';
+  vulGroups = null;
+  bpList = null;
+  bpBaseDate = null;
+
+  announcements = [];
+  announcementsLoaded = false;
+  announcementCurrentId = null;
+  announcementsLoadedAt = 0;
+  announcementsWorkspaceId = null;
+
+  warnSelected = new Set();
+  warnPreviewSingle = null;
+  window.selectedContractor = '';
+
+  photoFolders = [];
+  photos = [];
+  activeFolderId = null;
+  openFolderIds = new Set();
+  photoThumbUrlCache = {};
+  pendingUploadFiles = [];
+  draggedPhotoId = null;
+  addFolderParentId = null;
+  viewingPhotoId = null;
+
+  wxForecast = null;
+  wxPosterCache = {};
+  wxPosterSvg = '';
+  if (wxPosterObjectUrl) URL.revokeObjectURL(wxPosterObjectUrl);
+  wxPosterObjectUrl = '';
+
+  kgCatalog = null;
+  window.clauseSearchStore = [];
+  window.koshaGuideSearchStore = [];
+  clauseSearchQuery = '';
+
+  if (notifChannel) {
+    supabase.removeChannel(notifChannel);
+    notifChannel = null;
+  }
+  notifs = [];
+}
+
 async function showWorkspaces(autoEnter = false) {
   document.getElementById('authScreen').style.display = 'none';
   document.getElementById('workspaceScreen').style.display = 'block';
@@ -306,14 +450,14 @@ function renderWorkspaceList() {
   el.innerHTML = workspaces.map(ws => {
     const role = ws.workspace_members?.[0]?.role || 'member';
     const isOwner = ws.owner_id === user.id;
-    return `<div class="ws-card" onclick="enterWorkspace('${ws.id}')">
+    return `<button type="button" class="ws-card" onclick="enterWorkspace('${ws.id}')">
       <div class="ws-card-icon">🏗️</div>
       <div class="ws-card-info">
-        <div class="ws-card-name">${ws.name}</div>
-        <div class="ws-card-meta">코드: ${ws.code} · ${isOwner ? '관리자' : role === 'admin' ? '관리자' : '멤버'}</div>
+        <div class="ws-card-name">${escapeHtml(ws.name)}</div>
+        <div class="ws-card-meta">코드: ${escapeHtml(ws.code)} · ${isOwner ? '관리자' : role === 'admin' ? '관리자' : '멤버'}</div>
       </div>
       <div class="ws-card-badge">입장 →</div>
-    </div>`;
+    </button>`;
   }).join('');
 }
 
@@ -332,8 +476,10 @@ window.createWorkspace = async function() {
 };
 
 window.enterWorkspace = async function(wsId) {
-  currentWS = workspaces.find(w => w.id === wsId);
-  if (!currentWS) return;
+  const nextWorkspace = workspaces.find(w => w.id === wsId);
+  if (!nextWorkspace) return;
+  resetWorkspaceScopedState();
+  currentWS = nextWorkspace;
   localStorage.setItem('fms_last_ws', wsId);
   document.getElementById('workspaceScreen').style.display = 'none';
   document.getElementById('appScreen').style.display = 'block';
@@ -347,7 +493,7 @@ window.enterWorkspace = async function(wsId) {
   document.getElementById('sidebarName').textContent = name;
   document.getElementById('sidebarEmail').textContent = user.email;
   document.getElementById('sidebarAvatar').textContent = name.charAt(0).toUpperCase();
-  document.getElementById('accountInfo').innerHTML = `이메일: ${user.email}<br>이름: ${name}<br>가입일: ${new Date(user.created_at).toLocaleDateString('ko-KR')}`;
+  document.getElementById('accountInfo').innerHTML = `이메일: ${escapeHtml(user.email)}<br>이름: ${escapeHtml(name)}<br>가입일: ${new Date(user.created_at).toLocaleDateString('ko-KR')}`;
   await Promise.all([loadContractors(), loadWorkTypes(), loadMembers(), loadTokens(), loadPublicLink()]);
   await Promise.all([loadMsdsRecords(), loadPlacementSnapshots(), loadBusinessLicenses(), loadMeasureRounds(), loadMeasureResults(), loadNotifications(), loadHealthRecords()]);
   subscribeNotifications();
@@ -496,7 +642,10 @@ window.openSiteLocationSettings = function() {
 // 사용자별 AI API 설정
 // ═══════════════════════════════════════════════
 const AI_PROVIDER_LABEL = { claude: 'Claude', openai: 'GPT', gemini: 'Gemini' };
-const AI_SETUP_CODES = new Set(['AI_KEY_REQUIRED', 'AI_KEY_INVALID', 'AI_BILLING_REQUIRED', 'AI_QUOTA_EXCEEDED']);
+const AI_SETUP_CODES = new Set([
+  'AI_KEY_REQUIRED', 'AI_KEY_INVALID', 'AI_BILLING_REQUIRED', 'AI_QUOTA_EXCEEDED',
+  'AI_MONTHLY_LIMIT', 'AI_PRIVACY_CONSENT_REQUIRED', 'AI_PROVIDER_PRIVACY_REQUIRED',
+]);
 
 async function invokeEdgeJson(functionName, body) {
   const { data, error } = await supabase.functions.invoke(functionName, { body });
@@ -553,11 +702,36 @@ window.loadAiSettings = async function() {
 
 function renderAiSettings() {
   if (!aiSettingsState) return;
-  const preferred = aiSettingsState.preferredProvider || 'claude';
   const configured = Object.values(aiSettingsState.providers || {}).filter(item => item.configured);
-  document.querySelectorAll('.ai-provider-card').forEach(card => card.classList.toggle('selected', card.dataset.provider === preferred));
-  const selected = document.querySelector(`input[name="aiProvider"][value="${preferred}"]`);
-  if (selected) selected.checked = true;
+  const usable = configured.filter(item => item.status !== 'error');
+  const privacy = aiSettingsState.privacy || {};
+  const sensitiveInput = document.getElementById('aiAllowSensitiveDocuments');
+  const geminiInput = document.getElementById('aiGeminiPaidProtection');
+  const limitInput = document.getElementById('aiMonthlyLimit');
+  const limitEnabledInput = document.getElementById('aiEnableMonthlyLimit');
+  const usageEl = document.getElementById('aiMonthlyUsage');
+  if (sensitiveInput) sensitiveInput.checked = privacy.allowSensitiveDocuments === true;
+  if (geminiInput) geminiInput.checked = privacy.geminiPaidDataProtectionConfirmed === true;
+  const hasLimit = Number(privacy.monthlyRequestLimit || 0) > 0;
+  if (limitEnabledInput) limitEnabledInput.checked = hasLimit;
+  if (limitInput) { limitInput.value = hasLimit ? privacy.monthlyRequestLimit : 30; limitInput.disabled = !hasLimit; }
+  if (usageEl) usageEl.textContent = hasLimit
+    ? `이번 달 유료 분석 ${privacy.monthlyUsed || 0} / ${privacy.monthlyRequestLimit}회`
+    : `이번 달 유료 분석 ${privacy.monthlyUsed || 0}회 · 제한 없음`;
+  const routingEl = document.getElementById('aiRoutingSummary');
+  if (routingEl) {
+    routingEl.innerHTML = configured.length === 0
+      ? '<b>API 등록 필요</b><span>Claude, GPT, Gemini 중 하나 이상의 키를 등록해주세요.</span>'
+      : configured.length === 1
+        ? '<b>단일 API 모드</b><span>등록된 API가 1개이므로 모든 분석에 그 API만 사용합니다.</span>'
+      : '<b>자동 맞춤 선택</b><span>MSDS·작업환경측정은 Gemini → GPT → Claude, 건강진단은 GPT → Claude → 보호조건을 확인한 Gemini 순으로 한 곳만 호출합니다.</span>';
+  }
+
+  const providerRoles = {
+    claude: '복잡한 문서의 예비 순위',
+    openai: '건강진단 구조화 우선',
+    gemini: 'MSDS·측정 PDF/OCR 우선',
+  };
 
   ['claude', 'openai', 'gemini'].forEach(provider => {
     const status = aiSettingsState.providers?.[provider] || { configured: false };
@@ -566,7 +740,7 @@ function renderAiSettings() {
     el.className = 'ai-provider-status' + (status.status === 'error' ? ' error' : status.configured ? ' ok' : '');
     if (!status.configured) el.textContent = '미설정 — API 키를 입력해주세요.';
     else if (status.status === 'error') el.textContent = status.lastError || `오류 — ${status.keyHint}`;
-    else el.textContent = `연결됨 · ${status.keyHint}${provider === preferred ? ' · 현재 사용' : ''}`;
+    else el.textContent = `연결됨 · ${status.keyHint}${configured.length > 1 ? ` · ${providerRoles[provider]}` : ' · 단독 사용'}`;
   });
 
   const warning = document.getElementById('aiSettingsWarning');
@@ -574,13 +748,37 @@ function renderAiSettings() {
   if (!configured.length) {
     warning.style.display = '';
     warning.textContent = '⚠️ 등록된 API가 없어 AI 분석을 사용할 수 없습니다. 아래 제공자 중 하나의 키를 등록해주세요.';
-  } else if (aiSettingsState.providers?.[preferred]?.status === 'error') {
+  } else if (!usable.length) {
     warning.style.display = '';
-    warning.textContent = '⚠️ 현재 선택한 API에 오류가 있습니다. 연결을 확인하거나 정상인 다른 제공자를 선택해주세요.';
+    warning.textContent = '⚠️ 등록된 모든 API에 오류가 있습니다. 키·결제 잔액·사용 한도를 확인해주세요.';
+  } else if (usable.length < configured.length) {
+    warning.style.display = '';
+    warning.textContent = 'ℹ️ 오류가 있는 API는 자동 선택에서 제외됩니다. 연결을 확인하면 다시 자동 경로에 포함됩니다.';
   } else {
     warning.style.display = 'none';
   }
 }
+
+window.saveAiPrivacySettings = async function() {
+  const monthlyRequestLimit = document.getElementById('aiEnableMonthlyLimit')?.checked
+    ? Math.max(1, Math.min(Number(document.getElementById('aiMonthlyLimit')?.value || 30), 200))
+    : 0;
+  try {
+    const result = await invokeEdgeJson('ai-settings', {
+      action: 'privacy',
+      allowSensitiveDocuments: document.getElementById('aiAllowSensitiveDocuments')?.checked === true,
+      geminiPaidDataProtectionConfirmed: document.getElementById('aiGeminiPaidProtection')?.checked === true,
+      monthlyRequestLimit,
+    });
+    toast(result.message || 'AI 보호 설정을 저장했습니다', 'success');
+    await loadAiSettings();
+  } catch (error) { toast(error.message, 'error'); }
+};
+
+window.toggleAiMonthlyLimit = function() {
+  const input = document.getElementById('aiMonthlyLimit');
+  if (input) input.disabled = document.getElementById('aiEnableMonthlyLimit')?.checked !== true;
+};
 
 window.saveAiKey = async function(provider) {
   const input = document.getElementById(`aiKey-${provider}`);
@@ -622,7 +820,7 @@ window.selectAiProvider = async function(provider) {
     await invokeEdgeJson('ai-settings', { action: 'select', provider });
     aiSettingsState.preferredProvider = provider;
     renderAiSettings();
-    toast(`${AI_PROVIDER_LABEL[provider]}로 분석합니다`, 'success');
+    toast(`${AI_PROVIDER_LABEL[provider]}를 기타 문서의 기본 제공자로 저장했습니다. 자동 맞춤 선택은 유지됩니다.`, 'success');
   } catch (error) { toast(error.message, 'error'); renderAiSettings(); }
 };
 
@@ -652,7 +850,6 @@ window.showPage = function(id) {
   if (id === 'warning') { renderWarnPickList(); updateWarningPreview(); }
   if (id === 'upload-link') { renderTokenList(); renderPublicLinkUI(); }
   if (id === 'health') switchHealthSub(activeHealthSub);
-  if (id === 'calendar') { loadCalendarEvents().then(renderCalendar); }
   if (id === 'photos') { renderPhotoFolderTree(); renderPhotoMain(); }
   if (id === 'measure') { renderMeasureRoundsChecklist(); renderMeasureList(); }
   if (id === 'manpower') { initManpowerPage(); }
@@ -660,6 +857,8 @@ window.showPage = function(id) {
   if (id === 'bp') { initBpPage(); }
   if (id === 'library') { initLibraryPage(); }
   if (id === 'contractors') { renderContractorTags(); renderBusinessLicenseStatus(); }
+  if (id === 'announcements') { window.loadAnnouncements(); }
+  if (id === 'feedback') { loadFeedbackBoard(); }
   document.getElementById('mainContent')?.scrollTo(0, 0);
   if (id === 'settings') {
     if (!getDevPreviewPage()) {
@@ -677,10 +876,456 @@ window.searchLawFromHome = function() {
   if (!query) { toast('검색어를 입력하세요', 'error'); return; }
   showPage('library');
   setTimeout(() => {
-    const target = document.getElementById('clauseSearchQuery');
+    const target = document.getElementById('clauseQuery');
     if (target) target.value = query;
     window.runClauseSearch?.();
   }, 50);
+};
+
+// ═══════════════════════════════════════════════
+// 공지사항
+// ═══════════════════════════════════════════════
+function canManageAnnouncements() {
+  if (!user || !currentWS) return false;
+  const currentRole = currentWS.workspace_members?.[0]?.role;
+  return isSystemAdmin
+    || currentWS.owner_id === user.id
+    || currentRole === 'admin'
+    || members.some(member => member.user_id === user.id && member.role === 'admin');
+}
+
+function announcementStatus(item, now = Date.now()) {
+  const startsAt = new Date(item.starts_at).getTime();
+  const endsAt = item.ends_at ? new Date(item.ends_at).getTime() : null;
+  if (Number.isFinite(startsAt) && startsAt > now) return 'scheduled';
+  if (Number.isFinite(endsAt) && endsAt < now) return 'expired';
+  return 'active';
+}
+
+function announcementPeriod(item) {
+  const format = value => new Date(value).toLocaleString('ko-KR', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+  return `${format(item.starts_at)}부터 · ${item.ends_at ? `${format(item.ends_at)}까지` : '종료일 없음'}`;
+}
+
+function toLocalDateTimeInput(value) {
+  const date = value ? new Date(value) : new Date();
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+window.loadAnnouncements = async function(force = false) {
+  if (getDevPreviewPage()) { window.renderAnnouncements(); return; }
+  if (!user || !currentWS) return;
+  const workspaceId = currentWS.id;
+  const userId = user.id;
+  const cacheIsFresh = announcementsLoaded
+    && announcementsWorkspaceId === workspaceId
+    && Date.now() - announcementsLoadedAt < ANNOUNCEMENT_CACHE_TTL_MS;
+  if (cacheIsFresh && !force) { window.renderAnnouncements(); return; }
+
+  const list = document.getElementById('announcementList');
+  if (list) list.innerHTML = '<div class="announcement-empty">공지사항을 불러오는 중입니다.</div>';
+
+  const [{ data: adminRole, error: adminError }, { data, error }] = await Promise.all([
+    supabase.from('system_admins').select('user_id').eq('user_id', userId).maybeSingle(),
+    supabase.from('announcements')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .order('is_important', { ascending: false })
+      .order('starts_at', { ascending: false }),
+  ]);
+
+  if (currentWS?.id !== workspaceId || user?.id !== userId) return;
+
+  if (adminError) console.warn('시스템 관리자 권한 확인 실패:', adminError.message);
+  isSystemAdmin = Boolean(adminRole) || isSystemAdmin;
+  if (error) {
+    announcementsLoaded = false;
+    if (list) list.innerHTML = `<div class="announcement-empty error">공지사항을 불러오지 못했습니다.<br><small>${escapeHtml(error.message || '')}</small></div>`;
+    return;
+  }
+
+  announcements = data || [];
+  announcementsLoaded = true;
+  announcementsLoadedAt = Date.now();
+  announcementsWorkspaceId = workspaceId;
+  window.renderAnnouncements();
+};
+
+window.renderAnnouncements = function() {
+  const list = document.getElementById('announcementList');
+  if (!list) return;
+
+  const canManage = canManageAnnouncements();
+  const adminActions = document.getElementById('announcementAdminActions');
+  const showAllWrap = document.getElementById('announcementShowAllWrap');
+  const scopeHint = document.getElementById('announcementScopeHint');
+  if (adminActions) adminActions.style.display = canManage ? 'flex' : 'none';
+  if (showAllWrap) showAllWrap.style.display = canManage ? 'inline-flex' : 'none';
+  if (scopeHint) scopeHint.textContent = canManage
+    ? '관리자는 예약·종료된 공지도 함께 확인하고 수정할 수 있습니다.'
+    : '현재 게시 중인 현장 공지만 표시됩니다.';
+
+  const showAll = canManage && document.getElementById('announcementShowAllChk')?.checked;
+  const visible = announcements.filter(item => showAll || announcementStatus(item) === 'active');
+  if (!visible.length) {
+    list.innerHTML = `<div class="announcement-empty"><div>📢</div><b>${announcements.length ? '현재 게시 중인 공지가 없습니다.' : '등록된 공지사항이 없습니다.'}</b><span>${canManage ? '새 공지를 작성해 현장 구성원에게 안내할 수 있습니다.' : '새 공지가 등록되면 이곳에 표시됩니다.'}</span></div>`;
+    return;
+  }
+
+  const statusLabels = { active: '게시 중', scheduled: '게시 예정', expired: '게시 종료' };
+  list.innerHTML = visible.map(item => {
+    const status = announcementStatus(item);
+    return `<article class="announcement-card ${item.is_important ? 'important' : ''} ${status}">
+      <div class="announcement-card-head">
+        <div class="announcement-card-tags">
+          ${item.is_important ? '<span class="announcement-important">중요</span>' : ''}
+          <span class="announcement-status ${status}">${statusLabels[status]}</span>
+        </div>
+        ${canManage ? `<button type="button" class="btn btn-outline btn-sm" onclick="openAnnouncementEditor('${item.id}')">수정</button>` : ''}
+      </div>
+      <h3>${escapeHtml(item.title)}</h3>
+      <div class="announcement-content">${escapeHtml(item.content).replace(/\n/g, '<br>')}</div>
+      <div class="announcement-period">${escapeHtml(announcementPeriod(item))}</div>
+    </article>`;
+  }).join('');
+};
+
+window.toggleAnnouncementEnd = function() {
+  const noEnd = document.getElementById('announcementNoEnd')?.checked;
+  const input = document.getElementById('announcementEndsAt');
+  if (!input) return;
+  input.disabled = Boolean(noEnd);
+  if (noEnd) input.value = '';
+};
+
+window.openAnnouncementEditor = function(id = null) {
+  if (!canManageAnnouncements()) {
+    toast('공지사항을 관리할 권한이 없습니다.', 'error');
+    return;
+  }
+
+  const item = id ? announcements.find(row => row.id === id) : null;
+  announcementCurrentId = item?.id || null;
+  document.getElementById('announcementModalTitle').textContent = item ? '공지사항 수정' : '새 공지 작성';
+  document.getElementById('announcementId').value = item?.id || '';
+  document.getElementById('announcementTitle').value = item?.title || '';
+  document.getElementById('announcementContent').value = item?.content || '';
+  document.getElementById('announcementImportant').checked = Boolean(item?.is_important);
+  document.getElementById('announcementStartsAt').value = toLocalDateTimeInput(item?.starts_at);
+  document.getElementById('announcementNoEnd').checked = !item?.ends_at;
+  document.getElementById('announcementEndsAt').value = item?.ends_at ? toLocalDateTimeInput(item.ends_at) : '';
+  document.getElementById('announcementDeleteBtn').style.display = item ? '' : 'none';
+  window.toggleAnnouncementEnd();
+  openModal('announcementModal');
+  setTimeout(() => document.getElementById('announcementTitle')?.focus(), 80);
+};
+
+window.saveAnnouncement = async function() {
+  if (!canManageAnnouncements()) return;
+  const title = document.getElementById('announcementTitle').value.trim();
+  const content = document.getElementById('announcementContent').value.trim();
+  const startsValue = document.getElementById('announcementStartsAt').value;
+  const noEnd = document.getElementById('announcementNoEnd').checked;
+  const endsValue = document.getElementById('announcementEndsAt').value;
+  if (!title || !content || !startsValue) {
+    toast('제목, 내용, 게시 시작일을 입력하세요.', 'error');
+    return;
+  }
+  if (title.length < 2 || title.length > 120) {
+    toast('공지 제목은 2자 이상 120자 이하로 입력하세요.', 'error');
+    return;
+  }
+  if (content.length > 5000) {
+    toast('공지 내용은 5,000자 이하로 입력하세요.', 'error');
+    return;
+  }
+
+  const startsAt = new Date(startsValue);
+  const endsAt = noEnd || !endsValue ? null : new Date(endsValue);
+  if (!Number.isFinite(startsAt.getTime()) || (endsAt && !Number.isFinite(endsAt.getTime()))) {
+    toast('게시 기간을 다시 확인해주세요.', 'error');
+    return;
+  }
+  if (endsAt && endsAt <= startsAt) {
+    toast('종료일은 시작일보다 뒤여야 합니다.', 'error');
+    return;
+  }
+
+  const payload = {
+    workspace_id: currentWS.id,
+    title,
+    content,
+    is_important: document.getElementById('announcementImportant').checked,
+    starts_at: startsAt.toISOString(),
+    ends_at: endsAt?.toISOString() || null,
+  };
+  const button = document.getElementById('announcementSaveBtn');
+  button.disabled = true;
+  button.textContent = '저장 중...';
+  try {
+    if (getDevPreviewPage()) {
+      if (announcementCurrentId) {
+        const index = announcements.findIndex(row => row.id === announcementCurrentId);
+        announcements[index] = { ...announcements[index], ...payload, updated_at: new Date().toISOString() };
+      } else {
+        announcements.unshift({ ...payload, id: `preview-announcement-${Date.now()}`, created_by: user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+      }
+    } else if (announcementCurrentId) {
+      const { error } = await supabase.from('announcements')
+        .update(payload)
+        .eq('id', announcementCurrentId)
+        .eq('workspace_id', currentWS.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('announcements').insert({ ...payload, created_by: user.id });
+      if (error) throw error;
+    }
+    closeModal('announcementModal');
+    announcementCurrentId = null;
+    if (!getDevPreviewPage()) await window.loadAnnouncements(true);
+    else window.renderAnnouncements();
+    toast('공지사항이 저장됐습니다.', 'success');
+  } catch (error) {
+    toast('공지 저장 실패: ' + error.message, 'error');
+  } finally {
+    button.disabled = false;
+    button.textContent = '저장';
+  }
+};
+
+window.deleteAnnouncement = async function() {
+  if (!canManageAnnouncements() || !announcementCurrentId) return;
+  if (!confirm('이 공지사항을 삭제하시겠습니까?')) return;
+  try {
+    if (getDevPreviewPage()) {
+      announcements = announcements.filter(row => row.id !== announcementCurrentId);
+    } else {
+      const { error } = await supabase.from('announcements')
+        .delete()
+        .eq('id', announcementCurrentId)
+        .eq('workspace_id', currentWS.id);
+      if (error) throw error;
+    }
+    closeModal('announcementModal');
+    announcementCurrentId = null;
+    if (!getDevPreviewPage()) await window.loadAnnouncements(true);
+    else window.renderAnnouncements();
+    toast('공지사항이 삭제됐습니다.');
+  } catch (error) {
+    toast('공지 삭제 실패: ' + error.message, 'error');
+  }
+};
+
+// ═══════════════════════════════════════════════
+// 건의 · 오류 신고
+// ═══════════════════════════════════════════════
+const FEEDBACK_CATEGORY = { bug: '오류 신고', improvement: '기능 개선', question: '사용 문의', other: '기타' };
+const FEEDBACK_STATUS = { received: '접수', reviewing: '검토 중', planned: '반영 예정', resolved: '처리 완료', closed: '종료' };
+
+function feedbackDate(value) {
+  if (!value) return '-';
+  return new Date(value).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+window.loadFeedbackBoard = async function(force = false) {
+  if (getDevPreviewPage()) { renderFeedbackBoard(); return; }
+  if (!user || (feedbackLoaded && !force)) { renderFeedbackBoard(); return; }
+
+  const list = document.getElementById('feedbackList');
+  if (list) list.innerHTML = '<div class="feedback-empty">건의사항을 불러오는 중입니다.</div>';
+  const [{ data: adminRole, error: adminError }, { data: posts, error: postsError }] = await Promise.all([
+    supabase.from('system_admins').select('user_id').eq('user_id', user.id).maybeSingle(),
+    supabase.from('feedback_posts').select('*').order('created_at', { ascending: false }),
+  ]);
+  if (adminError || postsError) {
+    if (list) list.innerHTML = `<div class="feedback-empty error">불러오지 못했습니다. 잠시 후 다시 시도해주세요.<br><small>${escapeHtml(postsError?.message || adminError?.message || '')}</small></div>`;
+    return;
+  }
+  isSystemAdmin = Boolean(adminRole);
+  feedbackPosts = posts || [];
+  feedbackLoaded = true;
+  renderFeedbackBoard();
+};
+
+window.renderFeedbackBoard = function() {
+  const list = document.getElementById('feedbackList');
+  if (!list) return;
+  const query = document.getElementById('feedbackSearch')?.value.trim().toLowerCase() || '';
+  const category = document.getElementById('feedbackCategoryFilter')?.value || '';
+  const status = document.getElementById('feedbackStatusFilter')?.value || '';
+  const filtered = feedbackPosts.filter(post => {
+    const haystack = `${post.title || ''} ${post.content || ''} ${post.feature_area || ''} ${post.author_name || ''}`.toLowerCase();
+    return (!query || haystack.includes(query)) && (!category || post.category === category) && (!status || post.status === status);
+  });
+
+  const adminChip = document.getElementById('feedbackAdminChip');
+  if (adminChip) adminChip.style.display = isSystemAdmin ? 'inline-flex' : 'none';
+  const received = feedbackPosts.filter(post => post.status === 'received').length;
+  const active = feedbackPosts.filter(post => ['reviewing', 'planned'].includes(post.status)).length;
+  const done = feedbackPosts.filter(post => ['resolved', 'closed'].includes(post.status)).length;
+  const stats = document.getElementById('feedbackStats');
+  if (stats) stats.innerHTML = `
+    <div class="feedback-stat"><span>전체</span><b>${feedbackPosts.length}</b></div>
+    <div class="feedback-stat"><span>접수</span><b>${received}</b></div>
+    <div class="feedback-stat"><span>처리 중</span><b>${active}</b></div>
+    <div class="feedback-stat"><span>완료</span><b>${done}</b></div>`;
+
+  const badge = document.getElementById('navBadgeFeedback');
+  if (badge) {
+    badge.style.display = isSystemAdmin && received ? 'inline' : 'none';
+    badge.textContent = String(received);
+  }
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="feedback-empty"><div>💬</div><b>${feedbackPosts.length ? '조건에 맞는 글이 없습니다.' : '아직 작성한 건의사항이 없습니다.'}</b><span>불편한 점이나 필요한 기능을 실명으로 알려주세요.</span><button class="btn btn-primary" onclick="openFeedbackCreate()">첫 건의 작성하기</button></div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(post => `
+    <button class="feedback-card" onclick="openFeedbackDetail('${post.id}')">
+      <div class="feedback-card-top">
+        <div class="feedback-card-tags">
+          <span class="feedback-type ${post.category}">${FEEDBACK_CATEGORY[post.category] || '기타'}</span>
+          <span class="feedback-area">${escapeHtml(post.feature_area)}</span>
+          ${post.urgency === 'urgent' ? '<span class="feedback-urgent">긴급</span>' : ''}
+        </div>
+        <span class="feedback-status ${post.status}">${FEEDBACK_STATUS[post.status] || post.status}</span>
+      </div>
+      <div class="feedback-card-title">${escapeHtml(post.title)}</div>
+      <div class="feedback-card-summary">${escapeHtml(post.content)}</div>
+      <div class="feedback-card-meta"><span>${escapeHtml(post.author_name)}</span><span>${feedbackDate(post.created_at)}</span></div>
+    </button>`).join('');
+};
+
+window.openFeedbackCreate = function() {
+  const author = user?.user_metadata?.name || profile?.name || user?.email?.split('@')[0] || '로그인 사용자';
+  document.getElementById('feedbackAuthorName').textContent = author;
+  ['feedbackTitle', 'feedbackContent', 'feedbackReproduction', 'feedbackExpected'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('feedbackCategory').value = 'bug';
+  document.getElementById('feedbackUrgency').value = 'normal';
+  toggleFeedbackBugFields();
+  openModal('feedbackCreateModal');
+  setTimeout(() => document.getElementById('feedbackTitle')?.focus(), 80);
+};
+
+window.toggleFeedbackBugFields = function() {
+  const isBug = document.getElementById('feedbackCategory')?.value === 'bug';
+  const fields = document.getElementById('feedbackBugFields');
+  if (fields) fields.style.display = isBug ? '' : 'none';
+};
+
+window.submitFeedback = async function() {
+  const category = document.getElementById('feedbackCategory').value;
+  const payload = {
+    author_id: user?.id,
+    author_name: user?.user_metadata?.name || profile?.name || '로그인 사용자',
+    category,
+    feature_area: document.getElementById('feedbackFeatureArea').value,
+    urgency: document.getElementById('feedbackUrgency').value,
+    title: document.getElementById('feedbackTitle').value.trim(),
+    content: document.getElementById('feedbackContent').value.trim(),
+    reproduction_steps: category === 'bug' ? document.getElementById('feedbackReproduction').value.trim() || null : null,
+    expected_result: category === 'bug' ? document.getElementById('feedbackExpected').value.trim() || null : null,
+  };
+  if (payload.title.length < 2) { toast('제목을 2자 이상 입력해주세요', 'error'); return; }
+  if (payload.content.length < 5) { toast('내용을 5자 이상 입력해주세요', 'error'); return; }
+
+  const button = document.getElementById('feedbackSubmitBtn');
+  button.disabled = true; button.textContent = '접수 중...';
+  try {
+    if (getDevPreviewPage()) {
+      feedbackPosts.unshift({ ...payload, id: `preview-${Date.now()}`, status: 'received', created_at: new Date().toISOString() });
+    } else {
+      const { data, error } = await supabase.from('feedback_posts').insert(payload).select().single();
+      if (error) throw error;
+      feedbackPosts.unshift(data);
+    }
+    closeModal('feedbackCreateModal');
+    renderFeedbackBoard();
+    toast('건의사항이 실명으로 접수됐습니다', 'success');
+  } catch (error) {
+    toast(`접수 실패: ${error.message}`, 'error');
+  } finally {
+    button.disabled = false; button.textContent = '실명으로 접수하기';
+  }
+};
+
+function renderFeedbackDetail(post, comments) {
+  document.getElementById('feedbackDetailTitle').textContent = post.title;
+  document.getElementById('feedbackDetailMeta').textContent = `${post.author_name} · ${feedbackDate(post.created_at)}`;
+  document.getElementById('feedbackDetailBody').innerHTML = `
+    <div class="feedback-detail-tags">
+      <span class="feedback-type ${post.category}">${FEEDBACK_CATEGORY[post.category] || '기타'}</span>
+      <span class="feedback-area">${escapeHtml(post.feature_area)}</span>
+      ${post.urgency === 'urgent' ? '<span class="feedback-urgent">긴급</span>' : ''}
+      <span class="feedback-status ${post.status}">${FEEDBACK_STATUS[post.status] || post.status}</span>
+    </div>
+    <div class="feedback-detail-section"><b>내용</b><div>${escapeHtml(post.content).replace(/\n/g, '<br>')}</div></div>
+    ${post.reproduction_steps ? `<div class="feedback-detail-section"><b>재현 방법</b><div>${escapeHtml(post.reproduction_steps).replace(/\n/g, '<br>')}</div></div>` : ''}
+    ${post.expected_result ? `<div class="feedback-detail-section"><b>기대 결과</b><div>${escapeHtml(post.expected_result).replace(/\n/g, '<br>')}</div></div>` : ''}
+    <div class="feedback-comments">
+      <div class="feedback-comments-title">관리자 답변 <span>${comments.length}</span></div>
+      ${comments.length ? comments.map(comment => `<div class="feedback-comment"><div><b>시스템 관리자 · ${escapeHtml(comment.admin_name)}</b><span>${feedbackDate(comment.created_at)}</span></div><p>${escapeHtml(comment.content).replace(/\n/g, '<br>')}</p></div>`).join('') : '<div class="feedback-no-comment">아직 관리자 답변이 없습니다. 확인 후 이곳에 안내됩니다.</div>'}
+    </div>`;
+  const panel = document.getElementById('feedbackAdminPanel');
+  panel.style.display = isSystemAdmin ? 'block' : 'none';
+  document.getElementById('feedbackAdminStatus').value = post.status;
+}
+
+window.openFeedbackDetail = async function(postId) {
+  const post = feedbackPosts.find(item => item.id === postId);
+  if (!post) return;
+  feedbackCurrentId = postId;
+  const localComments = feedbackComments.filter(item => item.post_id === postId);
+  renderFeedbackDetail(post, localComments);
+  openModal('feedbackDetailModal');
+  if (getDevPreviewPage()) return;
+
+  const { data, error } = await supabase.from('feedback_comments').select('*').eq('post_id', postId).order('created_at');
+  if (error) { toast('관리자 답변을 불러오지 못했습니다', 'error'); return; }
+  feedbackComments = feedbackComments.filter(item => item.post_id !== postId).concat(data || []);
+  if (feedbackCurrentId === postId) renderFeedbackDetail(post, data || []);
+};
+
+window.updateFeedbackStatus = async function() {
+  if (!isSystemAdmin || !feedbackCurrentId) return;
+  const status = document.getElementById('feedbackAdminStatus').value;
+  try {
+    if (!getDevPreviewPage()) {
+      const { error } = await supabase.from('feedback_posts').update({ status }).eq('id', feedbackCurrentId);
+      if (error) throw error;
+    }
+    const post = feedbackPosts.find(item => item.id === feedbackCurrentId);
+    if (post) post.status = status;
+    renderFeedbackBoard();
+    renderFeedbackDetail(post, feedbackComments.filter(item => item.post_id === feedbackCurrentId));
+    toast('처리 상태를 저장했습니다', 'success');
+  } catch (error) { toast(`상태 저장 실패: ${error.message}`, 'error'); }
+};
+
+window.addFeedbackComment = async function() {
+  if (!isSystemAdmin || !feedbackCurrentId) return;
+  const input = document.getElementById('feedbackAdminComment');
+  const content = input.value.trim();
+  if (!content) { toast('관리자 답변을 입력해주세요', 'error'); return; }
+  const payload = { post_id: feedbackCurrentId, admin_id: user.id, admin_name: user.user_metadata?.name || '시스템 관리자', content };
+  try {
+    let comment;
+    if (getDevPreviewPage()) comment = { ...payload, id: `comment-${Date.now()}`, created_at: new Date().toISOString() };
+    else {
+      const { data, error } = await supabase.from('feedback_comments').insert(payload).select().single();
+      if (error) throw error;
+      comment = data;
+    }
+    feedbackComments.push(comment);
+    input.value = '';
+    const post = feedbackPosts.find(item => item.id === feedbackCurrentId);
+    renderFeedbackDetail(post, feedbackComments.filter(item => item.post_id === feedbackCurrentId));
+    toast('관리자 답변을 등록했습니다', 'success');
+  } catch (error) { toast(`답변 등록 실패: ${error.message}`, 'error'); }
 };
 
 // ═══════════════════════════════════════════════
@@ -737,6 +1382,15 @@ function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   })[ch]);
+}
+
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(String(value || ''), window.location.origin);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
+  } catch {
+    return '';
+  }
 }
 
 window.updateInlineContractorAdd = function(id) {
@@ -1020,7 +1674,7 @@ window.renderWorkTypeTags = function() {
   const wts = getWorkTypesForContractor(conId);
   tagEl.innerHTML = wts.length === 0
     ? '<div style="color:var(--text3);font-size:13px;">등록된 공종이 없습니다</div>'
-    : wts.map(w => `<span class="tag">${w.name}<span class="tag-remove" onclick="removeWorkType('${w.id}')">✕</span></span>`).join('');
+    : wts.map(w => `<span class="tag">${escapeHtml(w.name)}<button type="button" class="tag-remove" aria-label="${escapeHtml(w.name)} 공종 삭제" onclick="removeWorkType('${w.id}')">✕</button></span>`).join('');
 };
 
 window.addWorkType = async function() {
@@ -1105,7 +1759,10 @@ window.handleInvite = async function() {
 
   try {
     // 1) 이미 가입된 사용자인지 확인
-    const { data: existingUserId, error: rpcErr } = await supabase.rpc('get_user_id_by_email', { email_input: email });
+    const { data: existingUserId, error: rpcErr } = await supabase.rpc('get_workspace_user_id_by_email', {
+      email_input: email,
+      workspace_input: currentWS.id,
+    });
     if (rpcErr) throw rpcErr;
 
     if (existingUserId) {
@@ -1338,54 +1995,17 @@ function renderHomeDashboard() {
     alertWrap.style.display = 'none';
   }
 
-  // ② 이번 주 일정 (월~일 7칸)
-  renderDashWeekSchedule();
-
-  // ③ 최근 등록 MSDS
+  // ② 최근 등록 MSDS
   const recent = msdsRecords.slice(0, 5);
   document.getElementById('recentMsdsList').innerHTML = recent.length === 0
     ? '<div style="color:var(--text3);font-size:13px;text-align:center;padding:20px;">등록된 물질이 없습니다</div>'
-    : recent.map(r => `<div class="recent-item" onclick="showMsdsDetail('${r.id}')">
+    : recent.map(r => `<button type="button" class="recent-item" onclick="showMsdsDetail('${r.id}')">
         <div class="recent-icon">🧪</div>
         <div>
-          <div class="recent-name">${r.product_name}</div>
-          <div class="recent-meta">${r.contractor} ${r.work_type ? '/ '+r.work_type : ''} · ${r.legal_special==='Y' ? '<span style="color:var(--danger)">특별관리물질</span>' : '일반'}</div>
+          <div class="recent-name">${escapeHtml(r.product_name)}</div>
+          <div class="recent-meta">${escapeHtml(r.contractor)} ${r.work_type ? '/ ' + escapeHtml(r.work_type) : ''} · ${r.legal_special==='Y' ? '<span style="color:var(--danger)">특별관리물질</span>' : '일반'}</div>
         </div>
-      </div>`).join('');
-}
-
-function renderDashWeekSchedule() {
-  const el = document.getElementById('dashWeekSchedule');
-  if (!el) return;
-  const now = new Date();
-  const dow = now.getDay(); // 0=일
-  const monday = new Date(now); monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
-  const days = Array.from({length: 7}, (_, i) => {
-    const d = new Date(monday); d.setDate(monday.getDate() + i);
-    return d;
-  });
-  const todayStr = today();
-  const dayLabels = ['월','화','수','목','금','토','일'];
-
-  el.innerHTML = `<div class="dash-week-row">${days.map((d, i) => {
-    const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const isToday = dStr === todayStr;
-    const isSun = i === 6;
-    const isSat = i === 5;
-    const dayEvs = calendarEvents.filter(e => e.event_date === dStr)
-      .sort((a,b)=>(a.start_time||'').localeCompare(b.start_time||''));
-
-    const numEl = isToday
-      ? `<div class="dash-day-today-marker">${d.getDate()}</div>`
-      : `<div style="text-align:center;font-size:11px;color:${isSun?'#DC2626':isSat?'#2563EB':'var(--text3)'};margin-bottom:4px;">${d.getDate()}</div>`;
-
-    return `<div class="dash-day-col">
-      <div class="dash-day-label ${isToday?'today':''} ${isSun?'sun':''} ${isSat?'sat':''}">${dayLabels[i]}</div>
-      ${numEl}
-      ${dayEvs.slice(0,3).map(ev=>`<div class="dash-day-event" style="background:${ev.color||'#EFF6FF'};color:${ev.color?'#fff':'var(--primary)'};" onclick="showPage('calendar')" title="${ev.title}">${ev.start_time?ev.start_time.slice(0,5)+' ':''}${ev.title}</div>`).join('')}
-      ${dayEvs.length>3?`<div style="font-size:10px;color:var(--text3);text-align:center;">+${dayEvs.length-3}</div>`:''}
-    </div>`;
-  }).join('')}</div>`;
+      </button>`).join('');
 }
 
 let dashAlertsOpen = false;
@@ -1393,6 +2013,7 @@ window.toggleDashAlerts = function() {
   dashAlertsOpen = !dashAlertsOpen;
   document.getElementById('dashAlertDetail').style.display = dashAlertsOpen ? 'block' : 'none';
   document.getElementById('dashAlertToggleIcon').textContent = dashAlertsOpen ? '▴ 접기' : '▾ 펼치기';
+  document.getElementById('dashAlertBar')?.setAttribute('aria-expanded', String(dashAlertsOpen));
 };
 
 
@@ -1431,19 +2052,19 @@ window.renderMsdsTable = function() {
   tbody.innerHTML = filtered.map(r => {
     const sp = r.legal_special === 'Y' ? '<span class="badge badge-danger">특별</span>' : '<span class="badge badge-gray">일반</span>';
     const st = (r.status||'active') === 'active'
-      ? `<span class="badge badge-ok status-toggle" onclick="toggleMsdsStatus('${r.id}')">사용중</span>`
-      : `<span class="badge badge-gray status-toggle" onclick="toggleMsdsStatus('${r.id}')">종료</span>`;
+      ? `<button type="button" class="badge badge-ok status-toggle" onclick="toggleMsdsStatus('${r.id}')">사용중</button>`
+      : `<button type="button" class="badge badge-gray status-toggle" onclick="toggleMsdsStatus('${r.id}')">종료</button>`;
     const rc = (r.receipt_status||'received') === 'received'
-      ? `<span class="badge badge-ok status-toggle" onclick="openReceipt('${r.id}')">✓ 수령</span>`
-      : `<span class="badge badge-danger status-toggle" onclick="openReceipt('${r.id}')">! 미수령</span>`;
-    const file = r.has_pdf ? `<span class="pdf-link" onclick="viewFile('${r.id}')">📄</span>` : '-';
+      ? `<button type="button" class="badge badge-ok status-toggle" onclick="openReceipt('${r.id}')">✓ 수령</button>`
+      : `<button type="button" class="badge badge-danger status-toggle" onclick="openReceipt('${r.id}')">! 미수령</button>`;
+    const file = r.has_pdf ? `<button type="button" class="pdf-link" aria-label="${escapeHtml(r.product_name)} 원본 PDF 보기" onclick="viewFile('${r.id}')">📄</button>` : '-';
     return `<tr>
       <td><input type="checkbox" class="row-check" value="${r.id}" onchange="updateCheckAll()"></td>
-      <td><div class="td-name">${r.product_name}</div><div class="td-sub">v${r.version||1}${r.submission_no_valid === 'N' ? ' · <span style="color:var(--danger);font-weight:700;">⚠ 제출번호 확인필요</span>' : ''}${r.reupload_requested ? ' · <span style="color:var(--warn);font-weight:700;">🔁 재업로드 요청중</span>' : ''}</div></td>
-      <td>${r.contractor}</td>
-      <td>${r.work_type||'-'}</td>
-      <td>${r.supplier||'-'}</td>
-      <td style="font-size:12px;">${r.cas_no||'-'}</td>
+      <td><div class="td-name">${escapeHtml(r.product_name)}</div><div class="td-sub">v${escapeHtml(r.version || 1)}${r.submission_no_valid === 'N' ? ' · <span style="color:var(--danger);font-weight:700;">⚠ 제출번호 확인필요</span>' : ''}${r.reupload_requested ? ' · <span style="color:var(--warn);font-weight:700;">🔁 재업로드 요청중</span>' : ''}</div></td>
+      <td>${escapeHtml(r.contractor)}</td>
+      <td>${escapeHtml(r.work_type || '-')}</td>
+      <td>${escapeHtml(r.supplier || '-')}</td>
+      <td style="font-size:12px;">${escapeHtml(r.cas_no || '-')}</td>
       <td>${sp}</td>
       <td>${st}</td>
       <td>${rc}</td>
@@ -1530,13 +2151,44 @@ function addMsdsFilesToQueue(files, dt, fromFolder = false) {
       const g = guessFromPath(rel, contractors, workTypes);
       guessCon = g.guessCon; guessWork = g.guessWork;
     }
-    const item = { id, file, name: file.name, path: rel, data: null, mediaType: file.type, status: 'waiting', error: null, guessCon, guessWork };
+    const item = { id, file, name: file.name, path: rel, data: null, mediaType: file.type, status: 'reading', error: null, guessCon, guessWork };
     msdsFileQueue.push(item);
-    const reader = new FileReader();
-    reader.onload = ev => { item.data = ev.target.result.split(',')[1]; renderMsdsFileQueue(); };
-    reader.readAsDataURL(file);
+    readMsdsQueueItem(item);
   });
   renderMsdsFileQueue(); updateMsdsBatchBar();
+}
+
+function readMsdsQueueItem(item) {
+  item.status = 'reading';
+  item.error = null;
+  item.data = null;
+  renderMsdsFileQueue();
+  updateMsdsBatchBar();
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const result = String(ev.target?.result || '');
+      const separator = result.indexOf(',');
+      if (separator < 0 || !result.slice(separator + 1)) {
+        item.status = 'error';
+        item.error = '파일 내용을 읽지 못했습니다';
+      } else {
+        item.data = result.slice(separator + 1);
+        item.status = 'waiting';
+      }
+      renderMsdsFileQueue();
+      updateMsdsBatchBar();
+      resolve(item.status === 'waiting');
+    };
+    reader.onerror = () => {
+      item.status = 'error';
+      item.error = '파일 읽기에 실패했습니다. 파일을 다시 선택해 주세요';
+      renderMsdsFileQueue();
+      updateMsdsBatchBar();
+      resolve(false);
+    };
+    reader.readAsDataURL(item.file);
+  });
 }
 
 function renderMsdsFileQueue() {
@@ -1544,19 +2196,19 @@ function renderMsdsFileQueue() {
   if (!el) return;
   if (msdsFileQueue.length === 0) { el.style.display = 'none'; return; }
   el.style.display = 'flex';
-  const icons = { waiting:'📄', parsing:'⏳', done:'✅', error:'❌' };
-  const st = { waiting:'대기 중', parsing:'AI 분석 중...', done:'완료 — 저장됨', error:'' };
+  const icons = { reading:'📥', waiting:'📄', parsing:'⏳', done:'✅', error:'❌' };
+  const st = { reading:'파일 읽는 중...', waiting:'분석 대기', parsing:'AI 분석 중...', done:'완료 — 저장됨', error:'' };
   el.innerHTML = msdsFileQueue.map(item => {
     const guess = (item.guessCon || item.guessWork) ? ` · ${[item.guessCon, item.guessWork].filter(Boolean).join(' / ')}` : '';
     const statusText = item.status === 'error' ? '오류: ' + (item.error||'알수없음') : (st[item.status] + (item.status === 'waiting' ? guess : ''));
     return `<div class="file-item ${item.status}">
       <span class="fi-icon">${icons[item.status]}</span>
       <div class="fi-info">
-        <div class="fi-name">${item.name}</div>
-        <div class="fi-status">${statusText}</div>
+        <div class="fi-name">${escapeHtml(item.name)}</div>
+        <div class="fi-status">${escapeHtml(statusText)}</div>
         ${item.status === 'parsing' ? '<div class="file-progress"><div class="file-progress-bar"></div></div>' : ''}
       </div>
-      ${item.status !== 'parsing' ? `<button class="fi-remove" onclick="removeMsdsFile('${item.id}')">✕</button>` : ''}
+      ${item.status !== 'parsing' && item.status !== 'reading' ? `<button type="button" class="fi-remove" aria-label="${escapeHtml(item.name)} 제거" onclick="removeMsdsFile('${item.id}')">✕</button>` : ''}
     </div>`;
   }).join('');
 }
@@ -1572,28 +2224,31 @@ function updateMsdsBatchBar() {
   const done = msdsFileQueue.filter(f => f.status === 'done').length;
   const err = msdsFileQueue.filter(f => f.status === 'error').length;
   const wait = msdsFileQueue.filter(f => f.status === 'waiting').length;
-  document.getElementById('msdsBatchInfo').innerHTML = `<strong>${msdsFileQueue.length}개</strong> 파일 · 대기 ${wait} · 완료 ${done}${err ? ` · <span style="color:var(--danger)">오류 ${err}</span>` : ''}`;
-  document.getElementById('parseAllBtn').disabled = wait === 0;
+  const reading = msdsFileQueue.filter(f => f.status === 'reading').length;
+  document.getElementById('msdsBatchInfo').innerHTML = `<strong>${msdsFileQueue.length}개</strong> 파일${reading ? ` · 읽는 중 ${reading}` : ''} · 대기 ${wait} · 완료 ${done}${err ? ` · <span style="color:var(--danger)">오류 ${err}</span>` : ''}`;
+  document.getElementById('parseAllBtn').disabled = wait === 0 || reading > 0;
   const retryBtn = document.getElementById('retryMsdsBtn');
   if (retryBtn) retryBtn.style.display = err ? '' : 'none';
 }
 
-window.retryMsdsErrors = function() {
-  msdsFileQueue.forEach(item => {
-    if (item.status === 'error') {
-      item.status = 'waiting';
-      item.error = null;
-    }
-  });
+window.retryMsdsErrors = async function() {
+  const errors = msdsFileQueue.filter(item => item.status === 'error');
+  await Promise.all(errors.map(item => item.data
+    ? Promise.resolve(Object.assign(item, { status: 'waiting', error: null }))
+    : readMsdsQueueItem(item)));
   renderMsdsFileQueue();
   updateMsdsBatchBar();
-  parseAllFiles();
+  if (msdsFileQueue.some(item => item.status === 'waiting')) parseAllFiles();
 };
 
 // ═══════════════════════════════════════════════
 // Parse & Save MSDS
 // ═══════════════════════════════════════════════
 window.parseAllFiles = async function() {
+  if (msdsFileQueue.some(f => f.status === 'reading')) {
+    toast('파일을 읽는 중입니다. 잠시 후 다시 눌러주세요', 'warn');
+    return;
+  }
   const batchConId = document.getElementById('batchContractor').value;
   const batchWork = document.getElementById('batchWorkType').value;
   const waiting = msdsFileQueue.filter(f => f.status === 'waiting');
@@ -1622,6 +2277,7 @@ window.parseAllFiles = async function() {
         legal_permit: parsed.legalPermit||'N', legal_special: parsed.legalSpecial||'N',
         legal_dangerous: parsed.legalDangerous||'N', special: parsed.legalSpecial==='Y'?'Y_special':'N',
         submission_no: parsed.submissionNo||'', submission_no_valid: parsed.submissionNoValid||'N',
+        ...structuredMsdsFields(parsed),
         receipt_status: 'received', receipt_date: today(),
       });
       await uploadMsdsFile(recId, item.name, item.data, item.mediaType);
@@ -1648,11 +2304,27 @@ window.parseAllFiles = async function() {
   if (saved > 0 && !hasErrors) setTimeout(() => { closeModal('msdsRegisterModal'); msdsFileQueue = []; renderMsdsFileQueue(); updateMsdsBatchBar(); }, 800);
 };
 
-async function callParseFunction(base64Data, mediaType) {
+async function callParseFunction(base64Data, mediaType, options = {}) {
   const mb = (base64Data.length * 0.75 / 1024 / 1024).toFixed(1);
   if (mb > 20) throw new Error(`파일이 너무 큽니다 (${mb}MB)`);
-  const data = await invokeEdgeJson('parse-msds', { fileBase64: base64Data, mediaType });
-  return data.result;
+  const data = await invokeEdgeJson('parse-msds', { fileBase64: base64Data, mediaType, ...options });
+  return {
+    ...data.result,
+    analysisProvider: data.provider || '',
+    analysisModel: data.model || '',
+    analysisRouting: data.routing || null,
+  };
+}
+
+function structuredMsdsFields(parsed = {}) {
+  return {
+    component_details: Array.isArray(parsed.componentDetails) ? parsed.componentDetails : [],
+    dangerous_goods_details: parsed.dangerousGoods && typeof parsed.dangerousGoods === 'object' ? parsed.dangerousGoods : {},
+    occupational_safety_details: parsed.occupationalSafety && typeof parsed.occupationalSafety === 'object' ? parsed.occupationalSafety : {},
+    chemical_regulation_details: parsed.chemicalRegulation && typeof parsed.chemicalRegulation === 'object' ? parsed.chemicalRegulation : {},
+    analysis_provider: parsed.analysisProvider || null,
+    analysis_model: parsed.analysisModel || null,
+  };
 }
 
 async function saveMsdsRecord(fields) {
@@ -1734,32 +2406,117 @@ window.resetMsdsForm = function() {
 // ═══════════════════════════════════════════════
 // MSDS Detail / Edit / Delete
 // ═══════════════════════════════════════════════
+function safeJsonValue(value, fallback) {
+  if (value && typeof value === 'object') return value;
+  if (typeof value !== 'string' || !value.trim()) return fallback;
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
+function normalizedAssessment(value, legacyValue = '') {
+  const valid = new Set(['해당', '해당없음', '내용없음', '조건부']);
+  if (value && typeof value === 'object') {
+    return {
+      status: valid.has(value.status) ? value.status : '내용없음',
+      detail: String(value.detail || ''),
+      basis: String(value.basis || ''),
+    };
+  }
+  if (typeof value === 'string' && valid.has(value)) return { status: value, detail: '', basis: '' };
+  if (legacyValue === 'Y') return { status: '해당', detail: '기존 CAS 보조 판정', basis: '기존 분석 결과' };
+  return { status: '내용없음', detail: '', basis: '' };
+}
+
+function statusBadge(status) {
+  const css = { '해당': 'applicable', '해당없음': 'not-applicable', '내용없음': 'missing', '조건부': 'conditional' }[status] || 'missing';
+  return `<span class="legal-status ${css}">${escapeHtml(status || '내용없음')}</span>`;
+}
+
+function renderAssessmentItem(label, value, legacyValue = '') {
+  const item = normalizedAssessment(value, legacyValue);
+  return `<div class="regulatory-item">
+    <div class="regulatory-item-head"><b>${escapeHtml(label)}</b>${statusBadge(item.status)}</div>
+    ${item.detail ? `<p>${escapeHtml(item.detail)}</p>` : '<p class="regulatory-empty">추가 설명 없음</p>'}
+    ${item.basis ? `<small>근거: ${escapeHtml(item.basis)}</small>` : ''}
+  </div>`;
+}
+
+function detailRow(label, value) {
+  return `<div class="detail-row"><div class="detail-key">${escapeHtml(label)}</div><div class="detail-val">${value}</div></div>`;
+}
+
 window.showMsdsDetail = function(id) {
   const r = msdsRecords.find(x => x.id === id); if (!r) return;
   currentDetailId = id;
   document.getElementById('detailTitle').textContent = r.product_name;
-  const yn = v => v === 'Y' ? '<span style="color:var(--danger);font-weight:700">● 해당</span>' : '<span style="color:var(--text3)">해당없음</span>';
-  const hist = r.history?.length > 0 ? r.history.map(h => `<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);">v${h.version} · ${h.date} · ${h.note}</div>`).join('') : '<div style="color:var(--text3);font-size:12px;">개정 이력 없음</div>';
+  const safe = value => escapeHtml(value || '-');
+  const contentWithUnit = (value, unit) => {
+    if (!value || value === '내용없음') return safe(value || '내용없음');
+    const text = String(value);
+    const suffix = String(unit || '%');
+    return `${escapeHtml(text)}${text.includes(suffix) ? '' : escapeHtml(suffix)}`;
+  };
+  const firstCas = String(r.cas_no || '').split(/[,;\s]/)[0].replace(/[^0-9-]/g, '');
+  const componentDetails = safeJsonValue(r.component_details, []);
+  const dangerous = safeJsonValue(r.dangerous_goods_details, {});
+  const occupational = safeJsonValue(r.occupational_safety_details, {});
+  const chemical = safeJsonValue(r.chemical_regulation_details, {});
+  const dangerousStatus = ['해당', '해당없음', '내용없음', '조건부'].includes(dangerous.status)
+    ? dangerous.status : (r.legal_dangerous === 'Y' ? '해당' : '내용없음');
+  const providerLabel = { claude: 'Claude', openai: 'GPT', gemini: 'Gemini' }[r.analysis_provider] || '';
+  const componentHtml = Array.isArray(componentDetails) && componentDetails.length ? `
+    <div class="component-table-wrap"><table class="component-detail-table">
+      <thead><tr><th>CAS No.</th><th>물질명</th><th>최소 함유량</th><th>최대 함유량</th><th>근거</th></tr></thead>
+      <tbody>${componentDetails.map(item => `<tr>
+        <td>${safe(item.casNo)}</td><td>${safe(item.substanceName)}</td>
+        <td>${contentWithUnit(item.minContent, item.unit)}</td>
+        <td>${contentWithUnit(item.maxContent, item.unit)}</td>
+        <td>${safe(item.basis)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>` : '<div class="regulatory-no-data">내용 없음 · 원본 다시 분석을 실행하면 CAS별 함유량을 추출합니다.</div>';
+  const flammable = normalizedAssessment(dangerous.flammableLiquid, r.legal_dangerous);
+  const dangerousHtml = `<div class="dangerous-summary">
+    <div class="dangerous-summary-head"><b>위험물 분류</b>${statusBadge(dangerousStatus)}</div>
+    <div class="dangerous-facts">
+      <span><small>류별 분류</small><b>${safe(dangerous.classNo || (dangerousStatus === '해당없음' ? '해당없음' : '내용없음'))}</b></span>
+      <span><small>인화성액체</small><b>${statusBadge(flammable.status)}</b></span>
+      <span><small>위험물 종류</small><b>${safe(dangerous.category || '내용없음')}</b></span>
+      <span><small>수용성 구분</small><b>${safe(dangerous.waterSolubility || '내용없음')}</b></span>
+      <span><small>지정수량</small><b>${safe(dangerous.designatedQuantity || '내용없음')}</b></span>
+    </div>
+    ${dangerous.detail || flammable.detail ? `<p>${safe(dangerous.detail || flammable.detail)}</p>` : ''}
+    ${dangerous.basis || flammable.basis ? `<small>근거: ${safe(dangerous.basis || flammable.basis)}</small>` : ''}
+  </div>`;
+  const occupationalHtml = [
+    ['관리대상', 'managementTarget', r.legal_manage], ['특별관리', 'specialManagement', r.legal_special],
+    ['작업환경측정 대상', 'workEnvironmentMeasurement', r.legal_measurement], ['노출기준', 'exposureLimit', ''],
+    ['허용기준', 'permissibleLimit', ''], ['국소배기 점검대상', 'localExhaustInspection', ''],
+    ['특수건강진단 대상', 'specialHealthExam', r.legal_exam], ['허가대상', 'permitTarget', r.legal_permit],
+    ['금지대상', 'prohibitedTarget', ''], ['PSM 보고서', 'psm', ''],
+  ].map(([label, key, legacy]) => renderAssessmentItem(label, occupational[key], legacy)).join('');
+  const chemicalHtml = [
+    ['유독물질', 'toxic'], ['제한물질', 'restricted'], ['금지물질', 'prohibited'], ['사고대비물질', 'accidentPreparedness'],
+  ].map(([label, key]) => renderAssessmentItem(label, chemical[key])).join('');
+  const hist = r.history?.length > 0 ? r.history.map(h => `<div class="detail-history-row">v${escapeHtml(h.version)} · ${escapeHtml(h.date)} · ${escapeHtml(h.note)}</div>`).join('') : '<div class="regulatory-no-data">개정 이력 없음</div>';
   document.getElementById('detailBody').innerHTML = `
-    <div class="detail-row"><div class="detail-key">제품명</div><div class="detail-val"><strong>${r.product_name}</strong> <span class="badge badge-gray" style="margin-left:6px;">v${r.version||1}</span></div></div>
-    <div class="detail-row"><div class="detail-key">협력사</div><div class="detail-val">${r.contractor}</div></div>
-    <div class="detail-row"><div class="detail-key">취급 공종</div><div class="detail-val">${r.work_type||'-'}</div></div>
-    <div class="detail-row"><div class="detail-key">공급업체</div><div class="detail-val">${r.supplier||'-'} ${r.supplier_contact?'('+r.supplier_contact+')':''}</div></div>
-    <div class="detail-row"><div class="detail-key">MSDS 개정일</div><div class="detail-val">${r.issue_date||'-'}</div></div>
-    <div class="detail-row"><div class="detail-key">제출번호</div><div class="detail-val">${r.submission_no ? r.submission_no : '<span style="color:var(--danger);font-weight:700;">없음</span>'} ${r.submission_no_valid === 'N' ? '<span class="badge badge-danger" style="margin-left:6px;">⚠ 확인 필요</span>' : ''}</div></div>
-    <div class="detail-row"><div class="detail-key">CAS No.</div><div class="detail-val">${r.cas_no||'-'} ${r.cas_no ? `<button class="btn btn-outline btn-sm" style="margin-left:8px;padding:2px 9px;font-size:11px;" onclick="openKosha('${r.cas_no.split(/[,;\s]/)[0].replace(/'/g,'')}')">🔍 KOSHA 조회</button>` : ''}</div></div>
-    <div class="detail-row"><div class="detail-key">구성성분</div><div class="detail-val" style="white-space:pre-wrap;">${r.components||'-'}</div></div>
-    <div class="detail-row"><div class="detail-key">신호어</div><div class="detail-val">${r.signal_word||'-'}</div></div>
-    <div class="detail-row"><div class="detail-key">H코드</div><div class="detail-val">${r.h_codes||'-'}</div></div>
-    <div class="detail-row"><div class="detail-key">P코드</div><div class="detail-val">${r.p_codes||'-'}</div></div>
-    <div class="detail-row"><div class="detail-key">추천 보호구</div><div class="detail-val">${r.protective_equipment||'-'}</div></div>
-    <div class="detail-row"><div class="detail-key">작업환경측정</div><div class="detail-val">${yn(r.legal_measurement)}</div></div>
-    <div class="detail-row"><div class="detail-key">특수건강진단</div><div class="detail-val">${yn(r.legal_exam)} ${r.legal_exam==='Y'&&r.legal_exam_cycle?'· '+r.legal_exam_cycle:''}</div></div>
-    <div class="detail-row"><div class="detail-key">관리대상유해물질</div><div class="detail-val">${yn(r.legal_manage)}</div></div>
-    <div class="detail-row"><div class="detail-key">허가대상유해물질</div><div class="detail-val">${yn(r.legal_permit)}</div></div>
-    <div class="detail-row"><div class="detail-key">특별관리물질</div><div class="detail-val">${yn(r.legal_special)}</div></div>
-    <div class="detail-row"><div class="detail-key">위험물 규제</div><div class="detail-val">${yn(r.legal_dangerous)}</div></div>
-    <div style="margin-top:16px;"><div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:1px;margin-bottom:8px;">개정 이력</div>${hist}</div>`;
+    ${detailRow('제품명', `<strong>${safe(r.product_name)}</strong> <span class="badge badge-gray detail-version">v${escapeHtml(r.version || 1)}</span>`)}
+    ${detailRow('협력사', safe(r.contractor))}
+    ${detailRow('취급 공종', safe(r.work_type))}
+    ${detailRow('공급업체', `${safe(r.supplier)}${r.supplier_contact ? ` (${safe(r.supplier_contact)})` : ''}`)}
+    ${detailRow('MSDS 개정일', safe(r.issue_date))}
+    ${detailRow('제출번호', `${r.submission_no ? safe(r.submission_no) : '<span class="detail-alert">없음</span>'}${r.submission_no_valid === 'N' ? '<span class="badge badge-danger detail-version">⚠ 확인 필요</span>' : ''}`)}
+    ${detailRow('CAS No.', `${safe(r.cas_no)}${firstCas ? `<button class="btn btn-outline btn-sm kosha-inline-btn" onclick="openKosha('${firstCas}')">🔍 KOSHA 조회</button>` : ''}`)}
+    ${detailRow('구성성분', `<span class="detail-pre">${safe(r.components)}</span>`)}
+    ${detailRow('신호어', safe(r.signal_word))}
+    ${detailRow('H코드', safe(r.h_codes))}
+    ${detailRow('P코드', safe(r.p_codes))}
+    ${detailRow('추천 보호구', safe(r.protective_equipment))}
+    ${providerLabel ? detailRow('최근 분석 AI', `${escapeHtml(providerLabel)} · ${safe(r.analysis_model)}`) : ''}
+    <section class="regulatory-section"><div class="regulatory-section-title"><span>CAS별 물질명·함유량</span><small>MSDS 3항 기준</small></div>${componentHtml}</section>
+    <section class="regulatory-section"><div class="regulatory-section-title"><span>위험물안전관리법</span><small>제n류·인화성·세부 종류</small></div>${dangerousHtml}</section>
+    <section class="regulatory-section"><div class="regulatory-section-title"><span>산업안전보건법</span><small>문서 근거와 현장조건 구분</small></div><div class="regulatory-grid">${occupationalHtml}</div></section>
+    <section class="regulatory-section"><div class="regulatory-section-title"><span>화평법·화관법</span><small>유독·제한·금지·사고대비</small></div><div class="regulatory-grid">${chemicalHtml}</div></section>
+    <div class="regulatory-caution">AI 분석은 MSDS 문서의 업무 보조 결과입니다. <b>조건부</b> 항목은 취급량·공정·용도 등 현장 조건과 최신 법령을 함께 확인하세요.</div>
+    <section class="regulatory-section"><div class="regulatory-section-title"><span>개정 이력</span></div>${hist}</section>`;
   const fb = document.getElementById('detailViewFileBtn');
   fb.style.display = r.has_pdf ? 'inline-flex' : 'none';
   fb.onclick = () => { closeModal('msdsDetailModal'); viewFile(r.id); };
@@ -1785,6 +2542,28 @@ const REANALYSIS_FIELDS = [
   ['legal_special', '특별관리물질', 'legalSpecial'],
   ['legal_dangerous', '위험물 규제', 'legalDangerous'],
 ];
+
+const REANALYSIS_DETAIL_FIELDS = [
+  ['component_details', 'CAS별 물질·함유량'],
+  ['dangerous_goods_details', '위험물 상세 분류'],
+  ['occupational_safety_details', '산업안전보건법 상세 판정'],
+  ['chemical_regulation_details', '화평법·화관법 상세 판정'],
+];
+
+function summarizeStructuredAnalysis(dbKey, value) {
+  if (dbKey === 'component_details') {
+    const items = Array.isArray(value) ? value : [];
+    return items.length
+      ? items.map(item => `${item.substanceName || '물질명 없음'} (${item.casNo || 'CAS 없음'}): ${item.minContent || '내용없음'}~${item.maxContent || '내용없음'}${item.unit || ''}`).join('\n')
+      : '내용없음';
+  }
+  const entries = value && typeof value === 'object' ? Object.entries(value) : [];
+  if (!entries.length) return '내용없음';
+  return entries.map(([key, item]) => {
+    if (item && typeof item === 'object' && !Array.isArray(item)) return `${key}: ${item.status || item.detail || '내용없음'}`;
+    return `${key}: ${item || '내용없음'}`;
+  }).join('\n');
+}
 
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
@@ -1820,11 +2599,29 @@ window.reanalyzeMsds = async function(id) {
         protectiveEquipment: record.protective_equipment, submissionNo: 'AA-2026-123456', submissionNoValid: 'Y',
         legalMeasurement: 'Y', legalExam: 'Y', legalExamCycle: '배치후 1차: 6개월, 이후: 12개월',
         legalManage: 'Y', legalPermit: 'N', legalSpecial: record.legal_special || 'N', legalDangerous: 'N',
+        componentDetails: [{ casNo: '108-88-3', substanceName: '톨루엔', minContent: '20', maxContent: '30', unit: '%', basis: '3항 구성성분' }],
+        dangerousGoods: { status: '해당', classNo: '제4류', flammableLiquid: { status: '해당', detail: '인화성액체', basis: '9항 및 15항' }, category: '제1석유류', waterSolubility: '비수용성액체', designatedQuantity: '200 L', detail: '제4류 제1석유류', basis: '15항' },
+        occupationalSafety: {
+          managementTarget: { status: '해당', detail: '관리대상 유해물질', basis: '15항' }, specialManagement: { status: '내용없음', detail: '', basis: '' },
+          workEnvironmentMeasurement: { status: '해당', detail: '작업환경측정 대상', basis: '15항' }, exposureLimit: { status: '해당', detail: 'TWA 50 ppm', basis: '8항' },
+          permissibleLimit: { status: '내용없음', detail: '', basis: '' }, localExhaustInspection: { status: '조건부', detail: '밀폐설비·국소배기 설치 및 점검 여부는 공정 확인 필요', basis: '현장 조건 필요' },
+          specialHealthExam: { status: '해당', detail: '특수건강진단 대상, 12개월', basis: '15항' }, permitTarget: { status: '해당없음', detail: '', basis: '15항' },
+          prohibitedTarget: { status: '해당없음', detail: '', basis: '15항' }, psm: { status: '조건부', detail: '취급량과 공정 확인 필요', basis: '현장 조건 필요' },
+        },
+        chemicalRegulation: {
+          toxic: { status: '해당', detail: '유독물질', basis: '15항' }, restricted: { status: '해당없음', detail: '', basis: '15항' },
+          prohibited: { status: '해당없음', detail: '', basis: '15항' }, accidentPreparedness: { status: '조건부', detail: '함유량 기준 확인 필요', basis: '15항' },
+        },
+        analysisProvider: 'gemini', analysisModel: 'gemini-2.5-flash',
       };
     } else {
       const { data: blob, error: downloadError } = await supabase.storage.from('msds-pdfs').download(record.pdf_path);
       if (downloadError || !blob) throw new Error(downloadError?.message || '원본 파일을 내려받지 못했습니다.');
-      parsed = await callParseFunction(await blobToBase64(blob), blob.type || (record.pdf_name?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'));
+      parsed = await callParseFunction(
+        await blobToBase64(blob),
+        blob.type || (record.pdf_name?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
+        { forceReanalysis: true },
+      );
     }
     const updates = {};
     const changes = [];
@@ -1835,6 +2632,17 @@ window.reanalyzeMsds = async function(id) {
       updates[dbKey] = next;
       if (String(before).trim() !== String(next).trim()) changes.push({ dbKey, label, before, next });
     }
+    const structured = structuredMsdsFields(parsed);
+    for (const [dbKey, label] of REANALYSIS_DETAIL_FIELDS) {
+      const before = record[dbKey] ?? (dbKey === 'component_details' ? [] : {});
+      const next = structured[dbKey];
+      updates[dbKey] = next;
+      if (JSON.stringify(before) !== JSON.stringify(next)) {
+        changes.push({ dbKey, label, before: summarizeStructuredAnalysis(dbKey, before), next: summarizeStructuredAnalysis(dbKey, next) });
+      }
+    }
+    updates.analysis_provider = structured.analysis_provider;
+    updates.analysis_model = structured.analysis_model;
     updates.submission_no_valid = parsed.submissionNoValid || 'N';
     updates.special = parsed.legalSpecial === 'Y' ? 'Y_special' : 'N';
     pendingMsdsReanalysis = { id, record, updates, changes };
@@ -1944,6 +2752,7 @@ window.handleMsdsRenewFile = async function(e) {
       legal_permit: parsed.legalPermit || 'N', legal_special: parsed.legalSpecial || 'N',
       legal_dangerous: parsed.legalDangerous || 'N', special: parsed.legalSpecial === 'Y' ? 'Y_special' : 'N',
       submission_no: parsed.submissionNo || '', submission_no_valid: parsed.submissionNoValid || 'N',
+      ...structuredMsdsFields(parsed),
       version: nv, history, updated_at: new Date().toISOString(),
     };
 
@@ -2128,13 +2937,15 @@ function renderWarnPickList() {
   if (msdsRecords.length === 0) { el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">등록된 물질이 없습니다</div>'; return; }
   if (filtered.length === 0) { el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">검색/필터 조건에 맞는 물질이 없습니다</div>'; return; }
   el.innerHTML = filtered.map(r => `
-    <div class="warn-pick-item ${warnPreviewSingle===r.id?'previewing':''}" onclick="warnPreviewOne('${r.id}')" title="클릭하면 이 표지만 미리보기 (선택과 무관)">
+    <div class="warn-pick-item ${warnPreviewSingle===r.id?'previewing':''}">
       <input type="checkbox" class="warn-check" value="${r.id}" onclick="event.stopPropagation()" onchange="onWarnCheck('${r.id}',this.checked)" ${warnSelected.has(r.id)?'checked':''} title="인쇄 대상으로 선택">
-      <div style="flex:1;min-width:0;">
-        <div class="wp-name">${r.product_name}</div>
-        <div class="wp-sub">${r.contractor} ${r.work_type?'/ '+r.work_type:''} ${r.signal_word?'· '+r.signal_word:''} ${r.cas_no?'· CAS '+r.cas_no:''}</div>
-      </div>
-      ${r.legal_special==='Y'?'<span class="badge badge-danger">특별</span>':''}
+      <button type="button" class="warn-pick-preview" onclick="warnPreviewOne('${r.id}')" title="이 표지만 미리보기">
+        <span style="flex:1;min-width:0;">
+          <span class="wp-name">${escapeHtml(r.product_name)}</span>
+          <span class="wp-sub">${escapeHtml(r.contractor)} ${r.work_type ? '/ ' + escapeHtml(r.work_type) : ''} ${r.signal_word ? '· ' + escapeHtml(r.signal_word) : ''} ${r.cas_no ? '· CAS ' + escapeHtml(r.cas_no) : ''}</span>
+        </span>
+        ${r.legal_special==='Y'?'<span class="badge badge-danger">특별</span>':''}
+      </button>
     </div>`).join('');
   renderWarnSelPanel();
 }
@@ -2227,11 +3038,12 @@ function renderWarnSelPanel() {
   title.textContent = `✅ 선택된 물질 ${warnSelected.size}건 (필터와 무관하게 전부 인쇄됨)`;
   chips.style.display = warnSelPanelOpen ? 'flex' : 'none';
   document.getElementById('warnSelToggleIcon').textContent = warnSelPanelOpen ? '▾ 접기' : '▸ 펼치기';
+  document.querySelector('.warn-selection-toggle')?.setAttribute('aria-expanded', String(warnSelPanelOpen));
   if (!warnSelPanelOpen) return;
   chips.innerHTML = [...warnSelected].map(id => {
     const r = msdsRecords.find(x => x.id === id);
     if (!r) return '';
-    return `<span class="tag" style="cursor:pointer;" onclick="warnPreviewOne('${id}')" title="클릭하면 미리보기">${r.product_name} <span style="color:var(--text3);font-size:10px;">${r.contractor}</span><span class="tag-remove" onclick="event.stopPropagation();warnRemoveSel('${id}')">✕</span></span>`;
+    return `<span class="tag warn-selected-tag"><button type="button" class="tag-preview" onclick="warnPreviewOne('${id}')" title="미리보기">${escapeHtml(r.product_name)} <span style="color:var(--text3);font-size:10px;">${escapeHtml(r.contractor)}</span></button><button type="button" class="tag-remove" aria-label="${escapeHtml(r.product_name)} 선택 해제" onclick="warnRemoveSel('${id}')">✕</button></span>`;
   }).join('');
 }
 
@@ -2279,19 +3091,24 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
     : `<span style="font-size:${Math.round(cfg.picto * 0.45)}px;">⚠️</span>`;
   const qrSvg = warnQrSvg(r);
   const qrBox = qrSvg ? `<div class="wl-qr"><div class="wl-qr-img">${qrSvg}</div><div class="wl-qr-cap">QR스캔 →<br>MSDS 원본</div></div>` : '';
+  const productName = escapeHtml(r.product_name || '제품명 정보 없음');
+  const signalWord = escapeHtml(r.signal_word || '경고');
+  const supplier = escapeHtml(r.supplier || '-');
+  const supplierContact = r.supplier_contact ? ` (${escapeHtml(r.supplier_contact)})` : '';
+  const safeSite = escapeHtml(site);
 
   // ── 소분용기 간이표지 (고시 제6조②: 100g/100㎖ 이하 → 명칭·그림문자·신호어·공급자정보만) ──
   if (size === 'mini') {
     return `<div class="wlabel wlabel--mini">
-      <div class="wl-name-box">${r.product_name}</div>
+      <div class="wl-name-box">${productName}</div>
       <div class="wl-mini-row">
         <div class="wl-picto-row">${pictoHtml}</div>
         ${qrBox}
       </div>
-      <div class="wl-signal-bar ${isDanger ? 'danger' : 'warning'}">${r.signal_word || '경고'}</div>
+      <div class="wl-signal-bar ${isDanger ? 'danger' : 'warning'}">${signalWord}</div>
       <div class="wl-spacer"></div>
       <div class="wl-foot">
-        <div><b>공급</b>${r.supplier || '-'} ${r.supplier_contact ? '(' + r.supplier_contact + ')' : ''}</div>
+        <div><b>공급</b>${supplier}${supplierContact}</div>
         <div style="font-weight:700;">■ 자세한 내용은 MSDS 참조 (100㎖ 이하 소분용기용 간이표지)</div>
       </div>
     </div>`;
@@ -2306,25 +3123,25 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
   const hCondensed = hShown.length < hList.length;
   const { list: pList, condensed: pCondensed } = condensePCodes(pRaw);
   const autoFit = hCondensed || pCondensed;
-  const hHtml = (hShown.length ? hShown.map(h => `<li><span style="color:#888;font-size:0.85em;">[${h.code}]</span> ${h.text}</li>`).join('') : '<li>해당 정보 없음</li>')
+  const hHtml = (hShown.length ? hShown.map(h => `<li><span style="color:#888;font-size:0.85em;">[${escapeHtml(h.code)}]</span> ${escapeHtml(h.text)}</li>`).join('') : '<li>해당 정보 없음</li>')
     + (hCondensed ? `<li class="wl-condensed-note" data-kind="hazard">그 밖의 유해·위험 문구 ${hList.length - hShown.length}건은 MSDS 참조</li>` : '');
-  const pHtml = (pList.length ? pList.map(p => `<li><span style="color:#888;font-size:0.85em;">[${p.code}]</span> ${p.text}</li>`).join('') : '<li>해당 정보 없음</li>')
+  const pHtml = (pList.length ? pList.map(p => `<li><span style="color:#888;font-size:0.85em;">[${escapeHtml(p.code)}]</span> ${escapeHtml(p.text)}</li>`).join('') : '<li>해당 정보 없음</li>')
     + (pCondensed ? `<li class="wl-condensed-note" data-kind="precaution">그 밖의 예방조치 문구 ${pRaw.length - pList.length}건은 MSDS 참조</li>` : '');
 
   return `<div class="wlabel wlabel--${size}${autoFit ? ' wl-auto-fit' : ''}" data-warning-autofit="true">
     <div class="wl-top">(산업안전보건법 제115조 규정에 의한 경고표지)</div>
-    <div class="wl-name-box">${r.product_name}</div>
+    <div class="wl-name-box">${productName}</div>
     <div class="wl-picto-row">${pictoHtml}</div>
-    <div class="wl-signal-bar ${isDanger ? 'danger' : 'warning'}">신호어 : ${r.signal_word || '경고'}</div>
+    <div class="wl-signal-bar ${isDanger ? 'danger' : 'warning'}">신호어 : ${signalWord}</div>
     <div class="wl-block"><div class="wl-block-head">유해·위험 문구</div><ul class="wl-list">${hHtml}</ul></div>
     <div class="wl-block"><div class="wl-block-head">예방조치 문구</div><ul class="wl-list">${pHtml}</ul></div>
-    ${r.protective_equipment && size !== 'a6' ? `<div class="wl-block"><div class="wl-block-head">개인보호구</div><div class="wl-pe">${r.protective_equipment}</div></div>` : ''}
+    ${r.protective_equipment && size !== 'a6' ? `<div class="wl-block"><div class="wl-block-head">개인보호구</div><div class="wl-pe">${escapeHtml(r.protective_equipment)}</div></div>` : ''}
     ${r.legal_special === 'Y' ? `<div class="wl-special">⚠️ 특별관리물질 — 취급 시 관리감독자 확인 및 특별안전보건교육 필수</div>` : ''}
     <div class="wl-spacer"></div>
     <div class="wl-foot-row">
       <div class="wl-foot">
-        <div><b>공급업체</b>${r.supplier || '-'} ${r.supplier_contact ? '(' + r.supplier_contact + ')' : ''}</div>
-        <div><b>현장</b>${site} · <b>발행</b>${today()}</div>
+        <div><b>공급업체</b>${supplier}${supplierContact}</div>
+        <div><b>현장</b>${safeSite} · <b>발행</b>${today()}</div>
         <div style="margin-top:4px;font-weight:700;">■ 기타 자세한 내용은 물질안전보건자료(MSDS) 참조</div>
       </div>
       ${qrBox}
@@ -2335,7 +3152,7 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
 // ═══ 라벨 공통 인쇄 CSS — 크기별 폰트 스케일 + A4 분할 시트 그리드 ═══
 function warnLabelCss() {
   return `
-    .sheet{display:grid;page-break-after:always;width:100%;min-height:283mm;max-height:283mm;overflow:hidden;}
+    .sheet{display:grid;page-break-after:always;width:210mm;height:297mm;min-height:297mm;max-height:297mm;overflow:hidden;}
     .sheet:last-child{page-break-after:auto;}
     .sheet-1{grid-template-columns:1fr;grid-template-rows:1fr;}
     .sheet-2{grid-template-columns:1fr;grid-template-rows:1fr 1fr;}
@@ -2343,6 +3160,7 @@ function warnLabelCss() {
     .sheet-8{grid-template-columns:1fr 1fr;grid-template-rows:repeat(4,1fr);}
     .cell{padding:3mm;display:flex;align-items:stretch;justify-content:center;overflow:hidden;border:0.2mm dashed #bbb;}
     .sheet-1 .cell{border:none;padding:0;}
+    .sheet-1 .wlabel{border-radius:0;}
     .wlabel{box-sizing:border-box;display:flex;flex-direction:column;height:100%;border:3px solid #111;border-radius:6px;padding:16px;width:100%;font-family:'Malgun Gothic',sans-serif;color:#111;background:#fff;font-size:11.5px;word-break:keep-all;overflow-wrap:break-word;}
     .wl-spacer{flex:1 1 auto;min-height:6px;}
     .wlabel > *:not(.wl-spacer){flex-shrink:0;}
@@ -2470,7 +3288,7 @@ window.printWarnings = function() {
   });
   const sheets = warnSheets(labels);
   openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지</title><style>
-    @page{size:A4;margin:6mm;}
+    @page{size:A4;margin:0;}
     *{box-sizing:border-box;}
     body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;}
     ${warnLabelCss()}
@@ -2526,13 +3344,13 @@ window.printAllWarningsByContractor = function() {
   });
 
   openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>경고표지 전체 인쇄</title><style>
-    @page{size:A4;margin:6mm;}
+    @page{size:A4;margin:0;}
     *{box-sizing:border-box;}
     body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;}
-    .page-a4{width:100%;page-break-after:always;display:flex;align-items:flex-start;justify-content:center;}
+    .page-a4{width:210mm;height:297mm;page-break-after:always;display:flex;align-items:flex-start;justify-content:center;}
     .page-a4:last-child{page-break-after:auto;}
-    .blank-page{min-height:270mm;}
-    .cover-page{align-items:center;justify-content:center;min-height:270mm;}
+    .blank-page{min-height:297mm;}
+    .cover-page{align-items:center;justify-content:center;min-height:297mm;}
     .cover-inner{text-align:center;}
     .cover-label{font-size:16px;letter-spacing:6px;color:#888;font-weight:700;margin-bottom:18px;}
     .cover-name{font-size:48px;font-weight:900;color:#111;border:4px solid #111;border-radius:10px;padding:30px 50px;letter-spacing:2px;}
@@ -2944,15 +3762,17 @@ function renderContractorSidebar() {
   msdsRecords.forEach(r => { counts[r.contractor] = (counts[r.contractor]||0) + 1; });
   const sortedContractors = [...contractors].sort((a,b) => a.name.localeCompare(b.name, 'ko'));
   el.innerHTML = `
-    <div class="sidebar-con-item ${!window.selectedContractor?'active':''}" data-name="" onclick="selectContractorSidebar('')">
+    <button type="button" class="sidebar-con-item ${!window.selectedContractor?'active':''}" data-name="" onclick="selectContractorSidebar('')">
       <span class="sidebar-con-name">전체 보기</span>
       <span class="sidebar-con-count">${msdsRecords.length}</span>
-    </div>
-    ${sortedContractors.map(c => `
-      <div class="sidebar-con-item ${window.selectedContractor===c.name?'active':''}" data-name="${c.name}" onclick="selectContractorSidebar('${c.name}')">
-        <span class="sidebar-con-name">${c.name}</span>
+    </button>
+    ${sortedContractors.map(c => {
+      const encodedName = encodeURIComponent(c.name || '');
+      return `<button type="button" class="sidebar-con-item ${window.selectedContractor===c.name?'active':''}" data-name="${escapeHtml(c.name)}" onclick="selectContractorSidebar(decodeURIComponent('${encodedName}'))">
+        <span class="sidebar-con-name">${escapeHtml(c.name)}</span>
         <span class="sidebar-con-count">${counts[c.name]||0}</span>
-      </div>`).join('')}`;
+      </button>`;
+    }).join('')}`;
 }
 // ═══════════════════════════════════════════════
 // 작업환경측정
@@ -3074,15 +3894,18 @@ async function uploadMeasurePdf(recId, fileName, base64Data) {
 function showMeasureResult(d) {
   document.getElementById('measureResultTitle').textContent = `측정 결과 — ${d.round}`;
   const body = document.getElementById('measureResultBody');
-  const dustRows = (d.dust||[]).map(row => `<tr><td class="ctr">${row.no||''}</td><td>${row.process||''}</td><td>${row.agent||''}</td><td class="ctr">${row.measured||''}</td><td class="ctr">${row.limit||''}</td><td>${row.reason||''}</td></tr>`).join('');
-  const noiseRows = (d.noise||[]).map(row => `<tr><td class="ctr">${row.no||''}</td><td>${row.process||''}</td><td class="ctr">소음</td><td class="ctr">${row.measured||''}</td><td class="ctr">${row.limit||'90dB(A)'}</td><td>${row.reason||''}</td></tr>`).join('');
-  const workTypeRows = (d.workTypes||[]).map((wt,i) => {
-    const hasDust = (d.dust||[]).some(r => r.process?.includes(wt));
-    const hasNoise = (d.noise||[]).some(r => r.process?.includes(wt));
+  const dust = Array.isArray(d.dust) ? d.dust.filter(row => row && typeof row === 'object') : [];
+  const noise = Array.isArray(d.noise) ? d.noise.filter(row => row && typeof row === 'object') : [];
+  const workTypes = Array.isArray(d.workTypes) ? d.workTypes.map(value => String(value || '')).filter(Boolean) : [];
+  const dustRows = dust.map(row => `<tr><td class="ctr">${escapeHtml(row.no ?? '')}</td><td>${escapeHtml(row.process ?? '')}</td><td>${escapeHtml(row.agent ?? '')}</td><td class="ctr">${escapeHtml(row.measured ?? '')}</td><td class="ctr">${escapeHtml(row.limit ?? '')}</td><td>${escapeHtml(row.reason ?? '')}</td></tr>`).join('');
+  const noiseRows = noise.map(row => `<tr><td class="ctr">${escapeHtml(row.no ?? '')}</td><td>${escapeHtml(row.process ?? '')}</td><td class="ctr">소음</td><td class="ctr">${escapeHtml(row.measured ?? '')}</td><td class="ctr">${escapeHtml(row.limit || '90dB(A)')}</td><td>${escapeHtml(row.reason ?? '')}</td></tr>`).join('');
+  const workTypeRows = workTypes.map((wt,i) => {
+    const hasDust = dust.some(r => String(r.process || '').includes(wt));
+    const hasNoise = noise.some(r => String(r.process || '').includes(wt));
     const dustEx = hasDust && d.dustExceeded;
     const noiseEx = hasNoise && d.noiseExceeded;
     return `<tr>
-      <td class="ctr">${i+1}</td><td>${wt}</td>
+      <td class="ctr">${i+1}</td><td>${escapeHtml(wt)}</td>
       <td class="ctr">${hasDust ? (dustEx?'<span style="color:red;font-weight:700">초과</span>':'미만') : '해당없음'}</td>
       <td class="ctr">${d.mixedExceeded ? (hasDust?'초과':'해당없음') : '해당없음'}</td>
       <td class="ctr">${hasNoise ? (noiseEx?'<span style="color:red;font-weight:700">초과</span>':'미만') : '해당없음'}</td>
@@ -3094,14 +3917,14 @@ function showMeasureResult(d) {
     <div style="background:var(--ok-light);border:1.5px solid #86EFAC;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--ok);">
       ✅ AI 분석 완료 — 아래 내용을 확인하고 다운로드하세요. 오류가 있으면 다운로드 후 수정하세요.
     </div>
-    <h4 style="margin-bottom:8px;font-size:14px;">📋 분진 측정결과 (${d.dust?.length||0}건)</h4>
+    <h4 style="margin-bottom:8px;font-size:14px;">📋 분진 측정결과 (${dust.length}건)</h4>
     <div style="overflow-x:auto;margin-bottom:20px;">
       <table class="result-table">
         <thead><tr><th>No.</th><th>공정명</th><th>유해인자</th><th>측정치</th><th>노출기준</th><th>적용사유</th></tr></thead>
         <tbody>${dustRows||'<tr><td colspan="6" style="text-align:center;color:#999;">분진 측정결과 없음</td></tr>'}</tbody>
       </table>
     </div>
-    <h4 style="margin-bottom:8px;font-size:14px;">🔊 소음 측정결과 (${d.noise?.length||0}건)</h4>
+    <h4 style="margin-bottom:8px;font-size:14px;">🔊 소음 측정결과 (${noise.length}건)</h4>
     <div style="overflow-x:auto;margin-bottom:20px;">
       <table class="result-table">
         <thead><tr><th>No.</th><th>공종명</th><th>유해인자</th><th>측정치</th><th>노출기준</th><th>적용사유</th></tr></thead>
@@ -3149,15 +3972,17 @@ function renderMeasureList() {
     return;
   }
   list.innerHTML = measureResults.map(r => `
-    <div class="measure-card" onclick="openSavedMeasureResult('${r.id}')">
-      <div class="measure-round">${r.round}</div>
-      <div class="measure-date">측정 기간: ${r.period}${r.file_name ? ' · ' + r.file_name : ''}</div>
-      <div class="measure-badges">
-        <span class="badge badge-primary">분진 ${r.dust?.length||0}건</span>
-        <span class="badge badge-primary">소음 ${r.noise?.length||0}건</span>
-        ${r.dust_exceeded||r.noise_exceeded ? '<span class="badge badge-danger">기준 초과 있음</span>' : '<span class="badge badge-ok">전체 기준 이하</span>'}
-        ${r.file_path ? '<span class="badge badge-gray">📄 원본 보관됨</span>' : ''}
-      </div>
+    <div class="measure-card">
+      <button type="button" class="complex-card-open" aria-label="${escapeHtml(r.round || '측정 결과')} 열기" onclick="openSavedMeasureResult('${r.id}')">
+        <span class="measure-round">${escapeHtml(r.round)}</span>
+        <span class="measure-date">측정 기간: ${escapeHtml(r.period)}${r.file_name ? ' · ' + escapeHtml(r.file_name) : ''}</span>
+        <span class="measure-badges">
+          <span class="badge badge-primary">분진 ${r.dust?.length||0}건</span>
+          <span class="badge badge-primary">소음 ${r.noise?.length||0}건</span>
+          ${r.dust_exceeded||r.noise_exceeded ? '<span class="badge badge-danger">기준 초과 있음</span>' : '<span class="badge badge-ok">전체 기준 이하</span>'}
+          ${r.file_path ? '<span class="badge badge-gray">📄 원본 보관됨</span>' : ''}
+        </span>
+      </button>
       <button class="btn btn-danger btn-sm" style="position:absolute;top:14px;right:14px;" onclick="event.stopPropagation();deleteMeasureResult('${r.id}')">🗑</button>
     </div>
   `).join('');
@@ -3258,36 +4083,106 @@ window.handleHealthFiles = function(e) {
 function addHealthFiles(files) {
   files.forEach(file => {
     const id = Date.now().toString() + Math.random().toString(36).slice(2);
-    const item = { id, file, name: file.name, data: null, mediaType: file.type, status: 'waiting' };
+    const item = { id, file, name: file.name, data: null, mediaType: file.type, status: 'reading', error: null };
     healthFileQueue.push(item);
-    const reader = new FileReader();
-    reader.onload = ev => { item.data = ev.target.result.split(',')[1]; renderHealthFileQueue(); };
-    reader.readAsDataURL(file);
+    readHealthQueueItem(item);
   });
   renderHealthFileQueue();
+}
+
+function readHealthQueueItem(item) {
+  item.status = 'reading';
+  item.error = null;
+  item.data = null;
+  renderHealthFileQueue();
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const result = String(ev.target?.result || '');
+      const separator = result.indexOf(',');
+      if (separator < 0 || !result.slice(separator + 1)) {
+        item.status = 'error';
+        item.error = '파일 내용을 읽지 못했습니다';
+      } else {
+        item.data = result.slice(separator + 1);
+        item.status = 'waiting';
+      }
+      renderHealthFileQueue();
+      resolve(item.status === 'waiting');
+    };
+    reader.onerror = () => {
+      item.status = 'error';
+      item.error = '파일 읽기에 실패했습니다. 파일을 다시 선택해 주세요';
+      renderHealthFileQueue();
+      resolve(false);
+    };
+    reader.readAsDataURL(item.file);
+  });
 }
 
 function renderHealthFileQueue() {
   const el = document.getElementById('healthFileQueue');
   if (healthFileQueue.length === 0) { el.style.display='none'; return; }
   el.style.display = 'flex';
-  el.innerHTML = healthFileQueue.map(item => `
-    <div class="file-item ${item.status}">
-      <span class="fi-icon">${{waiting:'📄',parsing:'⏳',done:'✅',error:'❌'}[item.status]}</span>
-      <div class="fi-info"><div class="fi-name">${item.name}</div></div>
-      ${item.status !== 'parsing' ? `<button class="fi-remove" onclick="removeHealthFile('${item.id}')">✕</button>` : ''}
-    </div>`).join('');
+  const icons = { reading:'📥', waiting:'📄', parsing:'⏳', done:'✅', error:'❌' };
+  const labels = { reading:'파일 읽는 중...', waiting:'분석 대기', parsing:'AI 분석 중...', done:'분석 완료', error:'분석 오류' };
+  el.innerHTML = healthFileQueue.map(item => {
+    const statusText = item.status === 'error' ? `${labels.error}: ${item.error || '알 수 없는 오류'}` : labels[item.status];
+    return `<div class="file-item ${item.status}">
+      <span class="fi-icon">${icons[item.status]}</span>
+      <div class="fi-info">
+        <div class="fi-name">${escapeHtml(item.name)}</div>
+        <div class="fi-status">${escapeHtml(statusText)}</div>
+      </div>
+      ${item.status === 'error' ? `<button type="button" class="btn btn-outline btn-sm" onclick="retryHealthFile('${item.id}')">다시 시도</button>` : ''}
+      ${item.status !== 'parsing' && item.status !== 'reading' ? `<button type="button" class="fi-remove" aria-label="${escapeHtml(item.name)} 제거" onclick="removeHealthFile('${item.id}')">✕</button>` : ''}
+    </div>`;
+  }).join('');
+  const analyzeBtn = document.getElementById('healthAnalyzeBtn');
+  if (analyzeBtn && analyzeBtn.textContent !== '🤖 AI 분석 중...') {
+    const ready = healthFileQueue.some(item => item.status === 'waiting');
+    const reading = healthFileQueue.some(item => item.status === 'reading');
+    analyzeBtn.disabled = !ready || reading;
+  }
 }
 
 window.removeHealthFile = function(id) { healthFileQueue = healthFileQueue.filter(f => f.id !== id); renderHealthFileQueue(); };
 
+window.retryHealthFile = async function(id) {
+  const item = healthFileQueue.find(file => file.id === id);
+  if (!item) return;
+  if (item.data) {
+    item.status = 'waiting';
+    item.error = null;
+    renderHealthFileQueue();
+  } else {
+    await readHealthQueueItem(item);
+  }
+};
+
 window.analyzeHealth = async function() {
   if (healthFileQueue.length === 0) { toast('파일을 먼저 업로드하세요', 'error'); return; }
+  if (healthFileQueue.some(item => item.status === 'reading')) {
+    toast('파일을 읽는 중입니다. 잠시 후 다시 눌러주세요', 'warn');
+    return;
+  }
+  const pending = healthFileQueue.filter(item => item.status === 'waiting');
+  if (pending.length === 0) {
+    if (healthConfirmData.length) {
+      closeModal('healthUploadModal');
+      showHealthConfirm();
+    } else {
+      toast('분석 대기 중인 파일이 없습니다', 'error');
+    }
+    return;
+  }
   const btn = document.getElementById('healthAnalyzeBtn');
   btn.disabled = true; btn.textContent = '🤖 AI 분석 중...';
   healthCurrentRound = new Date().toLocaleDateString('ko-KR');
-  healthConfirmData = [];
-  for (const item of healthFileQueue) {
+  if (!healthFileQueue.some(item => item.status === 'done')) healthConfirmData = [];
+  const allowedCodes = new Set(['A','B','C1','C2','CN','D1','D2','DN','R','U','V']);
+  const allowedExamTypes = new Set(['1','2','3']);
+  for (const item of pending) {
     item.status = 'parsing'; renderHealthFileQueue();
     try {
       const data = await invokeEdgeJson('parse-msds', {
@@ -3305,7 +4200,24 @@ window.analyzeHealth = async function() {
 }]`
       });
       const parsed = Array.isArray(data.result) ? data.result : [data.result];
-      healthConfirmData.push(...parsed);
+      const normalized = parsed
+        .filter(entry => entry && typeof entry === 'object' && !Array.isArray(entry))
+        .map(entry => {
+          const examType = String(entry.examType || '1');
+          const resultCode = String(entry.resultCode || 'A').toUpperCase();
+          return {
+            name: String(entry.name || '').trim().slice(0, 100),
+            contractor: String(entry.contractor || '').trim().slice(0, 200),
+            jobType: String(entry.jobType || '').trim().slice(0, 200),
+            examDate: String(entry.examDate || '').trim().slice(0, 30),
+            examType: allowedExamTypes.has(examType) ? examType : '1',
+            resultCode: allowedCodes.has(resultCode) ? resultCode : 'A',
+            hazardResult: String(entry.hazardResult || '').trim().slice(0, 500),
+          };
+        })
+        .filter(entry => entry.name || entry.contractor || entry.examDate);
+      if (!normalized.length) throw new Error('문서에서 확인 가능한 근로자 결과가 없습니다');
+      healthConfirmData.push(...normalized);
       item.status = 'done';
     } catch (err) {
       item.status = 'error'; item.error = err.message; console.error(err);
@@ -3316,20 +4228,26 @@ window.analyzeHealth = async function() {
   }
   btn.disabled = false; btn.textContent = '🤖 AI 분석 시작';
   if (healthConfirmData.length === 0) { toast('분석 결과가 없습니다. 파일을 확인하세요', 'error'); return; }
+  const failedCount = healthFileQueue.filter(item => item.status === 'error').length;
+  if (failedCount) {
+    toast(`성공 ${healthConfirmData.length}명 · 오류 ${failedCount}개. 오류 파일을 다시 시도하거나 제거한 뒤 검토하세요`, 'warn');
+    renderHealthFileQueue();
+    return;
+  }
   closeModal('healthUploadModal');
   showHealthConfirm();
 };
 
 function showHealthConfirm() {
   const tbody = document.getElementById('healthConfirmBody');
-  const contractorOpts = contractors.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+  const contractorOpts = contractors.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
   tbody.innerHTML = healthConfirmData.map((item, i) => `
     <tr>
       <td class="ctr" style="color:var(--text3);">${i+1}</td>
-      <td><input value="${item.name||''}" onchange="healthConfirmData[${i}].name=this.value"></td>
+      <td><input value="${escapeHtml(item.name || '')}" onchange="healthConfirmData[${i}].name=this.value"></td>
       <td><select onchange="healthConfirmData[${i}].contractor=this.value"><option value="">선택</option>${contractorOpts}</select></td>
-      <td><input value="${item.jobType||''}" onchange="healthConfirmData[${i}].jobType=this.value" placeholder="소음작업"></td>
-      <td><input value="${item.examDate||''}" onchange="healthConfirmData[${i}].examDate=this.value" placeholder="2026.01.01"></td>
+      <td><input value="${escapeHtml(item.jobType || '')}" onchange="healthConfirmData[${i}].jobType=this.value" placeholder="소음작업"></td>
+      <td><input value="${escapeHtml(item.examDate || '')}" onchange="healthConfirmData[${i}].examDate=this.value" placeholder="2026.01.01"></td>
       <td>
         <select onchange="healthConfirmData[${i}].examType=this.value">
           <option value="1" ${String(item.examType)==='1'?'selected':''}>1 일반</option>
@@ -3342,7 +4260,7 @@ function showHealthConfirm() {
           ${['A','B','C1','C2','CN','D1','D2','DN','R','U','V'].map(c => `<option value="${c}" ${item.resultCode===c?'selected':''}>${c}</option>`).join('')}
         </select>
       </td>
-      <td><input value="${item.hazardResult||''}" onchange="healthConfirmData[${i}].hazardResult=this.value" placeholder="소음(우) D1" style="min-width:140px;"></td>
+      <td><input value="${escapeHtml(item.hazardResult || '')}" onchange="healthConfirmData[${i}].hazardResult=this.value" placeholder="소음(우) D1" style="min-width:140px;"></td>
     </tr>`).join('');
 
   // 협력사 select 기본값 설정
@@ -3431,13 +4349,13 @@ function renderHealthRecordsList() {
     return;
   }
   list.innerHTML = healthRecordsList.map(rec => `
-    <div class="health-card" onclick="openHealthRecord('${rec.id}')">
-      <div class="measure-round">${rec.round}</div>
-      <div class="measure-date">${(rec.created_at||'').split('T')[0]}</div>
-      <div class="measure-badges">
-        <span class="badge badge-primary">총 ${(rec.entries||[]).length}명</span>
-        <button class="btn btn-danger btn-sm btn-icon" onclick="event.stopPropagation();deleteHealthRecord('${rec.id}')" title="삭제">🗑</button>
-      </div>
+    <div class="health-card">
+      <button type="button" class="complex-card-open" aria-label="${escapeHtml(rec.round || '건강진단 결과')} 열기" onclick="openHealthRecord('${rec.id}')">
+        <span class="measure-round">${escapeHtml(rec.round)}</span>
+        <span class="measure-date">${escapeHtml((rec.created_at||'').split('T')[0])}</span>
+        <span class="measure-badges"><span class="badge badge-primary">총 ${(rec.entries||[]).length}명</span></span>
+      </button>
+      <button class="btn btn-danger btn-sm btn-icon" onclick="deleteHealthRecord('${rec.id}')" title="삭제">🗑</button>
     </div>`).join('');
 }
 
@@ -3882,14 +4800,14 @@ function renderPlacementSnapshotList() {
     return;
   }
   el.innerHTML = placementSnapshots.map(s => `
-    <div class="snapshot-item" onclick="openSnapshot('${s.id}')">
-      <div>
-        <div style="font-weight:700;font-size:13.5px;">${s.snapshot_label}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:2px;">
-          미수령 ${s.matched_count}명 · 코드 ${s.filter_codes.join(', ') || '-'}${s.include_missing ? ' + 누락' : ''}
-        </div>
-      </div>
-      <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteSnapshot('${s.id}')">삭제</button>
+    <div class="snapshot-item">
+      <button type="button" class="complex-card-open" aria-label="${escapeHtml(s.snapshot_label || '스냅샷')} 열기" onclick="openSnapshot('${s.id}')">
+        <span style="font-weight:700;font-size:13.5px;">${escapeHtml(s.snapshot_label)}</span>
+        <span style="font-size:12px;color:var(--text3);margin-top:2px;">
+          미수령 ${Number(s.matched_count) || 0}명 · 코드 ${escapeHtml(Array.isArray(s.filter_codes) ? s.filter_codes.join(', ') : '-')} ${s.include_missing ? ' + 누락' : ''}
+        </span>
+      </button>
+      <button class="btn btn-danger btn-sm" onclick="deleteSnapshot('${s.id}')">삭제</button>
     </div>
   `).join('');
 }
@@ -3903,11 +4821,11 @@ window.openSnapshot = function(id) {
   const body = document.getElementById('placementResultBody');
   body.innerHTML = placementFiltered.map(r => `
     <tr>
-      <td>${r.contractor}</td>
-      <td>${r.job || '-'}</td>
-      <td>${r.name}</td>
-      <td>${r.code ? r.code : '<span style="color:#DC2626;font-weight:700;">누락</span>'}</td>
-      <td>${r.phone || '-'}</td>
+      <td>${escapeHtml(r.contractor)}</td>
+      <td>${escapeHtml(r.job || '-')}</td>
+      <td>${escapeHtml(r.name)}</td>
+      <td>${r.code ? escapeHtml(r.code) : '<span style="color:#DC2626;font-weight:700;">누락</span>'}</td>
+      <td>${escapeHtml(r.phone || '-')}</td>
     </tr>
   `).join('');
 
@@ -3925,390 +4843,6 @@ window.deleteSnapshot = async function(id) {
   await supabase.from('placement_snapshots').delete().eq('id', id);
   await loadPlacementSnapshots();
   toast('삭제됐습니다');
-};
-
-// ═══════════════════════════════════════════════
-// 일정관리 (캘린더)
-// ═══════════════════════════════════════════════
-let calendarEvents = [];
-let calViewYear, calViewMonth; // 0-indexed month
-let calSelectedDate = null;
-
-// (CAL_CATEGORY_COLOR, CAL_CATEGORY_LABEL → src/data/constants.js 로 이동)
-
-function initCalView() {
-  const now = new Date();
-  calViewYear = now.getFullYear();
-  calViewMonth = now.getMonth();
-}
-
-async function loadCalendarEvents() {
-  if (!calViewYear) initCalView();
-  const { data, error } = await supabase.from('calendar_events')
-    .select('*').eq('workspace_id', currentWS.id).order('event_date');
-  if (error) { console.error(error); calendarEvents = []; return; }
-  calendarEvents = data || [];
-  renderUpcomingEvents();
-}
-
-window.calShiftMonth = function(delta) {
-  calViewMonth += delta;
-  if (calViewMonth > 11) { calViewMonth = 0; calViewYear++; }
-  if (calViewMonth < 0) { calViewMonth = 11; calViewYear--; }
-  renderCalendar();
-};
-
-function renderCalendar() {
-  if (!calViewYear) initCalView();
-  document.getElementById('calMonthLabel').textContent = `${calViewYear}년 ${calViewMonth + 1}월`;
-
-  const firstDay = new Date(calViewYear, calViewMonth, 1);
-  const startWeekday = firstDay.getDay();
-  const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
-  const daysInPrevMonth = new Date(calViewYear, calViewMonth, 0).getDate();
-  const todayStr = today();
-
-  const eventsByDate = {};
-  calendarEvents.forEach(ev => {
-    if (!eventsByDate[ev.event_date]) eventsByDate[ev.event_date] = [];
-    eventsByDate[ev.event_date].push(ev);
-  });
-
-  const cells = [];
-  // 이전달 채우기
-  for (let i = startWeekday - 1; i >= 0; i--) {
-    cells.push({ day: daysInPrevMonth - i, dim: true, dateStr: null });
-  }
-  // 이번달
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${calViewYear}-${String(calViewMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    cells.push({ day: d, dim: false, dateStr, isToday: dateStr === todayStr });
-  }
-  // 다음달 채우기 (7의 배수로)
-  let nextDay = 1;
-  while (cells.length % 7 !== 0) { cells.push({ day: nextDay++, dim: true, dateStr: null }); }
-
-  const grid = document.getElementById('calGrid');
-  grid.innerHTML = cells.map((c, i) => {
-    const weekday = i % 7;
-    const numClass = weekday === 0 ? 'sun' : (weekday === 6 ? 'sat' : '');
-    if (c.dim) {
-      return `<div class="cal-cell dim"><div class="cal-cell-num">${c.day}</div></div>`;
-    }
-    const evs = eventsByDate[c.dateStr] || [];
-    const evHtml = evs.slice(0, 3).map(ev =>
-      `<div class="cal-event-pill" style="background:${ev.color || CAL_CATEGORY_COLOR[ev.category] || '#64748B'}">${ev.title}</div>`
-    ).join('');
-    const moreHtml = evs.length > 3 ? `<div class="cal-event-more">+${evs.length - 3}개 더보기</div>` : '';
-    return `<div class="cal-cell ${c.isToday ? 'today' : ''}" onclick="selectCalDay('${c.dateStr}')">
-      <div class="cal-cell-num ${numClass}">${c.day}</div>
-      ${evHtml}${moreHtml}
-    </div>`;
-  }).join('');
-}
-
-window.selectCalDay = function(dateStr) {
-  calSelectedDate = dateStr;
-  const evs = calendarEvents.filter(e => e.event_date === dateStr).sort((a,b) => (a.start_time||'').localeCompare(b.start_time||''));
-  const d = new Date(dateStr + 'T00:00:00');
-  document.getElementById('calSelectedDayTitle').innerHTML =
-    `<span class="card-title-icon">📌</span> ${d.toLocaleDateString('ko-KR', { month:'long', day:'numeric', weekday:'long' })}
-     <button class="btn btn-primary btn-sm" style="float:right;" onclick="openEventModal('${dateStr}')">+ 일정 추가</button>`;
-  const list = document.getElementById('calSelectedDayEvents');
-  if (!evs.length) {
-    list.innerHTML = `<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">이 날짜에 등록된 일정이 없습니다</div>`;
-  } else {
-    list.innerHTML = evs.map(ev => `
-      <div class="cal-day-event-item" onclick="openEventModal(null,'${ev.id}')">
-        <div class="cal-day-event-dot" style="background:${ev.color || CAL_CATEGORY_COLOR[ev.category] || '#64748B'}"></div>
-        <div style="flex:1;">
-          <div style="font-weight:700;font-size:13.5px;">${ev.title}</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px;">
-            ${ev.start_time ? `${ev.start_time.slice(0,5)}${ev.end_time ? '–'+ev.end_time.slice(0,5) : ''}` : '종일'} · ${CAL_CATEGORY_LABEL[ev.category] || '일반'}
-          </div>
-        </div>
-      </div>
-    `).join('');
-  }
-  document.getElementById('calSelectedDayCard').style.display = '';
-};
-
-window.openEventModal = function(presetDate, editId) {
-  document.getElementById('ev_id').value = '';
-  document.getElementById('ev_title').value = '';
-  document.getElementById('ev_category').value = 'general';
-  document.getElementById('ev_date').value = presetDate || calSelectedDate || today();
-  document.getElementById('ev_start').value = '';
-  document.getElementById('ev_end').value = '';
-  document.getElementById('ev_desc').value = '';
-  document.getElementById('ev_deleteBtn').style.display = 'none';
-  document.getElementById('eventModalTitle').textContent = '일정 추가';
-
-  if (editId) {
-    const ev = calendarEvents.find(e => e.id === editId);
-    if (ev) {
-      document.getElementById('ev_id').value = ev.id;
-      document.getElementById('ev_title').value = ev.title;
-      document.getElementById('ev_category').value = ev.category || 'general';
-      document.getElementById('ev_date').value = ev.event_date;
-      document.getElementById('ev_start').value = ev.start_time ? ev.start_time.slice(0,5) : '';
-      document.getElementById('ev_end').value = ev.end_time ? ev.end_time.slice(0,5) : '';
-      document.getElementById('ev_desc').value = ev.description || '';
-      document.getElementById('ev_deleteBtn').style.display = '';
-      document.getElementById('eventModalTitle').textContent = '일정 수정';
-    }
-  }
-  openModal('eventModal');
-};
-
-window.saveEvent = async function() {
-  const id = document.getElementById('ev_id').value;
-  const title = document.getElementById('ev_title').value.trim();
-  const category = document.getElementById('ev_category').value;
-  const event_date = document.getElementById('ev_date').value;
-  const start_time = document.getElementById('ev_start').value || null;
-  const end_time = document.getElementById('ev_end').value || null;
-  const description = document.getElementById('ev_desc').value.trim() || null;
-
-  if (!title) { toast('제목을 입력하세요', 'error'); return; }
-  if (!event_date) { toast('날짜를 선택하세요', 'error'); return; }
-
-  const payload = {
-    workspace_id: currentWS.id, title, category, event_date, start_time, end_time, description,
-    color: CAL_CATEGORY_COLOR[category] || '#64748B',
-  };
-
-  let error;
-  if (id) {
-    ({ error } = await supabase.from('calendar_events').update(payload).eq('id', id));
-  } else {
-    ({ error } = await supabase.from('calendar_events').insert({ ...payload, created_by: user.id }));
-  }
-  if (error) { toast('저장 실패: ' + error.message, 'error'); return; }
-
-  closeModal('eventModal');
-  await loadCalendarEvents();
-  renderCalendar();
-  if (calSelectedDate) selectCalDay(calSelectedDate);
-  toast('일정이 저장됐습니다', 'success');
-};
-
-window.deleteEvent = async function() {
-  const id = document.getElementById('ev_id').value;
-  if (!id) return;
-  if (!confirm('이 일정을 삭제하시겠습니까?')) return;
-  await supabase.from('calendar_events').delete().eq('id', id);
-  closeModal('eventModal');
-  await loadCalendarEvents();
-  renderCalendar();
-  if (calSelectedDate) selectCalDay(calSelectedDate);
-  toast('삭제됐습니다');
-};
-
-function renderUpcomingEvents() {
-  const el = document.getElementById('upcomingEventsList');
-  if (!el) return;
-  const todayStr = today();
-  const upcoming = calendarEvents
-    .filter(e => e.event_date >= todayStr)
-    .sort((a,b) => a.event_date.localeCompare(b.event_date) || (a.start_time||'').localeCompare(b.start_time||''))
-    .slice(0, 5);
-  if (!upcoming.length) {
-    el.innerHTML = `<div style="color:var(--text3);font-size:13px;text-align:center;padding:20px;">예정된 일정이 없습니다</div>`;
-    return;
-  }
-  el.innerHTML = upcoming.map(ev => {
-    const d = new Date(ev.event_date + 'T00:00:00');
-    const dLabel = d.toLocaleDateString('ko-KR', { month:'numeric', day:'numeric', weekday:'short' });
-    return `<div class="cal-day-event-item" onclick="showPage('calendar')">
-      <div class="cal-day-event-dot" style="background:${ev.color || CAL_CATEGORY_COLOR[ev.category] || '#64748B'}"></div>
-      <div style="flex:1;">
-        <div style="font-weight:700;font-size:13.5px;">${ev.title}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:2px;">${dLabel}${ev.start_time ? ' · '+ev.start_time.slice(0,5) : ''}</div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ═══════════════════════════════════════════════
-// 투두리스트 (개인용)
-// ═══════════════════════════════════════════════
-let todos = [];
-
-async function loadTodos() {
-  const { data, error } = await supabase.from('todos')
-    .select('*').eq('workspace_id', currentWS.id).eq('user_id', user.id).order('sort_order');
-  if (error) { console.error(error); todos = []; return; }
-  todos = data || [];
-  renderTodos();
-}
-
-function renderTodos() {
-  const el = document.getElementById('todoList');
-  if (!el) return;
-  if (!todos.length) {
-    el.innerHTML = `<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">할 일을 추가해보세요</div>`;
-    return;
-  }
-  el.innerHTML = todos.map(t => `
-    <div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);">
-      <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTodo('${t.id}', this.checked)" style="width:17px;height:17px;cursor:pointer;flex-shrink:0;">
-      <div style="flex:1;font-size:13.5px;${t.done ? 'text-decoration:line-through;color:var(--text3);' : ''}">${t.content}</div>
-      <button class="btn btn-danger btn-sm" onclick="deleteTodo('${t.id}')" style="padding:4px 9px;">✕</button>
-    </div>
-  `).join('');
-}
-
-window.addTodo = async function() {
-  const input = document.getElementById('newTodoInput');
-  const content = input.value.trim();
-  if (!content) return;
-  const maxOrder = todos.reduce((m, t) => Math.max(m, t.sort_order), 0);
-  const { error } = await supabase.from('todos').insert({
-    workspace_id: currentWS.id, user_id: user.id, content, sort_order: maxOrder + 1,
-  });
-  if (error) { toast('추가 실패: ' + error.message, 'error'); return; }
-  input.value = '';
-  await loadTodos();
-};
-
-window.toggleTodo = async function(id, done) {
-  await supabase.from('todos').update({ done }).eq('id', id);
-  await loadTodos();
-};
-
-window.deleteTodo = async function(id) {
-  await supabase.from('todos').delete().eq('id', id);
-  await loadTodos();
-};
-
-// ═══════════════════════════════════════════════
-// 루틴 업무 (반복 체크리스트)
-// ═══════════════════════════════════════════════
-let routineTasks = [];
-let routineCompletions = []; // 현재 활성 주기에 대한 완료 기록만 보유
-
-function getISOWeekKey(d = new Date()) {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
-  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
-}
-function getMonthKey(d = new Date()) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-function periodKeyFor(task, d = new Date()) {
-  return task.frequency === 'monthly' ? getMonthKey(d) : getISOWeekKey(d);
-}
-
-window.toggleRoutineFreqInput = function() {
-  const freq = document.getElementById('newRoutineFreq').value;
-  document.getElementById('routineWeekdayField').style.display = freq === 'weekly' ? '' : 'none';
-  document.getElementById('routineDayField').style.display = freq === 'monthly' ? '' : 'none';
-};
-
-async function loadRoutineTasks() {
-  const { data, error } = await supabase.from('routine_tasks')
-    .select('*').eq('workspace_id', currentWS.id).eq('active', true).order('sort_order');
-  if (error) { console.error(error); routineTasks = []; return; }
-  routineTasks = data || [];
-
-  // 현재 주기들의 완료 기록 조회 (주간 태스크는 이번주 키, 월간 태스크는 이번달 키)
-  const periodKeys = [...new Set(routineTasks.map(t => periodKeyFor(t)))];
-  if (periodKeys.length) {
-    const { data: comps } = await supabase.from('routine_task_completions')
-      .select('*').eq('workspace_id', currentWS.id).in('period_key', periodKeys);
-    routineCompletions = comps || [];
-  } else {
-    routineCompletions = [];
-  }
-
-  renderRoutineTaskSettingsList();
-  renderRoutineTaskDashboard();
-}
-
-function renderRoutineTaskSettingsList() {
-  const el = document.getElementById('routineTaskList');
-  if (!el) return;
-  if (!routineTasks.length) {
-    el.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0;">등록된 루틴 업무가 없습니다</div>`;
-    return;
-  }
-  el.innerHTML = routineTasks.map(t => {
-    const freqLabel = t.frequency === 'monthly' ? `매월 ${t.day_of_month}일` : `매주 ${['일','월','화','수','목','금','토'][t.weekday]}요일`;
-    return `<div class="snapshot-item" style="cursor:default;">
-      <div>
-        <div style="font-weight:700;font-size:13.5px;">${t.title}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:2px;">${freqLabel}</div>
-      </div>
-      <button class="btn btn-danger btn-sm" onclick="deleteRoutineTask('${t.id}')">삭제</button>
-    </div>`;
-  }).join('');
-}
-
-function renderRoutineTaskDashboard() {
-  const el = document.getElementById('routineTaskDashList');
-  if (!el) return;
-  if (!routineTasks.length) {
-    el.innerHTML = `<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">등록된 루틴 업무가 없습니다</div>`;
-    return;
-  }
-  el.innerHTML = routineTasks.map(t => {
-    const pk = periodKeyFor(t);
-    const done = routineCompletions.some(c => c.task_id === t.id && c.period_key === pk);
-    const freqLabel = t.frequency === 'monthly' ? `매월 ${t.day_of_month}일` : `매주 ${['일','월','화','수','목','금','토'][t.weekday]}요일`;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);">
-      <input type="checkbox" ${done ? 'checked' : ''} onchange="toggleRoutineDone('${t.id}', this.checked)" style="width:17px;height:17px;cursor:pointer;flex-shrink:0;">
-      <div style="flex:1;">
-        <div style="font-size:13.5px;font-weight:600;${done ? 'text-decoration:line-through;color:var(--text3);' : ''}">${t.title}</div>
-        <div style="font-size:11.5px;color:var(--text3);">${freqLabel}</div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-window.addRoutineTask = async function() {
-  const title = document.getElementById('newRoutineTitle').value.trim();
-  const frequency = document.getElementById('newRoutineFreq').value;
-  if (!title) { toast('업무 내용을 입력하세요', 'error'); return; }
-
-  const payload = { workspace_id: currentWS.id, created_by: user.id, title, frequency };
-  if (frequency === 'weekly') {
-    payload.weekday = parseInt(document.getElementById('newRoutineWeekday').value, 10);
-  } else {
-    const dom = parseInt(document.getElementById('newRoutineDay').value, 10);
-    if (!dom || dom < 1 || dom > 31) { toast('1~31 사이 날짜를 입력하세요', 'error'); return; }
-    payload.day_of_month = dom;
-  }
-
-  const { error } = await supabase.from('routine_tasks').insert(payload);
-  if (error) { toast('추가 실패: ' + error.message, 'error'); return; }
-  document.getElementById('newRoutineTitle').value = '';
-  await loadRoutineTasks();
-  toast('루틴 업무가 추가됐습니다', 'success');
-};
-
-window.deleteRoutineTask = async function(id) {
-  if (!confirm('이 루틴 업무를 삭제하시겠습니까? (완료 기록도 함께 삭제됩니다)')) return;
-  await supabase.from('routine_tasks').delete().eq('id', id);
-  await loadRoutineTasks();
-  toast('삭제됐습니다');
-};
-
-window.toggleRoutineDone = async function(taskId, done) {
-  const task = routineTasks.find(t => t.id === taskId);
-  if (!task) return;
-  const pk = periodKeyFor(task);
-  if (done) {
-    const { error } = await supabase.from('routine_task_completions')
-      .insert({ task_id: taskId, workspace_id: currentWS.id, period_key: pk, completed_by: user.id });
-    if (error) { toast('처리 실패: ' + error.message, 'error'); return; }
-  } else {
-    await supabase.from('routine_task_completions').delete().eq('task_id', taskId).eq('period_key', pk);
-  }
-  await loadRoutineTasks();
 };
 
 // ═══════════════════════════════════════════════
@@ -4500,16 +5034,17 @@ function renderFolderItems(items, depth) {
     const indent = depth * 14;
     return `<div>
       <div class="tree-item ${isActive ? 'active' : ''}" style="padding-left:${12 + indent}px;"
-          onclick="selectPhotoFolder('${f.id}')"
           ondragover="event.preventDefault();this.classList.add('drag-over')"
           ondragleave="this.classList.remove('drag-over')"
           ondrop="handleDropOnFolder(event,'${f.id}')">
-        <span class="tree-toggle" onclick="event.stopPropagation();toggleFolderOpen('${f.id}')">
+        <button type="button" class="tree-toggle" aria-label="${hasChildren ? (isOpen ? '하위 폴더 접기' : '하위 폴더 펼치기') : '하위 폴더 없음'}" ${hasChildren ? '' : 'disabled'} onclick="toggleFolderOpen('${f.id}')">
           ${hasChildren ? (isOpen ? '▾' : '▸') : ''}
-        </span>
-        <span style="margin-right:4px;">📁</span>
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span>
-        <span style="font-size:11px;color:var(--text3);margin-left:4px;">${photoCount||''}</span>
+        </button>
+        <button type="button" class="tree-folder-select" onclick="selectPhotoFolder('${f.id}')">
+          <span style="margin-right:4px;">📁</span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(f.name)}</span>
+          <span style="font-size:11px;color:var(--text3);margin-left:4px;">${photoCount||''}</span>
+        </button>
       </div>
       <div class="tree-children ${isOpen ? 'open' : ''}">
         ${hasChildren ? renderFolderItems(children, depth + 1) : ''}
@@ -4578,12 +5113,12 @@ function renderPhotoMain() {
     return `<div class="photo-date-group">
       <div class="photo-date-label">${dLabel} <span style="font-weight:500;color:var(--text3);">(${byDate[d].length}장)</span></div>
       <div class="photo-grid">${byDate[d].map(p => `
-        <div class="photo-thumb" draggable="true" id="photo_${p.id}"
+        <button type="button" class="photo-thumb" draggable="true" id="photo_${p.id}"
             onclick="openPhotoViewer('${p.id}')"
             ondragstart="handlePhotoDragStart(event,'${p.id}')"
             ondragend="handlePhotoDragEnd(event)">
-          <img src="${photoThumbUrlCache[p.id]||''}" data-photo-id="${p.id}" loading="lazy">
-        </div>`).join('')}
+          <img src="${photoThumbUrlCache[p.id]||''}" data-photo-id="${p.id}" loading="lazy" alt="사진 크게 보기">
+        </button>`).join('')}
       </div>
     </div>`;
   }).join('');
@@ -4648,7 +5183,7 @@ window.openAddFolderModal = function(parentId) {
   const existing = new Set(photoFolders.filter(f => f.parent_id === parentId).map(f => f.name));
   const chips = PHOTO_FOLDER_PRESETS.filter(n => !existing.has(n));
   document.getElementById('folderPresetChips').innerHTML = chips.map(n =>
-    `<span class="tag" style="cursor:pointer;" onclick="document.getElementById('newFolderName').value='${n}'">${n}</span>`
+    `<button type="button" class="tag tag-button" onclick="document.getElementById('newFolderName').value=decodeURIComponent('${encodeURIComponent(n)}')">${escapeHtml(n)}</button>`
   ).join('');
   openModal('addFolderModal');
 };
@@ -5366,7 +5901,7 @@ function renderMpTypeFilters(groups) {
   document.getElementById('mpTypeFilters').innerHTML = types.map(t => {
     const color = MP_TYPE_COLORS[t] || 'var(--primary)';
     const on = mpFilter === t;
-    return `<button class="mp-type-btn" onclick="mpSetFilter('${t.replace(/'/g,"\\'")}')" style="${on?`background:${color};border-color:${color};color:#fff;font-weight:700`:''}">${t}</button>`;
+    return `<button type="button" class="mp-type-btn" onclick="mpSetFilter(decodeURIComponent('${encodeURIComponent(t)}'))" style="${on?`background:${color};border-color:${color};color:#fff;font-weight:700`:''}">${escapeHtml(t)}</button>`;
   }).join('');
 }
 
@@ -5380,11 +5915,11 @@ window.renderMpCompanyList = function() {
   el.innerHTML = groups.map(g => {
     const on = mpSelected.has(g.company);
     const color = MP_TYPE_COLORS[g.type] || '#64748b';
-    return `<div class="mp-company-item" onclick="mpToggleCompany('${g.company.replace(/'/g,"\\'")}')" >
+    return `<button type="button" class="mp-company-item" aria-pressed="${on}" onclick="mpToggleCompany(decodeURIComponent('${encodeURIComponent(g.company)}'))">
       <div class="mp-company-check" style="border-color:${on?color:'var(--border2)'};background:${on?color:'var(--surface)'}">${on?'✓':''}</div>
-      <div class="mp-company-name">${g.company}</div>
-      <span class="mp-type-badge" style="background:${color}18;color:${color}">${g.type}</span>
-    </div>`;
+      <div class="mp-company-name">${escapeHtml(g.company)}</div>
+      <span class="mp-type-badge" style="background:${color}18;color:${color}">${escapeHtml(g.type)}</span>
+    </button>`;
   }).join('');
 };
 
@@ -5789,12 +6324,14 @@ async function loadWxPosters() {
     grid.innerHTML = list.map(f => {
       const m = f.name.match(/(\d{4})(\d{2})(\d{2})[_-]?(\d{2})?(\d{2})?/);
       const label = m ? `${m[1]}.${m[2]}.${m[3]}${m[4] ? ` ${m[4]}:${m[5]||'00'}` : ''}` : f.name;
-      return `<div class="wx-poster" onclick="window.open('${f.download_url}','_blank')">
-        <img src="${f.download_url}" loading="lazy" alt="${label}">
-        <div class="wx-poster-label">${label}</div>
-      </div>`;
+      const downloadUrl = safeHttpUrl(f.download_url);
+      if (!downloadUrl) return '';
+      return `<a class="wx-poster" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener noreferrer">
+        <img src="${escapeHtml(downloadUrl)}" loading="lazy" alt="${escapeHtml(label)}">
+        <div class="wx-poster-label">${escapeHtml(label)}</div>
+      </a>`;
     }).join('');
-  } catch (e) { grid.innerHTML = `<div class="mp-empty">${e.message}</div>`; }
+  } catch (e) { grid.innerHTML = `<div class="mp-empty">${escapeHtml(e.message)}</div>`; }
 }
 window.wxSetTab = function(t) { wxTab = t; loadWxPosters(); };
 

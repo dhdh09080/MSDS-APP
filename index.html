@@ -104,9 +104,9 @@
         </div>
       </div>
       <div style="height:16px;"></div>
-      <div class="ws-add-btn" onclick="openModal('createWSModal')">
+      <button type="button" class="ws-add-btn" onclick="openModal('createWSModal')">
         + 새 현장 추가하기
-      </div>
+      </button>
     </div>
   </div>
 </div>
@@ -116,65 +116,73 @@
   <div class="app">
 
     <!-- 사이드바 (데스크탑) -->
-    <div class="sidebar">
-      <div class="sidebar-header" onclick="goWorkspaces()">
+    <aside class="sidebar" aria-label="현장 메뉴">
+      <button type="button" class="sidebar-header" onclick="goWorkspaces()" aria-label="현장 목록으로 이동">
         <div class="sidebar-back">← 현장 목록</div>
         <div class="sidebar-ws-name" id="sidebarWSName">현장명</div>
-      </div>
-      <nav class="sidebar-nav">
+      </button>
+      <nav class="sidebar-nav" aria-label="주요 기능">
         <div class="nav-section">메인</div>
-        <div class="nav-item active" id="nav-home" onclick="showPage('home')">
+        <button type="button" class="nav-item active" id="nav-home" onclick="showPage('home')">
           <span class="nav-icon">🏠</span> 홈
-        </div>
+        </button>
+        <button type="button" class="nav-item" id="nav-announcements" onclick="showPage('announcements')">
+          <span class="nav-icon">📢</span> 공지사항
+        </button>
+        <button type="button" class="nav-item" id="nav-feedback" onclick="showPage('feedback')">
+          <span class="nav-icon">💬</span> 건의 · 오류 신고
+          <span class="nav-badge" id="navBadgeFeedback" style="display:none">0</span>
+        </button>
+        <button type="button" class="nav-item" id="nav-library" onclick="showPage('library')">
+          <span class="nav-icon">📚</span> 법령 · 지침
+        </button>
+
         <div class="nav-section">화학물질</div>
-        <div class="nav-item" id="nav-msds" onclick="showPage('msds')">
+        <button type="button" class="nav-item" id="nav-msds" onclick="showPage('msds')">
           <span class="nav-icon">🧪</span> MSDS 대장
           <span class="nav-badge" id="navBadgeMsds" style="display:none">0</span>
-        </div>
-        <div class="nav-item" id="nav-warning" onclick="showPage('warning')">
+        </button>
+        <button type="button" class="nav-item" id="nav-warning" onclick="showPage('warning')">
           <span class="nav-icon">⚠️</span> 경고표지
-        </div>
-        <div class="nav-item" id="nav-upload-link" onclick="showPage('upload-link')">
+        </button>
+        <button type="button" class="nav-item" id="nav-contractors" onclick="showPage('contractors')">
+          <span class="nav-icon">👷</span> 협력사 관리
+        </button>
+        <button type="button" class="nav-item" id="nav-upload-link" onclick="showPage('upload-link')">
           <span class="nav-icon">🔗</span> 협력사 링크
-        </div>
+        </button>
 
-        <div class="nav-section">측정 · 진단</div>
-        <div class="nav-item" id="nav-measure" onclick="showPage('measure')">
-          <span class="nav-icon">📊</span> 작업환경측정
-        </div>
-        <div class="nav-item" id="nav-health" onclick="showPage('health')">
+        <div class="nav-section">근로자 건강</div>
+        <button type="button" class="nav-item" id="nav-health" onclick="showPage('health')">
           <span class="nav-icon">🏥</span> 건강진단
-        </div>
-        <div class="nav-item" id="nav-photos" onclick="showPage('photos')">
-          <span class="nav-icon">📷</span> 사진 클라우드
-        </div>
-
-        <div class="nav-section">인력</div>
-        <div class="nav-item" id="nav-manpower" onclick="showPage('manpower')">
-          <span class="nav-icon">👷</span> 투입인원
-        </div>
-        <div class="nav-item" id="nav-weather" onclick="showPage('weather')">
-          <span class="nav-icon">☀️</span> 혹서기 날씨
-        </div>
-        <div class="nav-item" id="nav-vulnerable" onclick="showPage('vulnerable')">
+        </button>
+        <button type="button" class="nav-item" id="nav-vulnerable" onclick="showPage('vulnerable')">
           <span class="nav-icon">🧓</span> 취약자 명단
-        </div>
-        <div class="nav-item" id="nav-bp" onclick="showPage('bp')">
+        </button>
+        <button type="button" class="nav-item" id="nav-bp" onclick="showPage('bp')">
           <span class="nav-icon">🩺</span> 고령자 혈압
-        </div>
+        </button>
 
-        <div class="nav-section">자료실</div>
-        <div class="nav-item" id="nav-library" onclick="showPage('library')">
-          <span class="nav-icon">📚</span> 법령 · 지침
-        </div>
+        <div class="nav-section">작업환경</div>
+        <button type="button" class="nav-item" id="nav-measure" onclick="showPage('measure')">
+          <span class="nav-icon">📊</span> 작업환경측정
+        </button>
+
+        <div class="nav-section">현장 지원</div>
+        <button type="button" class="nav-item" id="nav-weather" onclick="showPage('weather')">
+          <span class="nav-icon">☀️</span> 혹서기 날씨
+        </button>
+        <button type="button" class="nav-item" id="nav-photos" onclick="showPage('photos')">
+          <span class="nav-icon">📷</span> 사진 클라우드
+        </button>
+        <button type="button" class="nav-item" id="nav-manpower" onclick="showPage('manpower')">
+          <span class="nav-icon">👷</span> 투입인원
+        </button>
 
         <div class="nav-section">관리</div>
-        <div class="nav-item" id="nav-contractors" onclick="showPage('contractors')">
-          <span class="nav-icon">👷</span> 협력사 관리
-        </div>
-        <div class="nav-item" id="nav-settings" onclick="showPage('settings')">
+        <button type="button" class="nav-item" id="nav-settings" onclick="showPage('settings')">
           <span class="nav-icon">⚙️</span> 설정
-        </div>
+        </button>
       </nav>
       <div class="sidebar-footer">
         <div class="user-chip">
@@ -186,7 +194,7 @@
           <button class="logout-btn" onclick="handleLogout()" title="로그아웃">⏻</button>
         </div>
       </div>
-    </div>
+    </aside>
 
     <!-- 메인 콘텐츠 -->
     <div class="main" id="mainContent">
@@ -199,6 +207,7 @@
             <div class="page-subtitle" id="homeDate"></div>
           </div>
           <div class="header-actions">
+            <button class="btn btn-outline" onclick="showPage('feedback');openFeedbackCreate()">💬 건의하기</button>
             <button class="btn btn-primary" onclick="showPage('msds');setTimeout(()=>document.getElementById('msdsRegisterBtn').click(),100)">+ MSDS 등록</button>
           </div>
         </div>
@@ -220,7 +229,7 @@
 
           <!-- ① 경고 배너 (접기 가능) -->
           <div id="dashAlertWrap" style="display:none;margin-bottom:20px;">
-            <div class="dash-alert-bar" id="dashAlertBar" onclick="toggleDashAlerts()">
+            <button type="button" class="dash-alert-bar" id="dashAlertBar" aria-expanded="false" aria-controls="dashAlertDetail" onclick="toggleDashAlerts()">
               <span id="dashAlertSummary"></span>
               <span class="dash-alert-toggle" id="dashAlertToggleIcon">▾ 펼치기</span>
             </div>
@@ -245,32 +254,32 @@
           </div>
 
           <!-- ①.5 체감온도 (혹서기) -->
-          <div class="card" id="dashWeatherCard" style="display:none;margin-bottom:18px;cursor:pointer;" onclick="showPage('weather')">
+          <button type="button" class="card semantic-card-button" id="dashWeatherCard" style="display:none;margin-bottom:18px;cursor:pointer;" onclick="showPage('weather')">
             <div id="dashWeatherBody"></div>
-          </div>
+          </button>
 
           <!-- ④ 통계 (작게, 클릭하면 해당 페이지로) -->
           <div class="stats-row" style="margin-bottom:18px;">
-            <div class="stat-card" onclick="showPage('msds')">
+            <button type="button" class="stat-card semantic-card-button" onclick="showPage('msds')">
               <div class="stat-label">MSDS 등록</div>
               <div class="stat-value primary" id="homeStatTotal">0</div>
               <div class="stat-sub">전체 물질</div>
-            </div>
-            <div class="stat-card" onclick="showPage('msds');document.getElementById('filterReceipt').value='pending';renderMsdsTable()">
+            </button>
+            <button type="button" class="stat-card semantic-card-button" onclick="showPage('msds');document.getElementById('filterReceipt').value='pending';renderMsdsTable()">
               <div class="stat-label">MSDS 미수령</div>
               <div class="stat-value danger" id="homeStatPending">0</div>
               <div class="stat-sub">링크 전송 필요</div>
-            </div>
-            <div class="stat-card" onclick="showPage('msds');document.getElementById('filterSpecial').value='Y';renderMsdsTable()">
+            </button>
+            <button type="button" class="stat-card semantic-card-button" onclick="showPage('msds');document.getElementById('filterSpecial').value='Y';renderMsdsTable()">
               <div class="stat-label">특별관리물질</div>
               <div class="stat-value warn" id="homeStatSpecial">0</div>
               <div class="stat-sub">CMR 물질</div>
-            </div>
-            <div class="stat-card" onclick="showPage('msds');document.getElementById('filterStatus').value='active';renderMsdsTable()">
+            </button>
+            <button type="button" class="stat-card semantic-card-button" onclick="showPage('msds');document.getElementById('filterStatus').value='active';renderMsdsTable()">
               <div class="stat-label">사용중 물질</div>
               <div class="stat-value ok" id="homeStatActive">0</div>
               <div class="stat-sub">현재 반입중</div>
-            </div>
+            </button>
           </div>
 
           <!-- ⑤ 최근 등록 MSDS (하단) -->
@@ -282,6 +291,41 @@
         </div>
       </div>
 
+      <!-- ═══ 공지사항 ═══ -->
+      <div class="page" id="page-announcements">
+        <div class="page-header">
+          <div>
+            <div class="page-title">공지사항</div>
+            <div class="page-subtitle">현장 운영과 보건업무에 필요한 안내를 확인합니다.</div>
+          </div>
+          <div class="header-actions" id="announcementAdminActions" style="display:none">
+            <button type="button" class="btn btn-primary" onclick="openAnnouncementEditor()">+ 새 공지 작성</button>
+          </div>
+        </div>
+        <div class="content-scroll">
+          <section class="announcement-guide" aria-labelledby="announcementGuideTitle">
+            <div class="announcement-guide-icon" aria-hidden="true">📢</div>
+            <div>
+              <b id="announcementGuideTitle">현장 구성원에게 공유되는 공지입니다.</b>
+              <div id="announcementScopeHint">현재 게시 중인 현장 공지만 표시됩니다.</div>
+            </button>
+          </section>
+          <div class="announcement-toolbar">
+            <div>
+              <b>공지 목록</b>
+              <span>중요 공지는 목록 위쪽에 표시됩니다.</span>
+            </div>
+            <label class="announcement-show-all" id="announcementShowAllWrap" style="display:none">
+              <input type="checkbox" id="announcementShowAllChk" onchange="renderAnnouncements()">
+              예약·종료 공지도 보기
+            </label>
+          </div>
+          <div class="announcement-list" id="announcementList" aria-live="polite">
+            <div class="announcement-empty">공지사항을 불러오는 중입니다.</div>
+          </div>
+        </div>
+      </div>
+
       <!-- ═══ MSDS 대장 ═══ -->
 <div class="page" id="page-msds">
   <div class="page-header">
@@ -289,13 +333,18 @@
       <div class="page-title">MSDS 관리대장</div>
       <div class="page-subtitle" id="msdsSubtitle">총 0건</div>
     </div>
-    <div class="header-actions">
-      <button class="btn btn-secondary" onclick="printMsdsList()">🖨️ 인쇄</button>
-      <button class="btn btn-secondary" onclick="openMsdsFullPrintModal()">📄 전문 인쇄</button>
-      <button class="btn btn-secondary" onclick="exportMsdsExcel()">📊 엑셀</button>
-      <button class="btn btn-secondary" onclick="openKoshaSearch()">🔍 물질 검색</button>
-      <button class="btn btn-secondary" onclick="openPackageModal()">📦 패키지</button>
+    <div class="header-actions msds-header-actions">
       <button class="btn btn-primary" id="msdsRegisterBtn" onclick="openMsdsRegister()">+ 등록</button>
+      <details class="msds-more-actions">
+        <summary class="btn btn-secondary">기타 업무</summary>
+        <div class="msds-action-menu">
+          <button class="btn btn-secondary" onclick="printMsdsList()">🖨️ 대장 인쇄</button>
+          <button class="btn btn-secondary" onclick="openMsdsFullPrintModal()">📄 MSDS 전문 인쇄</button>
+          <button class="btn btn-secondary" onclick="exportMsdsExcel()">📊 엑셀 내보내기</button>
+          <button class="btn btn-secondary" onclick="openKoshaSearch()">🔍 물질 검색</button>
+          <button class="btn btn-secondary" onclick="openPackageModal()">📦 협력사 패키지</button>
+        </div>
+      </details>
     </div>
   </div>
   <div style="display:flex;flex:1;overflow:hidden;">
@@ -369,11 +418,12 @@
                   <button class="btn btn-primary btn-sm" onclick="printWarnings()">🖨️ 선택 인쇄</button>
                 </div>
                 <div id="warnSelWrap" style="display:none;margin-top:10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);">
-                  <div style="display:flex;align-items:center;padding:7px 10px;cursor:pointer;user-select:none;" onclick="toggleWarnSelPanel()">
-                    <span style="font-size:12px;font-weight:700;" id="warnSelTitle">✅ 선택된 물질 0건</span>
-                    <span style="flex:1"></span>
+                  <div style="display:flex;align-items:center;padding:4px 6px 4px 10px;gap:8px;user-select:none;">
+                    <button type="button" class="warn-selection-toggle" aria-expanded="true" aria-controls="warnSelChips" onclick="toggleWarnSelPanel()">
+                      <span style="font-size:12px;font-weight:700;" id="warnSelTitle">✅ 선택된 물질 0건</span>
+                      <span id="warnSelToggleIcon" style="margin-left:auto;font-size:11px;color:var(--text3);">▾ 접기</span>
+                    </button>
                     <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px;" onclick="event.stopPropagation();clearAllWarnSelected()">전체 해제</button>
-                    <span id="warnSelToggleIcon" style="margin-left:8px;font-size:11px;color:var(--text3);">▾ 접기</span>
                   </div>
                   <div id="warnSelChips" style="display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 10px;"></div>
                 </div>
@@ -960,41 +1010,50 @@
         </div>
       </div>
 
-      <!-- ═══ 일정관리 ═══ -->
-      <div class="page" id="page-calendar">
-        <div class="page-header">
-          <div>
-            <div class="page-title">일정관리</div>
-            <div class="page-subtitle">협력사 미팅, 점검일 등 팀 공유 일정</div>
-          </div>
-          <div class="header-actions">
-            <button class="btn btn-primary" onclick="openEventModal()">+ 일정 추가</button>
-          </div>
-        </div>
-        <div class="content-scroll">
+      <!-- 초기화 시 설정 화면으로 옮겨지는 AI 설정 카드 -->
+      <div id="aiSettingsMountSource" hidden>
           <div class="card ai-settings-card" id="aiSettingsCard">
             <div class="card-title ai-settings-title">
               <span><span class="card-title-icon">🤖</span> AI 분석 API</span>
               <span class="ai-security-badge">🔒 사용자별 암호화 저장</span>
             </div>
-            <div class="form-note" style="margin-bottom:10px;">MSDS·작업환경측정·건강진단 분석에 사용할 개인 API를 설정하세요. API 사용료는 각 제공자 계정에 직접 청구되며, 키 원문은 저장 후 다시 표시되지 않습니다.</div>
-            <div class="ai-privacy-notice"><b>문서 전송 안내</b><span>AI 분석을 실행하면 업로드한 문서 내용이 현재 선택한 Claude(Anthropic), GPT(OpenAI) 또는 Gemini(Google) API로 전송됩니다. 건강진단 결과 등 개인정보가 포함된 문서는 필요한 동의와 사내 보안 기준을 확인한 뒤 사용하세요.</span></div>
+            <div class="form-note" style="margin-bottom:10px;">개인 API를 하나만 등록하면 그 API를 사용하고, 여러 개를 등록하면 문서 유형에 가장 알맞은 한 곳만 자동 선택합니다. API 사용료는 각 제공자 계정에 직접 청구되며, 키 원문은 저장 후 다시 표시되지 않습니다.</div>
+            <div class="ai-privacy-notice"><b>보안 기본값</b><span>공개 협력사 링크는 AI를 호출하지 않습니다. 로그인한 사용자가 분석을 실행할 때만 자동 선택된 제공자 한 곳으로 문서가 전송되며, 문서·프롬프트 원문은 이 시스템의 사용량 기록에 저장하지 않습니다.</span></div>
             <div id="aiSettingsWarning" class="ai-settings-warning" style="display:none;"></div>
+            <div id="aiRoutingSummary" class="ai-routing-summary"><b>분석 경로 확인 중</b><span>등록된 API에 따라 자동 선택 규칙을 표시합니다.</span></div>
+            <section class="ai-privacy-controls">
+              <div class="ai-privacy-control-head">
+                <div><b>비용·민감정보 보호</b><span id="aiMonthlyUsage">이번 달 사용량 확인 중...</span></div>
+                <button class="btn btn-primary btn-sm" onclick="saveAiPrivacySettings()">설정 저장</button>
+              </div>
+              <div class="ai-privacy-control-grid">
+                <label class="ai-toggle-row">
+                  <input type="checkbox" id="aiAllowSensitiveDocuments">
+                  <span><b>건강진단 등 민감문서 AI 전송 허용</b><small>기본 꺼짐. 필요한 동의와 회사 보안 기준을 확인한 경우에만 켜세요.</small></span>
+                </label>
+                <label class="ai-toggle-row">
+                  <input type="checkbox" id="aiGeminiPaidProtection">
+                  <span><b>Gemini 유료 서비스 데이터 보호 조건 확인</b><small>확인하지 않으면 Gemini로 민감문서를 분석할 수 없습니다.</small></span>
+                </label>
+                <div class="ai-limit-row"><span><b>개인 월 한도 설정</b><small>기본은 무제한입니다. 개인 비용을 직접 제한하고 싶을 때만 사용하세요.</small></span><label class="ai-limit-toggle"><input type="checkbox" id="aiEnableMonthlyLimit" onchange="toggleAiMonthlyLimit()"> 사용</label><input class="form-input" id="aiMonthlyLimit" type="number" min="1" max="200" value="30" disabled></div>
+              </div>
+              <div class="ai-policy-summary">Claude·OpenAI의 상용 API는 기본적으로 고객 데이터를 모델 학습에 사용하지 않습니다. 다만 공급자 정책상 제한 기간 동안 보안·오용 방지용으로 보관될 수 있습니다. Gemini 무료 서비스에는 민감문서를 보내지 마세요.</div>
+            </section>
             <div class="ai-provider-grid">
               <section class="ai-provider-card" data-provider="claude">
-                <label class="ai-provider-select"><input type="radio" name="aiProvider" value="claude" onchange="selectAiProvider('claude')"><span><b>Claude</b><small>Anthropic · 문서 분석</small></span></label>
+                <div class="ai-provider-select"><span><b>Claude</b><small>Anthropic · 복잡한 문서의 예비 순위</small></span></div>
                 <div class="ai-provider-status" id="aiStatus-claude">확인 중...</div>
                 <div class="ai-key-row"><input class="form-input" type="password" id="aiKey-claude" autocomplete="off" placeholder="sk-ant-... 새 API 키 입력"><button class="btn btn-primary btn-sm" onclick="saveAiKey('claude')">저장</button></div>
                 <div class="ai-provider-actions"><button class="btn btn-outline btn-sm" onclick="testAiKey('claude')">연결 확인</button><button class="btn btn-secondary btn-sm" onclick="deleteAiKey('claude')">삭제</button></div>
               </section>
               <section class="ai-provider-card" data-provider="openai">
-                <label class="ai-provider-select"><input type="radio" name="aiProvider" value="openai" onchange="selectAiProvider('openai')"><span><b>GPT</b><small>OpenAI · 문서/이미지 분석</small></span></label>
+                <div class="ai-provider-select"><span><b>GPT</b><small>OpenAI · 건강진단 구조화 우선</small></span></div>
                 <div class="ai-provider-status" id="aiStatus-openai">확인 중...</div>
                 <div class="ai-key-row"><input class="form-input" type="password" id="aiKey-openai" autocomplete="off" placeholder="sk-... 새 API 키 입력"><button class="btn btn-primary btn-sm" onclick="saveAiKey('openai')">저장</button></div>
                 <div class="ai-provider-actions"><button class="btn btn-outline btn-sm" onclick="testAiKey('openai')">연결 확인</button><button class="btn btn-secondary btn-sm" onclick="deleteAiKey('openai')">삭제</button></div>
               </section>
               <section class="ai-provider-card" data-provider="gemini">
-                <label class="ai-provider-select"><input type="radio" name="aiProvider" value="gemini" onchange="selectAiProvider('gemini')"><span><b>Gemini</b><small>Google AI · 문서/이미지 분석</small></span></label>
+                <div class="ai-provider-select"><span><b>Gemini</b><small>Google AI · MSDS/PDF·OCR 우선</small></span></div>
                 <div class="ai-provider-status" id="aiStatus-gemini">확인 중...</div>
                 <div class="ai-key-row"><input class="form-input" type="password" id="aiKey-gemini" autocomplete="off" placeholder="AIza... 새 API 키 입력"><button class="btn btn-primary btn-sm" onclick="saveAiKey('gemini')">저장</button></div>
                 <div class="ai-provider-actions"><button class="btn btn-outline btn-sm" onclick="testAiKey('gemini')">연결 확인</button><button class="btn btn-secondary btn-sm" onclick="deleteAiKey('gemini')">삭제</button></div>
@@ -1007,7 +1066,7 @@
                   <li>아래에서 사용할 AI 제공자의 공식 API 키 페이지를 엽니다.</li>
                   <li>로그인 후 결제수단 또는 크레딧을 등록하고 <b>새 Secret/API key 만들기</b>를 누릅니다.</li>
                   <li>생성 직후 한 번만 표시되는 키를 복사합니다. 키를 메신저나 문서에 공유하지 마세요.</li>
-                  <li>위 입력칸에 붙여넣고 <b>저장</b>을 누릅니다. 연결 확인이 성공한 제공자를 선택하면 됩니다.</li>
+                  <li>위 입력칸에 붙여넣고 <b>저장</b>을 누릅니다. 하나만 등록하면 그 API를, 여러 개면 분석 종류에 맞는 API 한 곳을 자동 사용합니다.</li>
                 </ol>
                 <div class="ai-guide-links">
                   <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Claude API 키 만들기 ↗</a>
@@ -1018,25 +1077,6 @@
               </div>
             </details>
           </div>
-
-          <div class="card">
-            <div class="cal-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-              <button class="btn btn-outline btn-sm" onclick="calShiftMonth(-1)">← 이전</button>
-              <div id="calMonthLabel" style="font-size:17px;font-weight:800;color:var(--text);"></div>
-              <button class="btn btn-outline btn-sm" onclick="calShiftMonth(1)">다음 →</button>
-            </div>
-            <div class="cal-weekdays" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;">
-              <div class="cal-weekday">일</div><div class="cal-weekday">월</div><div class="cal-weekday">화</div>
-              <div class="cal-weekday">수</div><div class="cal-weekday">목</div><div class="cal-weekday">금</div><div class="cal-weekday">토</div>
-            </div>
-            <div id="calGrid" class="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;"></div>
-          </div>
-
-          <div class="card" id="calSelectedDayCard" style="margin-top:16px;display:none;">
-            <div class="card-title" id="calSelectedDayTitle"></div>
-            <div id="calSelectedDayEvents"></div>
-          </div>
-        </div>
       </div>
 
       <!-- ═══ 협력사 관리 ═══ -->
@@ -1105,6 +1145,56 @@
             <div class="form-note" style="margin-bottom:12px;">미제출 협력사를 선택해 바로 업로드하거나 협력사 업로드 링크를 보낼 수 있습니다.</div>
             <div id="businessLicenseStatus" style="margin-bottom:10px;font-size:14px;font-weight:700;"></div>
             <div id="businessLicenseList"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ 건의 · 오류 신고 ═══ -->
+      <div class="page" id="page-feedback">
+        <div class="page-header">
+          <div>
+            <div class="page-title">건의 · 오류 신고</div>
+            <div class="page-subtitle">불편한 점을 알려주시면 처리 상태와 관리자 답변을 확인할 수 있습니다.</div>
+          </div>
+          <div class="header-actions">
+            <span class="feedback-admin-chip" id="feedbackAdminChip" style="display:none">시스템 관리자</span>
+            <button class="btn btn-primary" onclick="openFeedbackCreate()">+ 새 건의 작성</button>
+          </div>
+        </div>
+        <div class="content-scroll">
+          <div class="feedback-guide">
+            <div class="feedback-guide-icon">💡</div>
+            <div>
+              <b>작성자 실명은 로그인 계정에서 자동으로 표시됩니다.</b>
+              <div>작성한 내용은 본인과 시스템 관리자만 볼 수 있으며, 답변 댓글은 시스템 관리자만 작성할 수 있습니다.</div>
+            </div>
+          </div>
+
+          <div class="feedback-stats" id="feedbackStats"></div>
+
+          <div class="card feedback-toolbar">
+            <div class="feedback-filter-grid">
+              <input class="form-input" id="feedbackSearch" placeholder="제목·내용 검색" oninput="renderFeedbackBoard()">
+              <select class="form-select" id="feedbackCategoryFilter" onchange="renderFeedbackBoard()">
+                <option value="">전체 유형</option>
+                <option value="bug">오류 신고</option>
+                <option value="improvement">기능 개선</option>
+                <option value="question">사용 문의</option>
+                <option value="other">기타</option>
+              </select>
+              <select class="form-select" id="feedbackStatusFilter" onchange="renderFeedbackBoard()">
+                <option value="">전체 상태</option>
+                <option value="received">접수</option>
+                <option value="reviewing">검토 중</option>
+                <option value="planned">반영 예정</option>
+                <option value="resolved">처리 완료</option>
+                <option value="closed">종료</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="feedbackList" class="feedback-list">
+            <div class="feedback-empty">건의사항을 불러오는 중입니다.</div>
           </div>
         </div>
       </div>
@@ -1199,13 +1289,13 @@
         <span class="mobile-tab-label">MSDS</span>
         <span class="mobile-tab-badge" id="mBadgeMsds" style="display:none">0</span>
       </button>
-      <button class="mobile-tab" id="mtab-library" onclick="showPage('library')">
-        <span class="mobile-tab-icon">📚</span>
-        <span class="mobile-tab-label">법령</span>
-      </button>
       <button class="mobile-tab" id="mtab-health" onclick="showPage('health')">
         <span class="mobile-tab-icon">🏥</span>
         <span class="mobile-tab-label">건강</span>
+      </button>
+      <button class="mobile-tab" id="mtab-library" onclick="showPage('library')">
+        <span class="mobile-tab-icon">📚</span>
+        <span class="mobile-tab-label">법령</span>
       </button>
       <button class="mobile-tab" id="mtab-more" onclick="openModal('moreSheet')">
         <span class="mobile-tab-icon">☰</span>
@@ -1224,16 +1314,17 @@
     </div>
     <div class="modal-body">
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+        <button class="more-item" onclick="showPage('announcements');closeModal('moreSheet')">📢<span>공지사항</span></button>
+        <button class="more-item" onclick="showPage('feedback');closeModal('moreSheet')">💬<span>건의·오류 신고</span></button>
         <button class="more-item" onclick="showPage('warning');closeModal('moreSheet')">⚠️<span>경고표지</span></button>
+        <button class="more-item" onclick="showPage('contractors');closeModal('moreSheet')">👷<span>협력사 관리</span></button>
         <button class="more-item" onclick="showPage('upload-link');closeModal('moreSheet')">🔗<span>협력사 링크</span></button>
         <button class="more-item" onclick="showPage('measure');closeModal('moreSheet')">📊<span>작업환경측정</span></button>
-        <button class="more-item" onclick="showPage('photos');closeModal('moreSheet')">📷<span>사진 클라우드</span></button>
-        <button class="more-item" onclick="showPage('manpower');closeModal('moreSheet')">👷<span>투입인원</span></button>
-        <button class="more-item" onclick="showPage('weather');closeModal('moreSheet')">☀️<span>혹서기 날씨</span></button>
         <button class="more-item" onclick="showPage('vulnerable');closeModal('moreSheet')">🧓<span>취약자 명단</span></button>
         <button class="more-item" onclick="showPage('bp');closeModal('moreSheet')">🩺<span>고령자 혈압</span></button>
-        <button class="more-item" onclick="showPage('library');closeModal('moreSheet')">📚<span>법령·지침</span></button>
-        <button class="more-item" onclick="showPage('contractors');closeModal('moreSheet')">👷<span>협력사 관리</span></button>
+        <button class="more-item" onclick="showPage('weather');closeModal('moreSheet')">☀️<span>혹서기 날씨</span></button>
+        <button class="more-item" onclick="showPage('photos');closeModal('moreSheet')">📷<span>사진 클라우드</span></button>
+        <button class="more-item" onclick="showPage('manpower');closeModal('moreSheet')">👷<span>투입인원</span></button>
         <button class="more-item" onclick="showPage('settings');closeModal('moreSheet')">⚙️<span>설정</span></button>
       </div>
     </div>
@@ -1241,6 +1332,153 @@
 </div>
 
 <!-- ═══ 모달들 ═══ -->
+
+<!-- 공지 작성·수정 -->
+<div class="modal-backdrop" id="announcementModal">
+  <div class="modal announcement-form-modal" role="dialog" aria-modal="true" aria-labelledby="announcementModalTitle" aria-describedby="announcementModalDescription">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="announcementModalTitle">새 공지 작성</div>
+        <div class="form-note" id="announcementModalDescription">게시 기간을 설정하면 해당 기간에만 현장 구성원에게 표시됩니다.</div>
+      </div>
+      <button type="button" class="modal-close" onclick="closeModal('announcementModal')" aria-label="공지 작성 창 닫기">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="announcementId">
+      <div class="form-field">
+        <label class="form-label" for="announcementTitle">제목 <span class="required">*</span></label>
+        <input class="form-input" id="announcementTitle" minlength="2" maxlength="120" required placeholder="예) 8월 건강진단 일정 안내">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="announcementContent">내용 <span class="required">*</span></label>
+        <textarea class="form-textarea" id="announcementContent" maxlength="5000" rows="7" required placeholder="현장 구성원이 알아야 할 내용을 이해하기 쉽게 작성하세요."></textarea>
+      </div>
+      <label class="announcement-important-check">
+        <input type="checkbox" id="announcementImportant">
+        <span><b>중요 공지로 표시</b><small>목록 위쪽에 강조해서 표시합니다.</small></span>
+      </label>
+      <div class="announcement-period-grid">
+        <div class="form-field">
+          <label class="form-label" for="announcementStartsAt">게시 시작일 <span class="required">*</span></label>
+          <input class="form-input" id="announcementStartsAt" type="datetime-local">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="announcementEndsAt">게시 종료일</label>
+          <input class="form-input" id="announcementEndsAt" type="datetime-local" disabled>
+        </div>
+      </div>
+      <label class="announcement-no-end">
+        <input type="checkbox" id="announcementNoEnd" checked onchange="toggleAnnouncementEnd()">
+        종료일 없이 계속 게시
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-danger" id="announcementDeleteBtn" style="display:none;margin-right:auto" onclick="deleteAnnouncement()">삭제</button>
+      <button type="button" class="btn btn-secondary" onclick="closeModal('announcementModal')">취소</button>
+      <button type="button" class="btn btn-primary" id="announcementSaveBtn" onclick="saveAnnouncement()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 건의 작성 -->
+<div class="modal-backdrop" id="feedbackCreateModal">
+  <div class="modal feedback-form-modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">새 건의 · 오류 신고</div>
+        <div class="form-note">재현 방법을 자세히 적을수록 더 빠르게 확인할 수 있습니다.</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('feedbackCreateModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="feedback-author-box">
+        <span>작성자</span>
+        <b id="feedbackAuthorName">-</b>
+        <small>로그인 계정의 실명으로 자동 등록됩니다.</small>
+      </div>
+      <div class="form-grid col3">
+        <div class="form-field">
+          <label class="form-label">유형 <span class="required">*</span></label>
+          <select class="form-select" id="feedbackCategory" onchange="toggleFeedbackBugFields()">
+            <option value="bug">오류 신고</option>
+            <option value="improvement">기능 개선</option>
+            <option value="question">사용 문의</option>
+            <option value="other">기타</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">관련 화면 <span class="required">*</span></label>
+          <select class="form-select" id="feedbackFeatureArea">
+            <option>MSDS 대장</option><option>경고표지</option><option>건강진단</option>
+            <option>작업환경측정</option><option>법령·지침</option><option>협력사 관리</option>
+            <option>혹서기 날씨</option><option>로그인·계정</option><option>기타</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">긴급도</label>
+          <select class="form-select" id="feedbackUrgency">
+            <option value="normal">일반</option>
+            <option value="urgent">업무 중단·긴급</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field">
+        <label class="form-label">제목 <span class="required">*</span></label>
+        <input class="form-input" id="feedbackTitle" maxlength="120" placeholder="예) MSDS 재분석 버튼을 누르면 화면이 멈춥니다">
+      </div>
+      <div class="form-field">
+        <label class="form-label">내용 <span class="required">*</span></label>
+        <textarea class="form-textarea" id="feedbackContent" maxlength="4000" rows="5" placeholder="언제, 어떤 업무를 하던 중 문제가 생겼는지 적어주세요."></textarea>
+      </div>
+      <div id="feedbackBugFields">
+        <div class="form-field">
+          <label class="form-label">재현 방법</label>
+          <textarea class="form-textarea" id="feedbackReproduction" maxlength="3000" rows="4" placeholder="1. MSDS 대장 이동\n2. 제품 선택\n3. 다시 분석하기 클릭\n4. 화면이 멈춤"></textarea>
+        </div>
+        <div class="form-field">
+          <label class="form-label">원래 기대한 결과</label>
+          <textarea class="form-textarea" id="feedbackExpected" maxlength="2000" rows="3" placeholder="예) 분석 완료 후 변경 내용을 비교해서 보여줌"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('feedbackCreateModal')">취소</button>
+      <button class="btn btn-primary" id="feedbackSubmitBtn" onclick="submitFeedback()">실명으로 접수하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 건의 상세 및 관리자 답변 -->
+<div class="modal-backdrop" id="feedbackDetailModal">
+  <div class="modal feedback-detail-modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="feedbackDetailTitle">건의 상세</div>
+        <div class="form-note" id="feedbackDetailMeta"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('feedbackDetailModal')">✕</button>
+    </div>
+    <div class="modal-body" id="feedbackDetailBody"></div>
+    <div class="feedback-admin-panel" id="feedbackAdminPanel" style="display:none">
+      <div class="feedback-admin-row">
+        <div class="form-field">
+          <label class="form-label">처리 상태</label>
+          <select class="form-select" id="feedbackAdminStatus">
+            <option value="received">접수</option><option value="reviewing">검토 중</option>
+            <option value="planned">반영 예정</option><option value="resolved">처리 완료</option>
+            <option value="closed">종료</option>
+          </select>
+        </div>
+        <button class="btn btn-secondary" onclick="updateFeedbackStatus()">상태 저장</button>
+      </div>
+      <div class="form-field">
+        <label class="form-label">관리자 답변</label>
+        <textarea class="form-textarea" id="feedbackAdminComment" maxlength="2000" rows="3" placeholder="확인 결과와 조치 계획을 작성하세요."></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="addFeedbackComment()">관리자 답변 등록</button>
+    </div>
+  </div>
+</div>
 
 <!-- 현장 생성 -->
 <div class="modal-backdrop" id="createWSModal">
@@ -1287,7 +1525,7 @@
           </div>
         </div>
         <div class="form-note" style="margin-bottom:10px;">📂 PDF 또는 JPG 파일만 가능. 여러 파일 동시 업로드 지원. 폴더 드래그 시 협력사·공종 자동 인식.</div>
-        <div id="msdsUploadZone" class="upload-zone"
+        <button type="button" id="msdsUploadZone" class="upload-zone"
           onclick="document.getElementById('pdfInput').click()"
           ondragover="dragOver(event,'msdsUploadZone')"
           ondrop="dropMsdsFiles(event)"
@@ -1295,8 +1533,8 @@
           <div class="upload-icon">📂</div>
           <div class="upload-text">파일 또는 폴더를 여기에 드래그하세요</div>
           <div class="upload-sub">PDF · JPG · PNG · 클릭해서 선택</div>
-          <input type="file" id="pdfInput" accept=".pdf,.jpg,.jpeg,.png" multiple onchange="handleMsdsFileSelect(event)">
-        </div>
+        </button>
+        <input type="file" id="pdfInput" accept=".pdf,.jpg,.jpeg,.png" multiple hidden onchange="handleMsdsFileSelect(event)">
         <div style="text-align:center;margin-bottom:12px;">
           <button class="btn btn-secondary btn-sm" onclick="document.getElementById('folderInput').click()">
             📁 폴더째 업로드
@@ -1645,7 +1883,7 @@
         </div>
       </div>
       <div class="form-note" style="margin-bottom:12px;">측정결과 보고서 PDF를 업로드하면 분진·소음 결과표와 사후관리 결과표를 자동으로 생성합니다.</div>
-      <div id="measureUploadZone" class="upload-zone"
+      <button type="button" id="measureUploadZone" class="upload-zone"
         onclick="document.getElementById('measureFileInput').click()"
         ondragover="dragOver(event,'measureUploadZone')"
         ondrop="dropMeasureFile(event)"
@@ -1653,8 +1891,8 @@
         <div class="upload-icon">📄</div>
         <div class="upload-text">측정결과 PDF를 여기에 드래그하세요</div>
         <div class="upload-sub">PDF 파일만 가능</div>
-        <input type="file" id="measureFileInput" accept=".pdf" onchange="handleMeasureFile(event)">
-      </div>
+      </button>
+      <input type="file" id="measureFileInput" accept=".pdf" hidden onchange="handleMeasureFile(event)">
       <div id="measureFileInfo" style="display:none" class="file-item done" style="margin-top:8px;">
         <span class="fi-icon">📄</span>
         <div class="fi-info"><div class="fi-name" id="measureFileName"></div></div>
@@ -1689,7 +1927,7 @@
     </div>
     <div class="modal-body">
       <div class="form-note" style="margin-bottom:12px;">건강진단 결과 파일(PDF 또는 이미지)을 업로드하면 AI가 자동으로 내용을 분석합니다.<br>여러 명의 결과가 담긴 파일도 가능합니다.</div>
-      <div id="healthUploadZone" class="upload-zone"
+      <button type="button" id="healthUploadZone" class="upload-zone"
         onclick="document.getElementById('healthFileInput').click()"
         ondragover="dragOver(event,'healthUploadZone')"
         ondrop="dropHealthFiles(event)"
@@ -1697,8 +1935,8 @@
         <div class="upload-icon">🏥</div>
         <div class="upload-text">건강진단 파일을 여기에 드래그하세요</div>
         <div class="upload-sub">PDF · JPG · PNG · 여러 파일 가능</div>
-        <input type="file" id="healthFileInput" accept=".pdf,.jpg,.jpeg,.png" multiple onchange="handleHealthFiles(event)">
-      </div>
+      </button>
+      <input type="file" id="healthFileInput" accept=".pdf,.jpg,.jpeg,.png" multiple hidden onchange="handleHealthFiles(event)">
       <div id="healthFileQueue" class="file-queue" style="display:none"></div>
     </div>
     <div class="modal-footer">
@@ -1796,56 +2034,6 @@
   </div>
 </div>
 
-<!-- 일정 추가/수정 -->
-<div class="modal-backdrop" id="eventModal">
-  <div class="modal" style="max-width:460px">
-    <div class="modal-header">
-      <div class="modal-title" id="eventModalTitle">일정 추가</div>
-      <button class="modal-close" onclick="closeModal('eventModal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="ev_id">
-      <div class="form-field" style="margin-bottom:12px;">
-        <label class="form-label">제목 <span class="required">*</span></label>
-        <input class="form-input" id="ev_title" placeholder="예) 세방테크 협력사 미팅">
-      </div>
-      <div class="form-field" style="margin-bottom:12px;">
-        <label class="form-label">분류</label>
-        <select class="form-input" id="ev_category">
-          <option value="general">일반</option>
-          <option value="meeting">협력사 미팅</option>
-          <option value="inspection">점검일</option>
-          <option value="contractor">협력사 일정</option>
-        </select>
-      </div>
-      <div class="form-field" style="margin-bottom:12px;">
-        <label class="form-label">날짜 <span class="required">*</span></label>
-        <input class="form-input" id="ev_date" type="date">
-      </div>
-      <div style="display:flex;gap:10px;margin-bottom:12px;">
-        <div class="form-field" style="flex:1;">
-          <label class="form-label">시작 시간</label>
-          <input class="form-input" id="ev_start" type="time">
-        </div>
-        <div class="form-field" style="flex:1;">
-          <label class="form-label">종료 시간</label>
-          <input class="form-input" id="ev_end" type="time">
-        </div>
-      </div>
-      <div class="form-note" style="margin-bottom:12px;">시간을 비워두면 종일 일정으로 표시됩니다.</div>
-      <div class="form-field">
-        <label class="form-label">메모</label>
-        <textarea class="form-input" id="ev_desc" rows="3" placeholder="상세 내용 (선택)"></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-danger btn-sm" id="ev_deleteBtn" style="display:none;margin-right:auto;" onclick="deleteEvent()">삭제</button>
-      <button class="btn btn-secondary" onclick="closeModal('eventModal')">취소</button>
-      <button class="btn btn-primary" onclick="saveEvent()">저장</button>
-    </div>
-  </div>
-</div>
-
 <!-- 사진대지 인쇄 설정 -->
 <div class="modal-backdrop" id="photoPrintModal">
   <div class="modal" style="max-width:460px">
@@ -1898,12 +2086,12 @@
         <input class="form-input" id="photoUploadDate" type="date">
         <div class="form-note" style="margin-top:6px;">선택한 날짜의 폴더로 저장됩니다. 여러 날짜를 한 번에 올리려면 날짜별로 나눠서 업로드해주세요.</div>
       </div>
-      <div class="upload-zone" id="photoUploadDropZone" tabindex="0" style="border:2.5px dashed var(--border);border-radius:var(--radius);padding:30px 16px;text-align:center;cursor:pointer;background:var(--surface2);outline:none;" onclick="document.getElementById('photoUploadFileInput').click()">
+      <label class="upload-zone" id="photoUploadDropZone" tabindex="0" style="display:block;border:2.5px dashed var(--border);border-radius:var(--radius);padding:30px 16px;text-align:center;cursor:pointer;background:var(--surface2);outline:none;" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('photoUploadFileInput').click()}">
         <input type="file" id="photoUploadFileInput" accept="image/*" multiple style="display:none" onchange="handlePhotoFilesSelected(event)">
         <div style="font-size:32px;margin-bottom:8px;">📤</div>
         <div style="font-size:14px;font-weight:700;">여러 장 한번에 선택 가능</div>
         <div style="font-size:12px;color:var(--text3);margin-top:4px;">클릭하여 사진 선택 · 카카오톡 등에서 복사한 사진은 <b>Ctrl+V</b>로 바로 붙여넣기</div>
-      </div>
+      </label>
       <div id="photoUploadFileList" style="margin-top:12px;font-size:13px;color:var(--text2);"></div>
     </div>
     <div class="modal-footer">
