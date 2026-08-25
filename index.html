@@ -1383,67 +1383,87 @@
 <!-- 건의 작성 -->
 <div class="modal-backdrop" id="feedbackCreateModal">
   <div class="modal feedback-form-modal">
-    <div class="modal-header">
-      <div>
-        <div class="modal-title">새 건의 · 오류 신고</div>
-        <div class="form-note">재현 방법을 자세히 적을수록 더 빠르게 확인할 수 있습니다.</div>
+    <div class="modal-header feedback-form-header">
+      <div class="feedback-form-heading">
+        <div class="feedback-form-icon" aria-hidden="true">💬</div>
+        <div>
+          <div class="feedback-form-eyebrow">의견 보내기</div>
+          <div class="modal-title">새 건의 · 오류 신고</div>
+          <div class="form-note">불편했던 상황을 알려주시면 처리 상태와 답변을 확인할 수 있어요.</div>
+        </div>
       </div>
-      <button class="modal-close" onclick="closeModal('feedbackCreateModal')">✕</button>
+      <button type="button" class="modal-close" onclick="closeModal('feedbackCreateModal')" aria-label="닫기">✕</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body feedback-form-body">
       <div class="feedback-author-box">
-        <span>작성자</span>
-        <b id="feedbackAuthorName">-</b>
-        <small>로그인 계정의 실명으로 자동 등록됩니다.</small>
+        <div class="feedback-author-icon" aria-hidden="true">👤</div>
+        <div>
+          <span>작성자</span>
+          <b id="feedbackAuthorName">-</b>
+        </div>
+        <small>로그인 계정의 실명으로 안전하게 접수됩니다.</small>
       </div>
-      <div class="form-grid col3">
+      <section class="feedback-form-section" aria-labelledby="feedbackBasicTitle">
+        <div class="feedback-form-section-title" id="feedbackBasicTitle"><span>1</span> 기본 정보</div>
+        <div class="form-grid col3 feedback-classification-grid">
+          <div class="form-field">
+            <label class="form-label" for="feedbackCategory">유형 <span class="required">필수</span></label>
+            <select class="form-select" id="feedbackCategory" onchange="toggleFeedbackBugFields()">
+              <option value="bug">오류 신고</option>
+              <option value="improvement">기능 개선</option>
+              <option value="question">사용 문의</option>
+              <option value="other">기타</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="feedbackFeatureArea">관련 화면 <span class="required">필수</span></label>
+            <select class="form-select" id="feedbackFeatureArea">
+              <option>MSDS 대장</option><option>경고표지</option><option>건강진단</option>
+              <option>작업환경측정</option><option>법령·지침</option><option>협력사 관리</option>
+              <option>혹서기 날씨</option><option>로그인·계정</option><option>기타</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="feedbackUrgency">긴급도</label>
+            <select class="form-select" id="feedbackUrgency">
+              <option value="normal">일반</option>
+              <option value="urgent">업무 중단 · 긴급</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="feedback-form-section" aria-labelledby="feedbackContentTitle">
+        <div class="feedback-form-section-title" id="feedbackContentTitle"><span>2</span> 어떤 문제가 있었나요?</div>
         <div class="form-field">
-          <label class="form-label">유형 <span class="required">*</span></label>
-          <select class="form-select" id="feedbackCategory" onchange="toggleFeedbackBugFields()">
-            <option value="bug">오류 신고</option>
-            <option value="improvement">기능 개선</option>
-            <option value="question">사용 문의</option>
-            <option value="other">기타</option>
-          </select>
+          <label class="form-label" for="feedbackTitle">제목 <span class="required">필수</span></label>
+          <input class="form-input" id="feedbackTitle" maxlength="120" placeholder="예) MSDS 재분석 버튼을 누르면 화면이 멈춥니다">
         </div>
         <div class="form-field">
-          <label class="form-label">관련 화면 <span class="required">*</span></label>
-          <select class="form-select" id="feedbackFeatureArea">
-            <option>MSDS 대장</option><option>경고표지</option><option>건강진단</option>
-            <option>작업환경측정</option><option>법령·지침</option><option>협력사 관리</option>
-            <option>혹서기 날씨</option><option>로그인·계정</option><option>기타</option>
-          </select>
+          <label class="form-label" for="feedbackContent">상세 내용 <span class="required">필수</span></label>
+          <textarea class="form-textarea" id="feedbackContent" maxlength="4000" rows="4" placeholder="언제, 어떤 업무를 하던 중 문제가 생겼는지 적어주세요."></textarea>
+        </div>
+      </section>
+
+      <section class="feedback-form-section feedback-bug-section" id="feedbackBugFields" aria-labelledby="feedbackReproductionTitle">
+        <div class="feedback-form-section-title" id="feedbackReproductionTitle"><span>3</span> 문제를 다시 확인하려면</div>
+        <p class="feedback-form-help">오류가 발생한 순서를 적어주시면 훨씬 빠르게 원인을 찾을 수 있습니다.</p>
+        <div class="form-field">
+          <label class="form-label" for="feedbackReproduction">재현 방법</label>
+          <textarea class="form-textarea" id="feedbackReproduction" maxlength="3000" rows="3" placeholder="1. MSDS 대장 이동\n2. 제품 선택\n3. 다시 분석하기 클릭\n4. 화면이 멈춤"></textarea>
         </div>
         <div class="form-field">
-          <label class="form-label">긴급도</label>
-          <select class="form-select" id="feedbackUrgency">
-            <option value="normal">일반</option>
-            <option value="urgent">업무 중단·긴급</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-field">
-        <label class="form-label">제목 <span class="required">*</span></label>
-        <input class="form-input" id="feedbackTitle" maxlength="120" placeholder="예) MSDS 재분석 버튼을 누르면 화면이 멈춥니다">
-      </div>
-      <div class="form-field">
-        <label class="form-label">내용 <span class="required">*</span></label>
-        <textarea class="form-textarea" id="feedbackContent" maxlength="4000" rows="5" placeholder="언제, 어떤 업무를 하던 중 문제가 생겼는지 적어주세요."></textarea>
-      </div>
-      <div id="feedbackBugFields">
-        <div class="form-field">
-          <label class="form-label">재현 방법</label>
-          <textarea class="form-textarea" id="feedbackReproduction" maxlength="3000" rows="4" placeholder="1. MSDS 대장 이동\n2. 제품 선택\n3. 다시 분석하기 클릭\n4. 화면이 멈춤"></textarea>
-        </div>
-        <div class="form-field">
-          <label class="form-label">원래 기대한 결과</label>
+          <label class="form-label" for="feedbackExpected">원래 기대한 결과</label>
           <textarea class="form-textarea" id="feedbackExpected" maxlength="2000" rows="3" placeholder="예) 분석 완료 후 변경 내용을 비교해서 보여줌"></textarea>
         </div>
-      </div>
+      </section>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('feedbackCreateModal')">취소</button>
-      <button class="btn btn-primary" id="feedbackSubmitBtn" onclick="submitFeedback()">실명으로 접수하기</button>
+    <div class="modal-footer feedback-form-footer">
+      <div class="feedback-privacy-note">🔒 작성 내용은 본인과 시스템 관리자만 확인합니다.</div>
+      <div class="feedback-footer-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('feedbackCreateModal')">취소</button>
+        <button type="button" class="btn btn-primary" id="feedbackSubmitBtn" onclick="submitFeedback()">실명으로 접수하기</button>
+      </div>
     </div>
   </div>
 </div>
