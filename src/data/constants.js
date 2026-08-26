@@ -2,7 +2,7 @@
 // 앱 전역에서 쓰는 고정 상수 (재할당 없음 — 상태 아님)
 // ═══════════════════════════════════════════════
 
-export const PAGES = ['home', 'announcements', 'feedback', 'library', 'msds', 'warning', 'contractors', 'upload-link', 'health', 'vulnerable', 'bp', 'measure', 'weather', 'photos', 'manpower', 'settings'];
+export const PAGES = ['home', 'announcements', 'feedback', 'library', 'msds', 'warning', 'contractors', 'upload-link', 'health', 'vulnerable', 'bp', 'measure', 'weather', 'photos', 'manpower', 'admin', 'settings'];
 export const MOBILE_TABS = ['home', 'msds', 'health', 'library'];
 
 // 경고표지 라벨 크기 프리셋 (A4 용지 분할 기준, 고시 제2023-9호 별표 규격 대응)

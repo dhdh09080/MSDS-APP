@@ -28,6 +28,7 @@ let aiSettingsState = null;
 let pendingMsdsReanalysis = null;
 let feedbackPosts = [], feedbackComments = [];
 let feedbackLoaded = false, isSystemAdmin = false, feedbackCurrentId = null;
+let adminConsoleState = null, adminConsoleTab = 'overview', adminConsoleLoading = false, adminStandalone = false;
 const ANNOUNCEMENT_CACHE_TTL_MS = 60_000;
 let announcements = [], announcementsLoaded = false, announcementCurrentId = null;
 let announcementsLoadedAt = 0, announcementsWorkspaceId = null;
@@ -140,6 +141,26 @@ function showDevFeaturePreview(page) {
     },
   };
   isSystemAdmin = true;
+  if (page === 'admin') {
+    const now = new Date().toISOString();
+    adminConsoleState = {
+      me: { id: 'preview-user', email: user.email, name: '시스템 관리자' },
+      metrics: { users: 3, workspaces: 2, activeWorkspaces: 1, systemAdmins: 1, openFeedback: 2, aiIssues: 1 },
+      health: { database: true, auth: true, storage: true, edgeFunction: true, checkedAt: now },
+      workspaces: [
+        { id: '11111111-1111-4111-8111-111111111111', name: '성동 안전현장', code: 'A7K9D2', owner_id: 'preview-user', ownerName: '구다희', ownerEmail: 'manager@example.com', address: '서울특별시 성동구 천호대로 416', status: 'active', memberCount: 2, msdsCount: 375 },
+        { id: '22222222-2222-4222-8222-222222222222', name: '마포 신규현장', code: 'M3P8Q1', owner_id: 'preview-user-2', ownerName: '김보건', ownerEmail: 'health@example.com', address: '서울특별시 마포구', status: 'suspended', memberCount: 1, msdsCount: 12 },
+      ],
+      users: [
+        { id: 'preview-user', name: '구다희', email: 'manager@example.com', createdAt: now, lastSignInAt: now, isSystemAdmin: true, memberships: [{ workspaceId: '11111111-1111-4111-8111-111111111111', role: 'admin' }] },
+        { id: 'preview-user-2', name: '김보건', email: 'health@example.com', createdAt: now, lastSignInAt: now, isSystemAdmin: false, memberships: [{ workspaceId: '22222222-2222-4222-8222-222222222222', role: 'admin' }] },
+        { id: 'preview-user-3', name: '이초보', email: 'beginner@example.com', createdAt: now, lastSignInAt: null, isSystemAdmin: false, memberships: [] },
+      ],
+      feedback: [{ id: 'preview-feedback', author_name: '이초보', category: 'bug', feature_area: 'MSDS 대장', urgency: 'urgent', title: 'PDF 분석 후 화면이 멈춥니다', status: 'received', created_at: now }],
+      aiIssues: [{ user_id: 'preview-user-3', provider: 'openai', key_hint: 'sk-p••••1234', status: 'error', last_error: 'API 사용 한도를 확인해주세요.', last_validated_at: now }],
+      auditLogs: [{ id: 'preview-audit', actor_id: 'preview-user', action: 'membership.set', target_type: 'user', created_at: now }],
+    };
+  }
   announcementsLoaded = true;
   announcements = [
     {
@@ -313,6 +334,7 @@ window.handleLogout = async function() {
   user = null; profile = null; workspaces = []; currentWS = null;
   resetWorkspaceScopedState();
   feedbackPosts = []; feedbackComments = []; feedbackLoaded = false; isSystemAdmin = false; feedbackCurrentId = null;
+  adminConsoleState = null; adminStandalone = false; document.body.classList.remove('admin-standalone');
   showAuth();
 };
 
@@ -416,7 +438,13 @@ async function showWorkspaces(autoEnter = false) {
   const name = user.user_metadata?.name || user.email.split('@')[0];
   document.getElementById('wsGreeting').textContent = `안녕하세요, ${name}님 👋`;
   document.getElementById('topbarUser').textContent = user.email;
+  await refreshSystemAdminRole();
   await loadWorkspaces();
+  setSystemAdminVisibility();
+  if (autoEnter && isSystemAdmin) {
+    await window.enterAdminConsole();
+    return;
+  }
   if (autoEnter && workspaces.length > 0) {
     const lastId = localStorage.getItem('fms_last_ws');
     const target = workspaces.find(w => w.id === lastId) || (workspaces.length === 1 ? workspaces[0] : null);
@@ -450,13 +478,14 @@ function renderWorkspaceList() {
   el.innerHTML = workspaces.map(ws => {
     const role = ws.workspace_members?.[0]?.role || 'member';
     const isOwner = ws.owner_id === user.id;
-    return `<button type="button" class="ws-card" onclick="enterWorkspace('${ws.id}')">
+    const unavailable = !isSystemAdmin && ['suspended', 'archived'].includes(ws.status);
+    return `<button type="button" class="ws-card ${unavailable ? 'is-unavailable' : ''}" onclick="enterWorkspace('${ws.id}')" ${unavailable ? 'disabled' : ''}>
       <div class="ws-card-icon">🏗️</div>
       <div class="ws-card-info">
         <div class="ws-card-name">${escapeHtml(ws.name)}</div>
-        <div class="ws-card-meta">코드: ${escapeHtml(ws.code)} · ${isOwner ? '관리자' : role === 'admin' ? '관리자' : '멤버'}</div>
+        <div class="ws-card-meta">코드: ${escapeHtml(ws.code)} · ${isOwner ? '관리자' : role === 'admin' ? '관리자' : '멤버'}${unavailable ? ` · ${ADMIN_STATUS_LABEL[ws.status]}` : ''}</div>
       </div>
-      <div class="ws-card-badge">입장 →</div>
+      <div class="ws-card-badge">${unavailable ? '접근 중지' : '입장 →'}</div>
     </button>`;
   }).join('');
 }
@@ -478,7 +507,10 @@ window.createWorkspace = async function() {
 window.enterWorkspace = async function(wsId) {
   const nextWorkspace = workspaces.find(w => w.id === wsId);
   if (!nextWorkspace) return;
+  if (!isSystemAdmin && ['suspended', 'archived'].includes(nextWorkspace.status)) { toast('현재 접근할 수 없는 현장입니다. 시스템 관리자에게 문의해주세요.', 'error'); return; }
   resetWorkspaceScopedState();
+  adminStandalone = false;
+  document.body.classList.remove('admin-standalone');
   currentWS = nextWorkspace;
   localStorage.setItem('fms_last_ws', wsId);
   document.getElementById('workspaceScreen').style.display = 'none';
@@ -503,7 +535,26 @@ window.enterWorkspace = async function(wsId) {
   loadPhotoFolders().then(loadPhotos); // 사진은 홈 화면 진입을 막지 않고 백그라운드로 로드
 }
 
+window.enterAdminConsole = async function() {
+  if (!isSystemAdmin) { toast('시스템 관리자 권한이 필요합니다.', 'error'); return; }
+  resetWorkspaceScopedState();
+  adminStandalone = true;
+  document.body.classList.add('admin-standalone');
+  currentWS = null;
+  document.getElementById('workspaceScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'block';
+  document.getElementById('sidebarWSName').textContent = '전체 시스템';
+  const name = user.user_metadata?.name || user.email.split('@')[0];
+  document.getElementById('sidebarName').textContent = name;
+  document.getElementById('sidebarEmail').textContent = user.email;
+  document.getElementById('sidebarAvatar').textContent = name.charAt(0).toUpperCase();
+  setSystemAdminVisibility();
+  showPage('admin');
+};
+
 window.goWorkspaces = function() {
+  adminStandalone = false;
+  document.body.classList.remove('admin-standalone');
   document.getElementById('appScreen').style.display = 'none';
   document.getElementById('workspaceScreen').style.display = 'block';
   loadWorkspaces();
@@ -759,6 +810,21 @@ function renderAiSettings() {
   }
 }
 
+async function refreshSystemAdminRole() {
+  if (!user || getDevPreviewPage()) return isSystemAdmin;
+  const { data, error } = await supabase.from('system_admins').select('user_id').eq('user_id', user.id).maybeSingle();
+  isSystemAdmin = !error && Boolean(data);
+  return isSystemAdmin;
+}
+
+function setSystemAdminVisibility() {
+  const display = isSystemAdmin ? '' : 'none';
+  ['nav-admin', 'openAdminConsoleBtn', 'moreAdminItem'].forEach(id => {
+    const element = document.getElementById(id);
+    if (element) element.style.display = display;
+  });
+}
+
 window.saveAiPrivacySettings = async function() {
   const monthlyRequestLimit = document.getElementById('aiEnableMonthlyLimit')?.checked
     ? Math.max(1, Math.min(Number(document.getElementById('aiMonthlyLimit')?.value || 30), 200))
@@ -840,6 +906,7 @@ window.deleteAiKey = async function(provider) {
 // (PAGES, MOBILE_TABS → src/data/constants.js 로 이동)
 
 window.showPage = function(id) {
+  if (id === 'admin' && !isSystemAdmin) { toast('시스템 관리자 권한이 필요합니다.', 'error'); return; }
   PAGES.forEach(p => {
     document.getElementById('page-'+p)?.classList.toggle('active', p === id);
     document.getElementById('nav-'+p)?.classList.toggle('active', p === id);
@@ -859,6 +926,7 @@ window.showPage = function(id) {
   if (id === 'contractors') { renderContractorTags(); renderBusinessLicenseStatus(); }
   if (id === 'announcements') { window.loadAnnouncements(); }
   if (id === 'feedback') { loadFeedbackBoard(); }
+  if (id === 'admin') { loadAdminConsole(); }
   document.getElementById('mainContent')?.scrollTo(0, 0);
   if (id === 'settings') {
     if (!getDevPreviewPage()) {
@@ -869,6 +937,170 @@ window.showPage = function(id) {
     const btn = document.getElementById('reanalyzeLegalBtn');
     if (btn) btn.textContent = `⚖️ 법정물질 일괄 재판정 (${msdsRecords.length}건)`;
   }
+};
+
+// ═══════════════════════════════════════════════
+// 시스템 관리자 콘솔
+// ═══════════════════════════════════════════════
+const ADMIN_STATUS_LABEL = { active: '운영 중', suspended: '일시중지', archived: '보관' };
+const ADMIN_ACTION_LABEL = {
+  'workspace.update': '현장 정보 변경', 'membership.set': '현장 권한 변경',
+  'membership.remove': '현장 배정 해제', 'system_admin.grant': '시스템 관리자 지정',
+  'system_admin.revoke': '시스템 관리자 해제', 'user.suspend': '계정 정지', 'user.restore': '계정 복구',
+};
+
+window.loadAdminConsole = async function(force = false) {
+  if (!isSystemAdmin || adminConsoleLoading || (adminConsoleState && !force)) {
+    if (adminConsoleState) renderAdminConsole();
+    return;
+  }
+  adminConsoleLoading = true;
+  document.getElementById('adminLoading')?.classList.add('show');
+  const button = document.getElementById('adminRefreshBtn');
+  if (button) button.disabled = true;
+  try {
+    adminConsoleState = await invokeEdgeJson('system-admin', { action: 'dashboard' });
+    renderAdminConsole();
+    if (force) toast('관리 정보를 새로 불러왔습니다.', 'success');
+  } catch (error) {
+    document.getElementById('adminOverview').innerHTML = `<div class="admin-error-state"><span>⚠️</span><b>관리 정보를 불러오지 못했습니다.</b><p>${escapeHtml(error.message)}</p><button class="btn btn-primary" onclick="loadAdminConsole(true)">다시 시도</button></div>`;
+    toast(error.message, 'error');
+  } finally {
+    adminConsoleLoading = false;
+    document.getElementById('adminLoading')?.classList.remove('show');
+    if (button) button.disabled = false;
+  }
+};
+
+window.switchAdminTab = function(tab) {
+  adminConsoleTab = tab;
+  document.querySelectorAll('.admin-tab').forEach(button => button.classList.toggle('active', button.dataset.adminTab === tab));
+  document.querySelectorAll('.admin-panel').forEach(panel => panel.classList.toggle('active', panel.id === `admin-panel-${tab}`));
+};
+
+function adminDate(value, withTime = false) {
+  if (!value) return '기록 없음';
+  return new Date(value).toLocaleString('ko-KR', withTime
+    ? { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }
+    : { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+
+function renderAdminConsole() {
+  if (!adminConsoleState) return;
+  const m = adminConsoleState.metrics;
+  document.getElementById('adminMetrics').innerHTML = [
+    ['👥', '전체 계정', m.users, '가입 계정'], ['🏗️', '전체 현장', m.workspaces, `${m.activeWorkspaces}곳 운영 중`],
+    ['💬', '미처리 신고', m.openFeedback, '확인 필요'], ['🤖', 'AI 설정 이상', m.aiIssues, '사용자 확인 필요'],
+    ['🛡️', '시스템 관리자', m.systemAdmins, '최고 권한'],
+  ].map(([icon, label, value, note]) => `<div class="admin-metric-card"><span>${icon}</span><div><small>${label}</small><strong>${value}</strong><em>${note}</em></div></div>`).join('');
+  renderAdminOverview();
+  renderAdminWorkspaces();
+  renderAdminUsers();
+  renderAdminIssues();
+  renderAdminAudit();
+  switchAdminTab(adminConsoleTab);
+}
+
+function renderAdminOverview() {
+  const state = adminConsoleState;
+  const healthItems = [
+    ['데이터베이스', state.health.database], ['로그인·인증', state.health.auth],
+    ['파일 저장소', state.health.storage], ['관리자 서버 함수', state.health.edgeFunction],
+  ];
+  const recentIssues = [...state.feedback.filter(item => ['received', 'reviewing', 'planned'].includes(item.status)).slice(0, 4)
+    .map(item => ({ icon: item.category === 'bug' ? '🐞' : '💬', title: item.title, meta: `${item.author_name} · ${adminDate(item.created_at)}`, bad: item.urgency === 'urgent' })),
+    ...state.aiIssues.slice(0, 3).map(item => ({ icon: '🤖', title: `${item.provider.toUpperCase()} API 설정 이상`, meta: item.last_error || 'API 키 상태를 확인해주세요.', bad: true }))];
+  document.getElementById('adminOverview').innerHTML = `
+    <div class="admin-overview-grid">
+      <div class="admin-section-card"><div class="admin-section-heading"><div><b>시스템 상태</b><small>마지막 점검 ${adminDate(state.health.checkedAt, true)}</small></div><span class="admin-health-summary">${healthItems.every(([, ok]) => ok) ? '● 정상' : '● 점검 필요'}</span></div>
+        <div class="admin-health-grid">${healthItems.map(([label, ok]) => `<div class="admin-health-item ${ok ? 'ok' : 'bad'}"><span>${ok ? '✓' : '!'}</span><div><b>${label}</b><small>${ok ? '정상 연결' : '연결 점검 필요'}</small></div></div>`).join('')}</div></div>
+      <div class="admin-section-card"><div class="admin-section-heading"><div><b>최근 확인 필요 항목</b><small>신고와 API 오류를 모아 보여줍니다.</small></div><button class="btn btn-outline btn-sm" onclick="switchAdminTab('issues')">전체 보기</button></div>
+        <div class="admin-alert-list">${recentIssues.length ? recentIssues.map(item => `<div class="admin-alert-item ${item.bad ? 'bad' : ''}"><span>${item.icon}</span><div><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.meta)}</small></div></div>`).join('') : '<div class="admin-empty-compact">현재 확인할 이상이 없습니다.</div>'}</div></div>
+    </div>`;
+}
+
+window.renderAdminWorkspaces = function() {
+  if (!adminConsoleState) return;
+  const query = (document.getElementById('adminWorkspaceSearch')?.value || '').trim().toLowerCase();
+  const rows = adminConsoleState.workspaces.filter(item => [item.name, item.code, item.address, item.ownerEmail].some(value => String(value || '').toLowerCase().includes(query)));
+  document.getElementById('adminWorkspaceList').innerHTML = rows.length ? `<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>현장</th><th>소유자</th><th>사용 현황</th><th>운영 상태</th></tr></thead><tbody>${rows.map(item => `<tr><td><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.code)}${item.address ? ` · ${escapeHtml(item.address)}` : ''}</small></td><td>${escapeHtml(item.ownerName)}<small>${escapeHtml(item.ownerEmail)}</small></td><td><b>${item.memberCount}명</b><small>MSDS ${item.msdsCount}건</small></td><td><select class="admin-status-select ${item.status}" aria-label="${escapeHtml(item.name)} 운영 상태" onchange="updateAdminWorkspaceStatus('${item.id}',this.value)">${Object.entries(ADMIN_STATUS_LABEL).map(([value, label]) => `<option value="${value}" ${item.status === value ? 'selected' : ''}>${label}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>` : '<div class="admin-empty">검색 조건에 맞는 현장이 없습니다.</div>';
+};
+
+window.renderAdminUsers = function() {
+  if (!adminConsoleState) return;
+  const query = (document.getElementById('adminUserSearch')?.value || '').trim().toLowerCase();
+  const workspaceMap = new Map(adminConsoleState.workspaces.map(item => [item.id, item]));
+  const rows = adminConsoleState.users.filter(item => [item.name, item.email].some(value => String(value || '').toLowerCase().includes(query)));
+  document.getElementById('adminUserList').innerHTML = rows.length ? `<div class="admin-user-list">${rows.map(item => {
+    const suspended = Boolean(item.bannedUntil && new Date(item.bannedUntil) > new Date());
+    return `<article class="admin-user-card ${suspended ? 'suspended' : ''}"><div class="admin-user-main"><div class="admin-user-avatar">${escapeHtml(item.name.charAt(0).toUpperCase())}</div><div><div class="admin-user-name">${escapeHtml(item.name)} ${item.isSystemAdmin ? '<span class="admin-role-badge system">시스템 관리자</span>' : ''} ${suspended ? '<span class="admin-role-badge stopped">정지</span>' : ''}</div><small>${escapeHtml(item.email)} · 최근 로그인 ${adminDate(item.lastSignInAt)}</small></div></div>
+      <div class="admin-memberships">${item.memberships.length ? item.memberships.map(member => `<span class="admin-membership-chip"><b>${escapeHtml(workspaceMap.get(member.workspaceId)?.name || '삭제된 현장')}</b><select aria-label="현장 권한" onchange="setAdminMembershipRole('${item.id}','${member.workspaceId}',this.value)"><option value="member" ${member.role === 'member' ? 'selected' : ''}>멤버</option><option value="admin" ${member.role === 'admin' ? 'selected' : ''}>관리자</option></select><button onclick="removeAdminMembership('${item.id}','${member.workspaceId}')" aria-label="현장 배정 해제">×</button></span>`).join('') : '<span class="admin-no-site">배정된 현장 없음</span>'}</div>
+      <div class="admin-user-actions"><button class="btn btn-outline btn-sm" onclick="openAdminMembership('${item.id}')">+ 현장 배정</button><button class="btn btn-outline btn-sm" onclick="toggleSystemAdmin('${item.id}',${!item.isSystemAdmin})">${item.isSystemAdmin ? '관리자 해제' : '시스템 관리자 지정'}</button><button class="btn ${suspended ? 'btn-secondary' : 'btn-danger'} btn-sm" onclick="toggleAdminUserAccess('${item.id}',${!suspended})">${suspended ? '계정 복구' : '계정 정지'}</button></div></article>`;
+  }).join('')}</div>` : '<div class="admin-empty">검색 조건에 맞는 계정이 없습니다.</div>';
+};
+
+function renderAdminIssues() {
+  const feedback = adminConsoleState.feedback.filter(item => ['received', 'reviewing', 'planned'].includes(item.status));
+  const ai = adminConsoleState.aiIssues;
+  document.getElementById('adminIssueList').innerHTML = `<div class="admin-overview-grid"><div class="admin-section-card"><div class="admin-section-heading"><div><b>미처리 건의 · 오류 신고</b><small>${feedback.length}건을 확인해야 합니다.</small></div></div><div class="admin-alert-list">${feedback.length ? feedback.map(item => `<div class="admin-alert-item ${item.urgency === 'urgent' ? 'bad' : ''}"><span>${item.category === 'bug' ? '🐞' : '💬'}</span><div><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.feature_area || '기타')} · ${escapeHtml(item.author_name)} · ${adminDate(item.created_at)}</small></div></div>`).join('') : '<div class="admin-empty-compact">미처리 신고가 없습니다.</div>'}</div></div>
+  <div class="admin-section-card"><div class="admin-section-heading"><div><b>사용자 AI 설정 이상</b><small>API 키 값은 표시하지 않습니다.</small></div></div><div class="admin-alert-list">${ai.length ? ai.map(item => `<div class="admin-alert-item bad"><span>🤖</span><div><b>${escapeHtml(item.provider.toUpperCase())} · ${escapeHtml(item.key_hint || '키 정보 없음')}</b><small>${escapeHtml(item.last_error || 'API 상태 확인 필요')} · ${adminDate(item.last_validated_at, true)}</small></div></div>`).join('') : '<div class="admin-empty-compact">AI 설정 이상이 없습니다.</div>'}</div></div></div>`;
+}
+
+function renderAdminAudit() {
+  const userMap = new Map(adminConsoleState.users.map(item => [item.id, item]));
+  document.getElementById('adminAuditList').innerHTML = adminConsoleState.auditLogs.length ? `<div class="admin-audit-list">${adminConsoleState.auditLogs.map(item => `<div class="admin-audit-row"><span class="admin-audit-icon">↺</span><div><b>${escapeHtml(ADMIN_ACTION_LABEL[item.action] || item.action)}</b><small>${escapeHtml(userMap.get(item.actor_id)?.name || '관리자')} · ${adminDate(item.created_at, true)}</small></div><code>${escapeHtml(item.target_type)}</code></div>`).join('')}</div>` : '<div class="admin-empty">아직 관리자 변경 기록이 없습니다.</div>';
+}
+
+async function runAdminAction(body, successMessage) {
+  try {
+    await invokeEdgeJson('system-admin', body);
+    toast(successMessage, 'success');
+    adminConsoleState = null;
+    await loadAdminConsole(true);
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+window.updateAdminWorkspaceStatus = async function(workspaceId, status) {
+  const workspace = adminConsoleState.workspaces.find(item => item.id === workspaceId);
+  if (!confirm(`${workspace?.name || '현장'} 상태를 '${ADMIN_STATUS_LABEL[status]}'(으)로 변경하시겠습니까?`)) { renderAdminWorkspaces(); return; }
+  await runAdminAction({ action: 'update-workspace', workspaceId, status }, '현장 운영 상태를 변경했습니다.');
+};
+
+window.openAdminMembership = function(userId) {
+  const target = adminConsoleState.users.find(item => item.id === userId);
+  document.getElementById('adminMembershipUserId').value = userId;
+  document.getElementById('adminMembershipUserLabel').value = `${target.name} (${target.email})`;
+  document.getElementById('adminMembershipWorkspace').innerHTML = adminConsoleState.workspaces.map(item => `<option value="${item.id}">${escapeHtml(item.name)} · ${escapeHtml(item.code)}</option>`).join('');
+  document.getElementById('adminMembershipRole').value = 'member';
+  openModal('adminMembershipModal');
+};
+
+window.saveAdminMembership = async function() {
+  const userId = document.getElementById('adminMembershipUserId').value;
+  const workspaceId = document.getElementById('adminMembershipWorkspace').value;
+  const role = document.getElementById('adminMembershipRole').value;
+  closeModal('adminMembershipModal');
+  await runAdminAction({ action: 'set-membership', userId, workspaceId, role }, '현장 권한을 저장했습니다.');
+};
+
+window.setAdminMembershipRole = async function(userId, workspaceId, role) {
+  if (!confirm(`현장 권한을 ${role === 'admin' ? '관리자' : '멤버'}로 변경하시겠습니까?`)) { renderAdminUsers(); return; }
+  await runAdminAction({ action: 'set-membership', userId, workspaceId, role }, '현장 권한을 변경했습니다.');
+};
+
+window.removeAdminMembership = async function(userId, workspaceId) {
+  if (!confirm('이 사용자의 현장 접근 권한을 해제하시겠습니까?')) return;
+  await runAdminAction({ action: 'remove-membership', userId, workspaceId }, '현장 배정을 해제했습니다.');
+};
+
+window.toggleSystemAdmin = async function(userId, enabled) {
+  if (!confirm(enabled ? '이 계정에 전체 시스템 관리자 권한을 부여하시겠습니까?' : '이 계정의 시스템 관리자 권한을 해제하시겠습니까?')) return;
+  await runAdminAction({ action: 'set-system-admin', userId, enabled }, enabled ? '시스템 관리자로 지정했습니다.' : '시스템 관리자 권한을 해제했습니다.');
+};
+
+window.toggleAdminUserAccess = async function(userId, suspended) {
+  if (!confirm(suspended ? '이 계정을 정지하시겠습니까? 정지 중에는 로그인할 수 없습니다.' : '이 계정을 다시 사용할 수 있게 복구하시겠습니까?')) return;
+  await runAdminAction({ action: 'set-user-access', userId, suspended }, suspended ? '계정을 정지했습니다.' : '계정을 복구했습니다.');
 };
 
 window.searchLawFromHome = function() {
