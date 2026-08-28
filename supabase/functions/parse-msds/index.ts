@@ -85,16 +85,25 @@ JSON만 응답:
 }
 JSON만 반환.`;
 
-const MEASURE_PROMPT = `이 작업환경측정 결과 보고서에서 측정결과를 추출하세요. JSON만 응답:
+const MEASURE_PROMPT = `이 작업환경측정 결과 보고서를 읽고 작업환경측정 사후관리 결과 Word 양식에 넣을 자료를 추출하세요.
+문서에 적힌 측정값, 노출기준, 공정·공종, 문제점 및 개선대책을 우선 사용하고 추측하지 마세요.
+측정치와 기준치는 반드시 숫자(value)와 단위(unit)를 분리하세요. 특히 초과 항목에는 단위를 절대 생략하지 마세요.
+초과 여부는 보고서의 판정 또는 동일 단위의 측정값과 기준치 비교가 명확할 때만 "초과"로 표시하세요.
+개선대책은 보고서에 기재된 내용을 우선 옮기고, 내용이 없을 때만 일반적인 검토용 대책임을 source에 "AI 제안"으로 표시하세요.
+JSON만 응답:
 {
-  "dust": [{"no":1,"process":"공정명","agent":"유해인자명","measured":"측정치(단위포함)","limit":"노출기준(단위포함)","reason":"적용사유"}],
-  "noise": [{"no":1,"process":"공종명","measured":"측정치 dB(A)","limit":"90dB(A)","reason":"적용사유"}],
+  "overview": {"siteName":"보고서 현장명 또는 빈 문자열","measurementPeriod":"YYYY.MM.DD ~ YYYY.MM.DD 또는 빈 문자열","receivedDate":"결과수신일 또는 빈 문자열"},
+  "measurements": [{"no":1,"workType":"대상 공종","process":"공정명","category":"single|mixed|noise","agent":"유해인자명","measured":{"value":"0.123","unit":"mg/m³"},"limit":{"value":"0.5","unit":"mg/m³"},"status":"미만|초과|해당없음","reason":"판정 근거"}],
+  "resultRows": [{"no":1,"workType":"대상 공종","singleStatus":"미만|초과|해당없음","mixedStatus":"미만|초과|해당없음","noiseStatus":"미만|초과|해당없음","exceededMeasurements":[{"agent":"초과 유해물질","measured":{"value":"측정값","unit":"단위"},"limit":{"value":"기준값","unit":"단위"}}]}],
+  "improvements": [{"no":1,"target":"개선대상 공정·공종","method":"구체적인 개선방법","assignee":"보고서에 없으면 빈 문자열","source":"보고서 기재|AI 제안"}],
+  "dust": [{"no":1,"process":"공정명","agent":"유해인자명","measured":"측정치 단위","limit":"노출기준 단위","reason":"적용사유"}],
+  "noise": [{"no":1,"process":"공종명","agent":"소음","measured":"측정치 dB(A)","limit":"기준치 dB(A)","reason":"적용사유"}],
   "workTypes": ["공종명1","공종명2"],
   "dustExceeded": false,
   "noiseExceeded": false,
   "mixedExceeded": false
 }
-dust 없으면 빈 배열. JSON만 반환.`;
+해당 항목이 없으면 배열은 빈 배열, 문자열은 빈 문자열로 반환하세요. JSON만 반환.`;
 
 const HEALTH_PROMPT = `이 건강진단 결과 문서에서 근로자별 정보를 추출하세요. JSON 배열만 응답:
 [{
@@ -374,9 +383,43 @@ function validateResultShape(mode: AnalysisMode, parsed: any) {
     throw { status: 502, code: 'AI_RESPONSE_INVALID', detail: `${mode} result must be an object` };
   }
   if (mode === 'measure') {
-    if (!Array.isArray(parsed.dust) || !Array.isArray(parsed.noise) || !Array.isArray(parsed.workTypes)) {
+    if (!Array.isArray(parsed.dust) || !Array.isArray(parsed.noise) || !Array.isArray(parsed.workTypes)
+      || !Array.isArray(parsed.measurements) || !Array.isArray(parsed.resultRows) || !Array.isArray(parsed.improvements)) {
       throw { status: 502, code: 'AI_RESPONSE_INVALID', detail: 'measurement arrays are missing' };
     }
+    const allowedStatus = new Set(['미만', '초과', '해당없음']);
+    const unitPattern = /(mg|µg|ug|ppm|ppb|dB|개|f|m|cm|mm|%|℃|lux|L)(\s*[/·^³²()A-Za-z가-힣0-9-]*)?/i;
+    for (const row of parsed.resultRows) {
+      for (const field of ['singleStatus', 'mixedStatus', 'noiseStatus']) {
+        if (!allowedStatus.has(String(row?.[field] || ''))) row[field] = '해당없음';
+      }
+      if (!Array.isArray(row.exceededMeasurements)) row.exceededMeasurements = [];
+      const hasExceeded = [row.singleStatus, row.mixedStatus, row.noiseStatus].includes('초과');
+      if (hasExceeded && row.exceededMeasurements.length === 0) {
+        throw { status: 502, code: 'AI_RESPONSE_INVALID', detail: 'exceeded measurement details are missing' };
+      }
+      for (const item of row.exceededMeasurements) {
+        const measuredUnit = String(item?.measured?.unit || '').trim();
+        const limitUnit = String(item?.limit?.unit || '').trim();
+        if (!String(item?.agent || '').trim() || !String(item?.measured?.value || '').trim() || !String(item?.limit?.value || '').trim()
+          || !unitPattern.test(measuredUnit) || !unitPattern.test(limitUnit)) {
+          throw { status: 502, code: 'AI_RESPONSE_INVALID', detail: 'exceeded values must include valid units' };
+        }
+        item.measured.display = `${String(item.measured.value).trim()} ${measuredUnit}`;
+        item.limit.display = `${String(item.limit.value).trim()} ${limitUnit}`;
+      }
+    }
+    parsed.aftercare = {
+      overview: parsed.overview && typeof parsed.overview === 'object' ? parsed.overview : {},
+      resultRows: parsed.resultRows,
+      improvements: parsed.improvements.map((item: any, index: number) => ({
+        no: Number(item?.no) || index + 1,
+        target: String(item?.target || '').trim(),
+        method: String(item?.method || '').trim(),
+        assignee: String(item?.assignee || '').trim(),
+        source: item?.source === '보고서 기재' ? '보고서 기재' : 'AI 제안',
+      })).filter((item: any) => item.target || item.method),
+    };
   } else if (
     typeof parsed.productName !== 'string'
     || typeof parsed.supplier !== 'string'
@@ -611,7 +654,11 @@ serve(async (req) => {
       reason: routingReason,
     };
 
-    const promptVersion = '2026-08-detailed-msds-v3-failover';
+    const promptVersion = normalizedMode === 'measure'
+      ? '2026-08-measure-aftercare-v2-units'
+      : normalizedMode === 'health'
+        ? '2026-08-health-v1-failover'
+        : '2026-08-detailed-msds-v3-failover';
     const fileHash = normalizedMode === 'health' ? '' : await sha256(fileBase64);
     if (fileHash && !forceReanalysis) {
       for (const candidate of providerCandidates) {

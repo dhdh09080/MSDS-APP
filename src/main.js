@@ -3,6 +3,7 @@ import { generateCode, generateToken, base64ToBlob, downloadBlob, guessFromPath,
 import { ghsPictogramWithLabel, decodeHCodes, decodePCodes, GHS_NAMES, applyPictogramRules, condensePCodes } from './lib/ghs.js';
 import { CAS_MEASUREMENT, CAS_HEALTH_EXAM, CAS_MANAGE, CAS_PERMIT, CAS_SPECIAL, CAS_EXAM_CYCLE } from './data/cas-lists.js';
 import { openModal, closeModal, toast, openPrintWindow, buildPrintHtml } from './lib/ui.js';
+import { createMeasureAftercareDocx } from './lib/measure-docx.js';
 import { PAGES, MOBILE_TABS, WARN_SIZES, PHOTO_FOLDER_PRESETS } from './data/constants.js';
 import qrcode from 'qrcode-generator';
 
@@ -161,6 +162,26 @@ function showDevFeaturePreview(page) {
       auditLogs: [{ id: 'preview-audit', actor_id: 'preview-user', action: 'membership.set', target_type: 'user', created_at: now }],
     };
   }
+  if (page === 'measure') {
+    currentMeasureData = {
+      round: '2026년 1차 (상반기)', period: '2026-05-21 ~ 2026-05-22', receivedDate: '2026-06-19',
+      siteName: currentWS.name, createdDate: '2026-06-26', defaultAssignee: '보건관리자',
+      dust: [{ no: 1, process: '내장목공사', agent: '목재분진', measured: '1.21 mg/m³', limit: '1 mg/m³', reason: '개인시료 측정' }],
+      noise: [{ no: 1, process: '철골공사', agent: '소음', measured: '86.2 dB(A)', limit: '90 dB(A)', reason: '8시간 TWA' }],
+      workTypes: ['내장목공사', '철골공사'], dustExceeded: true, noiseExceeded: false, mixedExceeded: false,
+      aftercare: {
+        overview: { siteName: currentWS.name, measurementPeriod: '2026-05-21 ~ 2026-05-22', receivedDate: '2026-06-19' },
+        resultRows: [
+          { no: 1, workType: '내장목공사', singleStatus: '초과', mixedStatus: '해당없음', noiseStatus: '해당없음', exceededMeasurements: [{ agent: '목재분진', measured: { value: '1.21', unit: 'mg/m³' }, limit: { value: '1', unit: 'mg/m³' } }] },
+          { no: 2, workType: '철골공사', singleStatus: '해당없음', mixedStatus: '해당없음', noiseStatus: '미만', exceededMeasurements: [] },
+        ],
+        improvements: [
+          { no: 1, target: '내장목공사(목재분진)', method: '이동식 집진장치 설치, 방진마스크 착용 및 작업 후 습식 청소를 실시한다.', assignee: '보건관리자', source: '보고서 기재' },
+          { no: 2, target: '철골공사', method: '귀마개 착용 상태를 점검하고 소음 발생 장비의 정비 상태를 주기적으로 확인한다.', assignee: '공사담당자', source: 'AI 제안' },
+        ],
+      },
+    };
+  }
   announcementsLoaded = true;
   announcements = [
     {
@@ -203,6 +224,7 @@ function showDevFeaturePreview(page) {
     renderAiSettings();
     if (target === 'announcements') window.renderAnnouncements();
     if (target === 'feedback') renderFeedbackBoard();
+    if (target === 'measure') showMeasureResult(currentMeasureData);
     window.showPage(target);
   }, 0);
 }
@@ -4019,6 +4041,8 @@ window.openMeasureUpload = function() {
   document.getElementById('measureHalf').value = '';
   document.getElementById('measureDateFrom').value = '';
   document.getElementById('measureDateTo').value = '';
+  document.getElementById('measureReceivedDate').value = '';
+  document.getElementById('measureAssignee').value = '';
   openModal('measureUploadModal');
 };
 
@@ -4057,6 +4081,8 @@ window.analyzeMeasure = async function() {
   const half = document.getElementById('measureHalf').value;
   const dateFrom = document.getElementById('measureDateFrom').value;
   const dateTo = document.getElementById('measureDateTo').value;
+  const receivedDate = document.getElementById('measureReceivedDate').value;
+  const defaultAssignee = document.getElementById('measureAssignee').value.trim();
   if (!year || !half) { toast('연도와 상/하반기를 선택하세요', 'error'); return; }
   if (!dateFrom || !dateTo) { toast('측정 기간을 선택하세요', 'error'); return; }
   const round = `${year}년 ${half}`;
@@ -4068,17 +4094,11 @@ window.analyzeMeasure = async function() {
     const data = await invokeEdgeJson('parse-msds', {
         fileBase64: measureFileB64, mediaType: 'application/pdf',
         mode: 'measure',
-        prompt: `이 작업환경측정 결과 보고서에서 분진 측정결과와 소음 측정결과를 추출하세요. JSON만 응답:
-{
-  "dust": [{"no":1,"process":"공정명","agent":"유해인자명","measured":"측정치(단위포함)","limit":"노출기준(단위포함)","reason":"적용사유"}],
-  "noise": [{"no":1,"process":"공종명","measured":"측정치 dB(A)","limit":"90dB(A)","reason":"적용사유"}],
-  "workTypes": ["공종명1","공종명2"],
-  "dustExceeded": false,
-  "noiseExceeded": false,
-  "mixedExceeded": false
-}`
     });
-    currentMeasureData = { round, period, ...data.result };
+    currentMeasureData = {
+      round, period, receivedDate, defaultAssignee, siteName: currentWS.name,
+      createdDate: today(), ...data.result,
+    };
     closeModal('measureUploadModal');
     showMeasureResult(currentMeasureData);
 
@@ -4104,6 +4124,11 @@ async function saveMeasureResult(d, fileName) {
     round: d.round, period: d.period,
     dust: d.dust || [], noise: d.noise || [], work_types: d.workTypes || [],
     dust_exceeded: !!d.dustExceeded, noise_exceeded: !!d.noiseExceeded, mixed_exceeded: !!d.mixedExceeded,
+    aftercare: {
+      ...(d.aftercare || {}),
+      overview: { ...(d.aftercare?.overview || {}), receivedDate: d.receivedDate || d.aftercare?.overview?.receivedDate || '' },
+      defaultAssignee: d.defaultAssignee || d.aftercare?.defaultAssignee || '',
+    },
     file_name: fileName || null,
   }).select().single();
   if (error) throw new Error('DB 저장 실패: ' + error.message);
@@ -4128,26 +4153,27 @@ function showMeasureResult(d) {
   const body = document.getElementById('measureResultBody');
   const dust = Array.isArray(d.dust) ? d.dust.filter(row => row && typeof row === 'object') : [];
   const noise = Array.isArray(d.noise) ? d.noise.filter(row => row && typeof row === 'object') : [];
-  const workTypes = Array.isArray(d.workTypes) ? d.workTypes.map(value => String(value || '')).filter(Boolean) : [];
+  const resultRows = getMeasureResultRows(d);
+  const improvements = Array.isArray(d.aftercare?.improvements) ? d.aftercare.improvements : [];
   const dustRows = dust.map(row => `<tr><td class="ctr">${escapeHtml(row.no ?? '')}</td><td>${escapeHtml(row.process ?? '')}</td><td>${escapeHtml(row.agent ?? '')}</td><td class="ctr">${escapeHtml(row.measured ?? '')}</td><td class="ctr">${escapeHtml(row.limit ?? '')}</td><td>${escapeHtml(row.reason ?? '')}</td></tr>`).join('');
   const noiseRows = noise.map(row => `<tr><td class="ctr">${escapeHtml(row.no ?? '')}</td><td>${escapeHtml(row.process ?? '')}</td><td class="ctr">소음</td><td class="ctr">${escapeHtml(row.measured ?? '')}</td><td class="ctr">${escapeHtml(row.limit || '90dB(A)')}</td><td>${escapeHtml(row.reason ?? '')}</td></tr>`).join('');
-  const workTypeRows = workTypes.map((wt,i) => {
-    const hasDust = dust.some(r => String(r.process || '').includes(wt));
-    const hasNoise = noise.some(r => String(r.process || '').includes(wt));
-    const dustEx = hasDust && d.dustExceeded;
-    const noiseEx = hasNoise && d.noiseExceeded;
+  const workTypeRows = resultRows.map((row,i) => {
+    const exceeded = Array.isArray(row.exceededMeasurements) ? row.exceededMeasurements : [];
+    const agents = exceeded.map(item => escapeHtml(item.agent || '')).filter(Boolean).join('<br>');
+    const values = exceeded.map(item => `${escapeHtml(formatMeasurePart(item.measured))} / ${escapeHtml(formatMeasurePart(item.limit))}`).filter(value => value !== ' / ').join('<br>');
     return `<tr>
-      <td class="ctr">${i+1}</td><td>${escapeHtml(wt)}</td>
-      <td class="ctr">${hasDust ? (dustEx?'<span style="color:red;font-weight:700">초과</span>':'미만') : '해당없음'}</td>
-      <td class="ctr">${d.mixedExceeded ? (hasDust?'초과':'해당없음') : '해당없음'}</td>
-      <td class="ctr">${hasNoise ? (noiseEx?'<span style="color:red;font-weight:700">초과</span>':'미만') : '해당없음'}</td>
-      <td></td><td></td>
+      <td class="ctr">${row.no || i+1}</td><td>${escapeHtml(row.workType || '')}</td>
+      <td class="ctr">${measureStatusMarkup(row.singleStatus)}</td>
+      <td class="ctr">${measureStatusMarkup(row.mixedStatus)}</td>
+      <td class="ctr">${measureStatusMarkup(row.noiseStatus)}</td>
+      <td>${agents || '-'}</td><td>${values || '-'}</td>
     </tr>`;
   }).join('');
+  const improvementRows = improvements.map((item, index) => `<tr><td class="ctr">${item.no || index + 1}</td><td>${escapeHtml(item.target || '')}</td><td>${escapeHtml(item.method || '')}${item.source === 'AI 제안' ? '<div class="td-sub" style="color:var(--warn)">AI 제안 · 원문 확인 필요</div>' : ''}</td><td>${escapeHtml(item.assignee || d.defaultAssignee || '')}</td></tr>`).join('');
 
   body.innerHTML = `
     <div style="background:var(--ok-light);border:1.5px solid #86EFAC;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--ok);">
-      ✅ AI 분석 완료 — 아래 내용을 확인하고 다운로드하세요. 오류가 있으면 다운로드 후 수정하세요.
+      ✅ AI 분석 완료 — 단위와 초과 판정, 개선대책을 원본 보고서와 대조한 뒤 Word 파일을 내려받으세요.
     </div>
     <h4 style="margin-bottom:8px;font-size:14px;">📋 분진 측정결과 (${dust.length}건)</h4>
     <div style="overflow-x:auto;margin-bottom:20px;">
@@ -4169,15 +4195,58 @@ function showMeasureResult(d) {
         <thead><tr><th>No.</th><th>대상 공종</th><th>단일물질</th><th>혼합유기화합물</th><th>소음</th><th>초과 유해물질</th><th>측정치/기준치</th></tr></thead>
         <tbody>${workTypeRows||'<tr><td colspan="7" style="text-align:center;color:#999;">공종 정보 없음</td></tr>'}</tbody>
       </table>
-    </div>`;
+    </div>
+    <h4 style="margin:20px 0 8px;font-size:14px;">🛠️ 개선대책</h4>
+    <div style="overflow-x:auto;"><table class="result-table"><thead><tr><th>No.</th><th>개선대상</th><th>개선방법</th><th>담당자</th></tr></thead><tbody>${improvementRows || '<tr><td colspan="4" style="text-align:center;color:#999;">추출된 개선대책 없음 · 원본 보고서 확인 필요</td></tr>'}</tbody></table></div>`;
 
   document.getElementById('measureResultFooter').innerHTML = `
     <button class="btn btn-secondary" onclick="closeModal('measureResultModal')">닫기</button>
     ${d.file_path ? `<button class="btn btn-outline btn-sm" onclick="viewMeasureOriginalPdf()">📄 원본 PDF 보기</button>` : ''}
     <button class="btn btn-primary btn-sm" onclick="downloadMeasureDust()">📥 분진 결과표</button>
     <button class="btn btn-primary btn-sm" onclick="downloadMeasureNoise()">📥 소음 결과표</button>
-    <button class="btn btn-primary btn-sm" onclick="downloadMeasureAfter()">📥 사후관리 결과표</button>`;
+    <button class="btn btn-primary btn-sm" id="measureWordBtn" onclick="downloadMeasureAfter()">📄 사후관리 Word</button>`;
   openModal('measureResultModal');
+}
+
+function formatMeasurePart(part) {
+  if (!part) return '';
+  if (part.display) return String(part.display);
+  return [part.value, part.unit].map(value => String(value || '').trim()).filter(Boolean).join(' ');
+}
+
+function measureStatusMarkup(status) {
+  const safe = ['미만', '초과', '해당없음'].includes(status) ? status : '해당없음';
+  return safe === '초과' ? '<span style="color:red;font-weight:700">초과</span>' : safe;
+}
+
+function getMeasureResultRows(d) {
+  if (Array.isArray(d.aftercare?.resultRows) && d.aftercare.resultRows.length) return d.aftercare.resultRows;
+  const workTypes = Array.isArray(d.workTypes) ? d.workTypes.map(value => String(value || '')).filter(Boolean) : [];
+  return workTypes.map((workType, index) => {
+    const dust = (d.dust || []).filter(row => String(row.process || '').includes(workType));
+    const noise = (d.noise || []).filter(row => String(row.process || '').includes(workType));
+    const exceededMeasurements = [
+      ...(d.dustExceeded ? dust : []),
+      ...(d.noiseExceeded ? noise : []),
+    ].map(row => ({
+      agent: row.agent || (noise.includes(row) ? '소음' : ''),
+      measured: parseMeasureDisplay(row.measured),
+      limit: parseMeasureDisplay(row.limit),
+    }));
+    return {
+      no: index + 1, workType,
+      singleStatus: dust.length ? (d.dustExceeded ? '초과' : '미만') : '해당없음',
+      mixedStatus: d.mixedExceeded && dust.length ? '초과' : '해당없음',
+      noiseStatus: noise.length ? (d.noiseExceeded ? '초과' : '미만') : '해당없음',
+      exceededMeasurements,
+    };
+  });
+}
+
+function parseMeasureDisplay(value) {
+  const text = String(value || '').trim();
+  const match = text.match(/^([<>≤≥]?[\d.,]+)\s*(.+)$/);
+  return match ? { value: match[1], unit: match[2], display: text } : { value: text, unit: '', display: text };
 }
 
 // ─── 작업환경측정 결과 영구 저장 목록 (DB 기반) ───
@@ -4227,6 +4296,10 @@ window.openSavedMeasureResult = function(id) {
     id: r.id, round: r.round, period: r.period,
     dust: r.dust || [], noise: r.noise || [], workTypes: r.work_types || [],
     dustExceeded: r.dust_exceeded, noiseExceeded: r.noise_exceeded, mixedExceeded: r.mixed_exceeded,
+    aftercare: r.aftercare || {}, siteName: currentWS.name,
+    receivedDate: r.aftercare?.overview?.receivedDate || '',
+    defaultAssignee: r.aftercare?.defaultAssignee || '',
+    createdDate: String(r.created_at || today()).substring(0, 10),
     file_name: r.file_name, file_path: r.file_path,
   };
   showMeasureResult(currentMeasureData);
@@ -4271,22 +4344,21 @@ window.downloadMeasureNoise = function() {
   toast('소음 결과표 다운로드 완료', 'success');
 };
 
-window.downloadMeasureAfter = function() {
+window.downloadMeasureAfter = async function() {
   if (!currentMeasureData) return;
   const d = currentMeasureData;
-  const rows = (d.workTypes||[]).map((wt,i) => {
-    const hasDust = (d.dust||[]).some(r=>r.process?.includes(wt));
-    const hasNoise = (d.noise||[]).some(r=>r.process?.includes(wt));
-    return { '구분':i+1, '대상 공종':wt,
-      '단일물질':hasDust?(d.dustExceeded?'초과':'미만'):'해당없음',
-      '혼합유기화합물':d.mixedExceeded?(hasDust?'초과':'해당없음'):'해당없음',
-      '소음':hasNoise?(d.noiseExceeded?'초과':'미만'):'해당없음',
-      '초과 유해물질':'', '측정치/기준치':'' };
-  });
-  const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '사후관리결과');
-  XLSX.writeFile(wb, `작업환경측정_사후관리_${d.round}_${today()}.xlsx`);
-  toast('사후관리 결과표 다운로드 완료', 'success');
+  const btn = document.getElementById('measureWordBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Word 생성 중...'; }
+  try {
+    const payload = { ...d, aftercare: { ...(d.aftercare || {}), resultRows: getMeasureResultRows(d) }, siteName: d.siteName || currentWS.name, createdDate: d.createdDate || today() };
+    const blob = await createMeasureAftercareDocx(payload);
+    downloadBlob(blob, `작업환경측정_사후관리_${String(d.round || '').replace(/[\\/:*?"<>|]/g, '_')}_${today()}.docx`);
+    toast('사후관리 Word 파일을 생성했습니다.', 'success');
+  } catch (error) {
+    toast(error.message || 'Word 생성에 실패했습니다.', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📄 사후관리 Word'; }
+  }
 };
 
 // ═══════════════════════════════════════════════

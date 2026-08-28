@@ -1956,8 +1956,16 @@
           <label class="form-label">측정 종료일 <span class="required">*</span></label>
           <input class="form-input" type="date" id="measureDateTo">
         </div>
+        <div class="form-field">
+          <label class="form-label">결과 수신일 <span class="form-hint">선택</span></label>
+          <input class="form-input" type="date" id="measureReceivedDate">
+        </div>
+        <div class="form-field">
+          <label class="form-label">기본 담당자 <span class="form-hint">선택</span></label>
+          <input class="form-input" id="measureAssignee" maxlength="40" placeholder="예) 보건관리자">
+        </div>
       </div>
-      <div class="form-note" style="margin-bottom:12px;">측정결과 보고서 PDF를 업로드하면 분진·소음 결과표와 사후관리 결과표를 자동으로 생성합니다.</div>
+      <div class="form-note" style="margin-bottom:12px;">측정결과 보고서 PDF를 업로드하면 측정치·기준치의 단위와 개선대책까지 분석해 사후관리 Word 양식을 자동으로 채웁니다.</div>
       <button type="button" id="measureUploadZone" class="upload-zone"
         onclick="document.getElementById('measureFileInput').click()"
         ondragover="dragOver(event,'measureUploadZone')"
