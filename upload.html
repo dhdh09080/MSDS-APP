@@ -227,12 +227,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
         <div class="complete-title">업로드 완료!</div>
         <div class="complete-sub">
           <b id="uploadedCount">0</b>개의 MSDS 파일이 성공적으로 업로드됐습니다.<br>
-          담당 보건관리자가 확인 후 처리합니다.
+          담당 보건관리자가 로그인 후 필요한 문서만 분석하고 확인합니다.
         </div>
         <div id="uploadFailureSummary" style="display:none;margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--danger-light);color:var(--danger);font-size:13px;font-weight:700;"></div>
         <div class="complete-actions">
           <button class="btn btn-secondary" id="retryFailedBtn" onclick="retryFailedUploads()" style="display:none;">실패 파일 다시 시도</button>
-          <button class="btn btn-primary" onclick="printWarning()">⚠️ 경고표지 인쇄</button>
           <button class="btn btn-secondary" onclick="resetForm()">+ 추가 파일 업로드</button>
         </div>
       </div>
@@ -293,6 +292,7 @@ async function init() {
       const { data: plink, error } = await supabase.from('public_upload_links')
         .select('*, workspace:workspace_id(*)').eq('token', ptoken).single();
       if (error || !plink) { showError('유효하지 않은 링크입니다.'); return; }
+      if (plink.expires_at && new Date(plink.expires_at) < new Date()) { showError('만료된 링크입니다. 새 링크를 요청해주세요.'); return; }
       publicLinkData = plink; wsData = plink.workspace;
 
       const { data: cons } = await supabase.from('contractors')
@@ -442,24 +442,11 @@ function renderFileList() {
       <span class="fi-icon">${{waiting:'📄',uploading:'⏳',done:'✅',error:'❌'}[item.status]}</span>
       <div class="fi-info">
         <div class="fi-name">${item.name}</div>
-        <div class="fi-status">${{waiting:'업로드 대기',uploading:'AI 분석 중...',done:'완료',error:'오류 발생'}[item.status]}</div>
+        <div class="fi-status">${{waiting:'업로드 대기',uploading:'안전하게 접수 중...',done:'접수 완료',error:'오류 발생'}[item.status]}</div>
         ${item.status==='uploading'?'<div class="progress-bar"><div class="progress-fill"></div></div>':''}
       </div>
       ${item.status!=='uploading'?`<button class="fi-remove" onclick="removeFile('${item.id}')">✕</button>`:''}
     </div>`).join('');
-}
-
-async function invokeAiParse(body) {
-  const { data, error } = await supabase.functions.invoke('parse-msds', {
-    body: { ...body, uploadToken: currentUploadToken }
-  });
-  if (error) {
-    let payload = null;
-    try { payload = error.context ? await error.context.json() : null; } catch {}
-    throw new Error(payload?.error || error.message || 'AI 분석 요청에 실패했습니다.');
-  }
-  if (data?.error) throw new Error(data.error);
-  return data;
 }
 
 window.removeFile = function(id) { fileQueue = fileQueue.filter(f => f.id !== id); renderFileList(); };
@@ -473,9 +460,8 @@ window.startUpload = async function() {
   for (const item of waiting) {
     item.status = 'uploading'; renderFileList();
     try {
-      // Edge Function 호출
-      const data = await invokeAiParse({ fileBase64: item.data, mediaType: item.mediaType });
-      const parsed = data.result;
+      // 공개 링크에서는 현장 관리자 API 비용과 문서 외부 전송을 막고 파일만 접수합니다.
+      // 보건관리자가 로그인 후 MSDS 대장에서 필요한 건만 AI 분석합니다.
       // 파일을 먼저 스토리지에 올리고, PDF 정보를 포함해 한 번에 저장
       // (기존 방식은 저장 후 UPDATE였는데, 비로그인 권한으로는 UPDATE가 조용히 실패해 has_pdf가 항상 false로 남는 버그가 있었음)
       const recId = crypto.randomUUID();
@@ -491,27 +477,15 @@ window.startUpload = async function() {
         id: recId,
         workspace_id: wsData.id,
         uploaded_by: null, // 협력사 업로드 = null
-        product_name: parsed.productName || item.name.replace(/\.(pdf|jpg|jpeg|png)$/i,''),
-        supplier: parsed.supplier || '',
-        supplier_contact: parsed.supplierContact || '',
+        product_name: item.name.replace(/\.(pdf|jpg|jpeg|png)$/i,''),
+        supplier: '',
+        supplier_contact: '',
         contractor: contractorData.name,
         work_type: selectedWorkType,
-        cas_no: parsed.casNo || '',
-        components: parsed.components || '',
-        signal_word: parsed.signalWord || '',
-        h_codes: parsed.hCodes || '',
-        p_codes: parsed.pCodes || '',
-        pictograms: parsed.pictograms || '',
-        issue_date: parsed.issueDate || '',
-        protective_equipment: parsed.protectiveEquipment || '',
-        legal_measurement: parsed.legalMeasurement || 'N',
-        legal_exam: parsed.legalExam || 'N',
-        legal_exam_cycle: parsed.legalExamCycle || '',
-        legal_manage: parsed.legalManage || 'N',
-        legal_permit: parsed.legalPermit || 'N',
-        legal_special: parsed.legalSpecial || 'N',
-        legal_dangerous: parsed.legalDangerous || 'N',
-        special: parsed.legalSpecial === 'Y' ? 'Y_special' : 'N',
+        cas_no: '', components: '', signal_word: '', h_codes: '', p_codes: '', pictograms: '',
+        issue_date: '', protective_equipment: '',
+        legal_measurement: 'N', legal_exam: 'N', legal_exam_cycle: '', legal_manage: 'N',
+        legal_permit: 'N', legal_special: 'N', legal_dangerous: 'N', special: 'N',
         status: 'active',
         receipt_status: 'received',
         receipt_date: new Date().toISOString().split('T')[0],
@@ -544,11 +518,6 @@ window.startUpload = async function() {
 };
 
 // ─── 완료 후 액션 ───
-window.printWarning = function() {
-  // 업로드된 파일의 경고표지를 간단히 출력
-  toast('경고표지 인쇄 준비 중...'); window.print();
-};
-
 window.resetForm = function() {
   fileQueue = []; selectedWorkType = '';
   document.querySelectorAll('.worktype-btn').forEach(b => b.classList.remove('selected'));
@@ -664,12 +633,11 @@ window.handleLicenseFileSelect = async function(e) {
 let reuploadItems = [];
 
 async function loadReuploadRequests() {
-  const { data } = await supabase.from('msds_records')
-    .select('id, product_name, supplier, version, reupload_reason, reupload_requested_at')
-    .eq('workspace_id', wsData.id)
-    .eq('contractor', contractorData.name)
-    .eq('reupload_requested', true)
-    .order('reupload_requested_at', { ascending: true });
+  const { data, error } = await supabase.rpc('get_public_reupload_requests', {
+    p_token: currentUploadToken,
+    p_contractor_id: contractorData.id,
+  });
+  if (error) { console.error('재업로드 요청 조회 실패', error); return; }
   reuploadItems = (data || []).map(r => ({ ...r, status: 'waiting' }));
   renderReuploadSection();
 }
@@ -687,7 +655,7 @@ function renderReuploadSection() {
           <span style="font-size:18px;">${{waiting:'📄',uploading:'⏳',done:'✅',error:'❌'}[item.status]}</span>
           <div style="flex:1;min-width:0;">
             <div style="font-weight:700;font-size:13px;color:#1e293b;">${item.product_name} <span style="color:#94a3b8;font-weight:400;">v${item.version||1}</span></div>
-            <div style="font-size:12px;color:#b45309;">${item.status==='done' ? '재업로드 완료! 감사합니다' : item.status==='uploading' ? 'AI 분석 및 저장 중...' : item.status==='error' ? '오류: ' + (item.error||'다시 시도해주세요') : '사유: ' + (item.reupload_reason||'재업로드 필요')}</div>
+            <div style="font-size:12px;color:#b45309;">${item.status==='done' ? '재업로드 접수 완료! 감사합니다' : item.status==='uploading' ? '안전하게 접수 중...' : item.status==='error' ? '오류: ' + (item.error||'다시 시도해주세요') : '사유: ' + (item.reupload_reason||'재업로드 필요')}</div>
           </div>
           ${item.status==='waiting'||item.status==='error' ? `<button class="btn btn-primary" style="flex-shrink:0;padding:8px 14px;" onclick="pickReuploadFile('${item.id}')">파일 올리기</button>` : ''}
         </div>`).join('')}
@@ -716,57 +684,24 @@ async function doReupload(recordId, file) {
       r.onerror = rej;
       r.readAsDataURL(file);
     });
-    // 2) AI 분석
-    const data = await invokeAiParse({ fileBase64: base64, mediaType: file.type });
-    const parsed = data.result;
-    // 3) 스토리지 교체
+    // 2) 공개 링크에서는 AI로 보내지 않고 스토리지 파일만 교체
     const ext = file.type === 'application/pdf' ? 'pdf' : (file.type.split('/')[1]||'jpg');
     const path = `${wsData.id}/${recordId}.${ext}`;
     const bytes = atob(base64); const arr = new Uint8Array(bytes.length);
     for (let i=0;i<bytes.length;i++) arr[i]=bytes.charCodeAt(i);
     const { error: stErr } = await supabase.storage.from('msds-pdfs').upload(path, new Blob([arr],{type:file.type}), {contentType:file.type,upsert:true});
     const hasPdf = !stErr;
-    // 4) 레코드 갱신: 버전 업 + 이력 + 요청 해제
+    // 3) 토큰 검증 RPC로 버전 업 + 요청 해제 + 관리자 알림
     const nv = (item.version || 1) + 1;
-    const today = new Date().toISOString().split('T')[0];
-    const { data: cur } = await supabase.from('msds_records').select('history').eq('id', recordId).single();
-    const history = [...(cur?.history || []), { version: item.version || 1, date: today, note: '협력사 재업로드 (' + (item.reupload_reason||'요청') + ')' }];
-    const { error: upErr } = await supabase.from('msds_records').update({
-      product_name: parsed.productName || item.product_name,
-      supplier: parsed.supplier || '',
-      supplier_contact: parsed.supplierContact || '',
-      cas_no: parsed.casNo || '',
-      components: parsed.components || '',
-      signal_word: parsed.signalWord || '',
-      h_codes: parsed.hCodes || '',
-      p_codes: parsed.pCodes || '',
-      pictograms: parsed.pictograms || '',
-      issue_date: parsed.issueDate || '',
-      protective_equipment: parsed.protectiveEquipment || '',
-      legal_measurement: parsed.legalMeasurement || 'N',
-      legal_exam: parsed.legalExam || 'N',
-      legal_exam_cycle: parsed.legalExamCycle || '',
-      legal_manage: parsed.legalManage || 'N',
-      legal_permit: parsed.legalPermit || 'N',
-      legal_special: parsed.legalSpecial || 'N',
-      legal_dangerous: parsed.legalDangerous || 'N',
-      special: parsed.legalSpecial === 'Y' ? 'Y_special' : 'N',
-      receipt_status: 'received',
-      receipt_date: today,
-      version: nv, history,
-      has_pdf: hasPdf, pdf_name: hasPdf ? file.name : undefined, pdf_path: hasPdf ? path : undefined,
-      reupload_requested: false, reupload_reason: null, reupload_requested_at: null,
-      updated_at: new Date().toISOString(),
-    }).eq('id', recordId);
-    if (upErr) throw new Error('저장 실패: ' + upErr.message);
-    // 5) 보건관리자에게 알림
-    await supabase.from('notifications').insert({
-      workspace_id: wsData.id,
-      type: 'reupload',
-      title: `${contractorData.name} · ${parsed.productName || item.product_name}`,
-      body: `v${nv}(으)로 재업로드 완료`,
-      record_id: recordId,
+    if (!hasPdf) throw new Error('원본 파일 업로드 실패: ' + stErr.message);
+    const { error: upErr } = await supabase.rpc('complete_public_reupload', {
+      p_token: currentUploadToken,
+      p_contractor_id: contractorData.id,
+      p_record_id: recordId,
+      p_file_name: file.name,
+      p_file_path: path,
     });
+    if (upErr) throw new Error('저장 실패: ' + upErr.message);
     item.status = 'done'; item.version = nv;
   } catch (err) {
     item.status = 'error'; item.error = err.message;

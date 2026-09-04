@@ -3,15 +3,41 @@
 // (상태 공유 없는 순수 유틸이라 안전하게 분리 가능)
 // ═══════════════════════════════════════════════
 
-export function openModal(id) { document.getElementById(id)?.classList.add('open'); }
-export function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
+const modalReturnFocus = new Map();
+
+export function openModal(id) {
+  const backdrop = document.getElementById(id);
+  if (!backdrop) return;
+  if (document.activeElement instanceof HTMLElement) modalReturnFocus.set(id, document.activeElement);
+  backdrop.classList.add('open');
+  requestAnimationFrame(() => {
+    const firstControl = backdrop.querySelector('[autofocus], .modal-close, button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (firstControl instanceof HTMLElement) firstControl.focus();
+  });
+}
+
+export function closeModal(id) {
+  const backdrop = document.getElementById(id);
+  if (!backdrop) return;
+  backdrop.classList.remove('open');
+  const returnTarget = modalReturnFocus.get(id);
+  modalReturnFocus.delete(id);
+  if (returnTarget instanceof HTMLElement && returnTarget.isConnected) returnTarget.focus();
+}
+
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  const openModals = [...document.querySelectorAll('.modal-backdrop.open')];
+  const topmost = openModals.at(-1);
+  if (topmost?.id) closeModal(topmost.id);
+});
 
 export function toast(msg, type = '') {
   const wrap = document.getElementById('toastWrap');
   const el = document.createElement('div');
   el.className = 'toast ' + type;
-  el.innerHTML = (type === 'success' ? '✓ ' : type === 'error' ? '✕ ' : type === 'warn' ? '⚠ ' : '') + msg;
-  wrap.appendChild(el);
+  el.textContent = (type === 'success' ? '✓ ' : type === 'error' ? '✕ ' : type === 'warn' ? '⚠ ' : '') + String(msg ?? '');
+  wrap?.appendChild(el);
   setTimeout(() => el.remove(), 3500);
 }
 
