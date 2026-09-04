@@ -1600,7 +1600,7 @@ async function loadWorkTypes() {
 }
 
 function populateContractorSelects() {
-  ['batchContractor','f_contractor','pkgContractor','linkContractor','workTypeContractor'].forEach(id => {
+  ['batchContractor','f_contractor','linkContractor','workTypeContractor'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const q = (document.getElementById(id + 'Search')?.value || '').trim().toLowerCase();
@@ -3725,89 +3725,147 @@ window.printMsdsList = function() {
 // ═══════════════════════════════════════════════
 // Package
 // ═══════════════════════════════════════════════
+let packageSelectedContractors = new Set();
+
 window.openPackageModal = function() {
-  const sel = document.getElementById('pkgContractor');
-  sel.innerHTML = '<option value="">선택하세요</option>' + contractors.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+  document.getElementById('pkgContractorSearch').value = '';
   const fc = window.selectedContractor || '';
-  if (fc) sel.value = fc;
-  updatePkgCount(); openModal('packageModal');
+  packageSelectedContractors = new Set(fc ? [fc] : []);
+  renderPackageContractors();
+  openModal('packageModal');
+};
+
+function packageContractorNames() {
+  return [...new Set(msdsRecords.map(r => (r.contractor || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'ko'));
+}
+
+function selectedPackageContractors() {
+  return [...packageSelectedContractors];
+}
+
+window.renderPackageContractors = function() {
+  const listEl = document.getElementById('pkgContractorList');
+  const query = document.getElementById('pkgContractorSearch').value.trim().toLowerCase();
+  const names = packageContractorNames().filter(name => !query || name.toLowerCase().includes(query));
+  listEl.innerHTML = names.map(name => {
+    const items = msdsRecords.filter(r => r.contractor === name);
+    const withPdf = items.filter(r => r.has_pdf && r.pdf_path).length;
+    return `<label style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:6px;cursor:pointer;">
+      <input type="checkbox" class="pkg-contractor-check" value="${escapeHtml(name)}" ${packageSelectedContractors.has(name) ? 'checked' : ''} onchange="setPackageContractorSelected(this.value,this.checked)">
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;">${escapeHtml(name)}</div>
+        <div style="font-size:11px;color:var(--text3);">물질 ${items.length}건 · 원본 파일 ${withPdf}건</div>
+      </div>
+    </label>`;
+  }).join('') || '<div style="padding:14px;text-align:center;color:var(--text3);font-size:13px;">검색 결과가 없습니다</div>';
+  updatePkgCount();
+};
+
+window.setPackageContractorSelected = function(name, checked) {
+  if (checked) packageSelectedContractors.add(name);
+  else packageSelectedContractors.delete(name);
+  updatePkgCount();
+};
+
+window.toggleAllPackageContractors = function(checked) {
+  packageSelectedContractors = checked ? new Set(packageContractorNames()) : new Set();
+  renderPackageContractors();
 };
 
 function pkgTargets() {
-  const con = document.getElementById('pkgContractor').value;
+  const selected = selectedPackageContractors();
   const st = document.getElementById('pkgStatus').value;
-  if (!con) return [];
-  return msdsRecords.filter(r => r.contractor === con && (!st || (r.status||'active') === st));
+  if (!selected.length) return [];
+  return msdsRecords.filter(r => selected.includes(r.contractor) && (!st || (r.status||'active') === st));
 }
 
 window.updatePkgCount = function() {
   const t = pkgTargets();
   const el = document.getElementById('pkgCount');
-  if (!document.getElementById('pkgContractor').value) { el.textContent=''; return; }
-  el.textContent = `해당 물질 ${t.length}건 (원본 파일 ${t.filter(r=>r.has_pdf).length}건)`;
+  const selected = selectedPackageContractors();
+  const allNames = packageContractorNames();
+  const selectAll = document.getElementById('pkgSelectAll');
+  selectAll.checked = allNames.length > 0 && allNames.every(name => packageSelectedContractors.has(name));
+  selectAll.indeterminate = selected.length > 0 && !selectAll.checked;
+  if (!selected.length) { el.textContent=''; return; }
+  el.textContent = `협력사 ${selected.length}곳 · 물질 ${t.length}건 (원본 파일 ${t.filter(r=>r.has_pdf && r.pdf_path).length}건)`;
 };
 
 window.exportPackage = async function() {
-  const con = document.getElementById('pkgContractor').value;
-  if (!con) { toast('협력사를 선택하세요', 'error'); return; }
+  const selected = selectedPackageContractors();
+  if (!selected.length) { toast('협력사를 선택하세요', 'error'); return; }
   const targets = pkgTargets();
-  if (targets.length === 0) { toast('해당 협력사 물질이 없습니다', 'error'); return; }
+  if (targets.length === 0) { toast('선택한 조건에 해당하는 물질이 없습니다', 'error'); return; }
   const wantList = document.getElementById('pkgList').checked;
   const wantPdf = document.getElementById('pkgPdf').checked;
   const wantWarn = document.getElementById('pkgWarn').checked;
   if (!wantList && !wantPdf && !wantWarn) { toast('출력 항목을 선택하세요', 'error'); return; }
-  toast(`${con} 패키지 생성 중...`);
-  const zip = new JSZip(); const root = zip.folder(`${con}_MSDS_${today()}`);
-  if (wantList) {
+  toast(`협력사 ${selected.length}곳 패키지 생성 중...`);
+  const zip = new JSZip();
+  const safeZipName = value => String(value || '미지정').replace(/[\\/:*?"<>|]/g, '_').replace(/[. ]+$/g, '').trim() || '미지정';
+  const safeSheetName = value => String(value || 'MSDS').replace(/[\\/?*\[\]:]/g, '_').slice(0, 31) || 'MSDS';
+  const usedFolderNames = new Set();
+  const groups = selected.map(contractor => ({
+    contractor,
+    targets: targets.filter(r => r.contractor === contractor),
+  })).filter(group => group.targets.length > 0);
+  for (const group of groups) {
+    const con = group.contractor;
+    const contractorTargets = group.targets;
+    const folderBase = safeZipName(con);
+    let folderName = folderBase, folderNo = 2;
+    while (usedFolderNames.has(folderName)) folderName = `${folderBase}_${folderNo++}`;
+    usedFolderNames.add(folderName);
+    const root = zip.folder(folderName);
+    if (wantList) {
     const YN = v => v === 'Y' ? 'O' : '';
     const rows = [];
     let no = 0;
-    filtered.forEach(r => {
+    contractorTargets.forEach(r => {
       no++;
       const comps = splitComponents(r);
       comps.forEach((comp, idx) => {
-        rows.push(`<tr style="${idx > 0 ? 'background:#fafafa;' : ''}">
-          <td class="ctr">${idx===0 ? no : ''}</td>
-          <td>${idx===0 ? r.contractor : ''}</td>
-          <td>${idx===0 ? (r.work_type||'-') : ''}</td>
-          <td class="pname">${idx===0 ? r.product_name : ''}</td>
-          <td>${idx===0 ? (r.supplier||'-') : ''}</td>
-          <td>${idx===0 ? (r.supplier_contact||'-') : ''}</td>
-          <td class="ctr">${idx===0 ? (r.issue_date||'-') : ''}</td>
-          <td>${comp.cas||'-'}</td>
-          <td>${comp.name||'-'}</td>
-          <td class="ctr">${idx===0 ? YN(r.legal_measurement) : ''}</td>
-          <td class="ctr">${idx===0 ? (r.legal_exam==='Y' ? (r.legal_exam_cycle||'●') : '') : ''}</td>
-          <td class="ctr">${idx===0 ? YN(r.legal_manage) : ''}</td>
-          <td class="ctr">${idx===0 ? YN(r.legal_permit) : ''}</td>
-          <td class="ctr">${idx===0 ? YN(r.legal_special) : ''}</td>
-          <td class="ctr">${idx===0 ? YN(r.legal_dangerous) : ''}</td>
-          <td style="font-size:8px;">${idx===0 ? (r.protective_equipment||'-') : ''}</td>
-        </tr>`);
+        rows.push({
+          'No.': idx===0 ? no : '', '사용 협력사': idx===0 ? r.contractor : '', '취급 공종': idx===0 ? (r.work_type||'') : '',
+          '제품명': idx===0 ? r.product_name : '', '공급업체': idx===0 ? (r.supplier||'') : '',
+          '공급업체 연락처': idx===0 ? (r.supplier_contact||'') : '', 'MSDS 개정일자': idx===0 ? (r.issue_date||'') : '',
+          'CAS No.': comp.cas||'', '구성성분명': comp.name||'', '작업환경측정': idx===0 ? YN(r.legal_measurement) : '',
+          '특수검진 주기': idx===0 ? (r.legal_exam==='Y' ? (r.legal_exam_cycle||'대상') : '') : '',
+          '관리대상유해물질': idx===0 ? YN(r.legal_manage) : '', '허가대상유해물질': idx===0 ? YN(r.legal_permit) : '',
+          '특별관리물질': idx===0 ? YN(r.legal_special) : '', '위험물 규제': idx===0 ? YN(r.legal_dangerous) : '',
+          '추천 보호구': idx===0 ? (r.protective_equipment||'') : '',
+        });
       });
     });
-    const rowsHtml = rows.join('');
-    const ws2 = XLSX.utils.json_to_sheet(rows); const wb2 = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2, ws2, con.slice(0,30));
-    root.file(`${con}_MSDS목록.xlsx`, XLSX.write(wb2, {bookType:'xlsx',type:'array'}));
-  }
-  if (wantPdf) {
-    const pf = root.folder('원본파일');
-    for (const r of targets) {
-      if (!r.has_pdf || !r.pdf_path) continue;
-      const { data } = await supabase.storage.from('msds-pdfs').download(r.pdf_path);
-      if (!data) continue;
-      let fname = r.pdf_name || (r.product_name+'.pdf');
-      let n = fname, c = 1; while (pf.file(n)) { n = fname.replace(/\.(\w+)$/,`_${c}.$1`); c++; }
-      pf.file(n, data);
+    const ws2 = XLSX.utils.json_to_sheet(rows); const wb2 = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2, ws2, safeSheetName(con));
+      root.file(`${safeZipName(con)}_MSDS목록.xlsx`, XLSX.write(wb2, {bookType:'xlsx',type:'array'}));
+    }
+    if (wantPdf) {
+      const pf = root.folder('원본파일');
+      for (const r of contractorTargets) {
+        if (!r.has_pdf || !r.pdf_path) continue;
+        const { data, error } = await supabase.storage.from('msds-pdfs').download(r.pdf_path);
+        if (error || !data) continue;
+        const originalName = safeZipName(r.pdf_name || (r.product_name+'.pdf'));
+        let n = originalName, c = 1;
+        while (pf.file(n)) {
+          const dot = originalName.lastIndexOf('.');
+          n = dot > 0 ? `${originalName.slice(0, dot)}_${c}${originalName.slice(dot)}` : `${originalName}_${c}`;
+          c++;
+        }
+        pf.file(n, data);
+      }
     }
   }
   const content = await zip.generateAsync({type:'blob'});
-  downloadBlob(content, `${con}_MSDS패키지_${today()}.zip`);
+  const filePrefix = groups.length === 1 ? safeZipName(groups[0].contractor) : `전체_${groups.length}개협력사`;
+  downloadBlob(content, `${filePrefix}_MSDS패키지_${today()}.zip`);
   if (wantWarn) setTimeout(() => {
     warnSelected = new Set(targets.map(r=>r.id));
     printWarnings();
   }, 600);
-  toast(`${con} 패키지 완료`, 'success');
+  toast(`협력사 ${groups.length}곳 · 물질 ${targets.length}건 패키지 완료`, 'success');
   closeModal('packageModal');
 };
 // ═══════════════════════════════════════════════

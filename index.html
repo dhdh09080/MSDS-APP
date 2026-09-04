@@ -1851,19 +1851,21 @@
 
 <!-- 협력사 패키지 -->
 <div class="modal-backdrop" id="packageModal">
-  <div class="modal" style="max-width:460px">
+  <div class="modal" style="max-width:520px">
     <div class="modal-header">
       <div class="modal-title">📦 협력사별 일괄 출력</div>
       <button class="modal-close" onclick="closeModal('packageModal')">✕</button>
     </div>
     <div class="modal-body">
+      <div class="form-note" style="margin-bottom:12px;">다운로드할 협력사를 여러 곳 선택할 수 있습니다. ZIP 안에 협력사별 폴더가 자동으로 만들어집니다.</div>
       <div class="form-field" style="margin-bottom:14px;">
-        <label class="form-label">협력사 선택</label>
-        <div class="contractor-search-row">
-          <input class="form-input" id="pkgContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('pkgContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('pkgContractor');}">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('pkgContractor')">검색</button>
-        </div>
-        <select class="form-input" id="pkgContractor" onchange="updatePkgCount()"><option value="">선택하세요</option></select>
+        <label class="form-label" for="pkgContractorSearch">협력사 선택</label>
+        <input class="form-input" id="pkgContractorSearch" placeholder="협력사명 검색" oninput="renderPackageContractors()">
+        <label style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1.5px solid var(--border);border-radius:8px;margin:10px 0;cursor:pointer;background:var(--surface2);">
+          <input type="checkbox" id="pkgSelectAll" onchange="toggleAllPackageContractors(this.checked)">
+          <div style="font-size:13px;font-weight:700;">전체 선택</div>
+        </label>
+        <div id="pkgContractorList" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px;"></div>
       </div>
       <div class="form-field" style="margin-bottom:14px;">
         <label class="form-label">사용 상태</label>
