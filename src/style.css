@@ -5194,6 +5194,7 @@ button.stat-card {
   }
 
   .msds-header-actions > #msdsRegisterBtn,
+  .msds-header-actions > #msdsDownloadAllBtn,
   .msds-more-actions,
   .msds-more-actions > summary {
     width: 100%;
@@ -5202,6 +5203,7 @@ button.stat-card {
   .msds-more-actions {
     position: relative;
     display: block;
+    grid-column: 1 / -1;
   }
 
   .msds-more-actions > summary {

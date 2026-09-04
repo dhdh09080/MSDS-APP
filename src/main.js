@@ -3727,10 +3727,10 @@ window.printMsdsList = function() {
 // ═══════════════════════════════════════════════
 let packageSelectedContractors = new Set();
 
-window.openPackageModal = function() {
+window.openPackageModal = function(selectAll = false) {
   document.getElementById('pkgContractorSearch').value = '';
   const fc = window.selectedContractor || '';
-  packageSelectedContractors = new Set(fc ? [fc] : []);
+  packageSelectedContractors = selectAll ? new Set(packageContractorNames()) : new Set(fc ? [fc] : []);
   renderPackageContractors();
   openModal('packageModal');
 };

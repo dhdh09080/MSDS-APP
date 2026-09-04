@@ -339,6 +339,7 @@
     </div>
     <div class="header-actions msds-header-actions">
       <button class="btn btn-primary" id="msdsRegisterBtn" onclick="openMsdsRegister()">+ 등록</button>
+      <button class="btn btn-secondary" id="msdsDownloadAllBtn" onclick="openPackageModal(true)">📦 전체 MSDS 다운로드</button>
       <details class="msds-more-actions">
         <summary class="btn btn-secondary">기타 업무</summary>
         <div class="msds-action-menu">
@@ -346,7 +347,7 @@
           <button class="btn btn-secondary" onclick="openMsdsFullPrintModal()">📄 MSDS 전문 인쇄</button>
           <button class="btn btn-secondary" onclick="exportMsdsExcel()">📊 엑셀 내보내기</button>
           <button class="btn btn-secondary" onclick="openKoshaSearch()">🔍 물질 검색</button>
-          <button class="btn btn-secondary" onclick="openPackageModal()">📦 협력사 패키지</button>
+          <button class="btn btn-secondary" onclick="openPackageModal()">📦 협력사 선택 다운로드</button>
         </div>
       </details>
     </div>
