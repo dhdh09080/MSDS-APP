@@ -1,3 +1,5 @@
+import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 import { supabase, isAutoLoginEnabled, setAutoLoginEnabled } from './lib/supabase.js';
 import { generateCode, generateToken, base64ToBlob, downloadBlob, guessFromPath, today } from './lib/utils.js';
 import { ghsPictogramWithLabel, decodeHCodes, decodePCodes, GHS_NAMES, applyPictogramRules, condensePCodes } from './lib/ghs.js';
@@ -98,7 +100,7 @@ function showDevFeaturePreview(page) {
     { id: 'wt-3', contractor_id: 'con-3', name: '도장' },
   ];
   msdsRecords = [
-    { id: 'msds-1', product_name: '에폭시 프라이머', contractor: '성우도장', receipt_status: 'received', supplier: '안전화학', supplier_contact: '02-1234-5678', signal_word: '위험', pictograms: 'GHS02 GHS05 GHS07 GHS08', h_codes: 'H225 H304 H315 H317 H318 H336 H351 H373 H411', p_codes: 'P201 P202 P210 P233 P240 P241 P242 P243 P260 P273 P280 P301+P310 P304+P340 P305+P351+P338 P403 P405 P501', protective_equipment: '보호장갑, 보안경, 방독마스크', legal_special: 'Y' },
+    { id: 'msds-1', product_name: '에폭시 프라이머', contractor: '성우도장', receipt_status: 'received', supplier: '안전화학', supplier_contact: '02-1234-5678', signal_word: '위험', pictograms: 'GHS02 GHS05 GHS07 GHS08', h_codes: 'H225 H304 H315 H317 H318 H336 H351 H373 H411', p_codes: 'P201 P202 P210 P233 P240 P241 P242 P243 P260 P273 P280 P301+P310 P304+P340 P305+P351+P338 P403 P405 P501', protective_equipment: '보호장갑, 보안경, 방독마스크', legal_special: 'Y', has_pdf: true, handling_precautions: '충분히 환기되는 장소에서 사용하고, 열·불꽃·스파크와의 접촉을 피하십시오. 용기를 밀폐하여 보관하십시오.', first_aid: '눈에 들어가면 물로 조심해서 씻고, 흡입 시 신선한 공기가 있는 곳으로 옮긴 뒤 의학적인 조언을 구하십시오.', emergency_response: '점화원을 제거하고 관계자 외 접근을 제한하십시오. 보호구를 착용하고 누출물이 배수구로 유입되지 않도록 하십시오.' },
     { id: 'msds-2', product_name: '실리콘 실란트', contractor: '새길설비', receipt_status: 'pending', supplier: '한국실란트', signal_word: '경고', pictograms: 'GHS07', h_codes: 'H315 H319', p_codes: 'P264 P280 P302+P352 P305+P351+P338', legal_special: 'N' },
   ];
   businessLicenses = [{ id: 'license-1', contractor_id: 'con-1', file_name: '대한건설_사업자등록증.pdf', uploaded_by: 'manager', uploaded_at: new Date().toISOString(), contractor: { name: '대한건설' } }];
@@ -111,13 +113,13 @@ function showDevFeaturePreview(page) {
   document.getElementById('wsNameEdit').value = currentWS.name;
   hydrateWorkspaceLocationInputs();
   populateContractorSelects();
-  const target = ['contractors', 'weather', 'warning', 'settings'].includes(page) ? page : 'contractors';
+  const target = PAGES.includes(page) ? page : 'home';
   if (target === 'warning') {
     warnSelected = new Set(['msds-1']);
     warnPreviewSingle = 'msds-1';
   }
   // 모듈 하단에 정의된 날씨 렌더러까지 초기화된 뒤 미리보기 화면을 연다.
-  setTimeout(() => window.showPage(target), 0);
+  setTimeout(() => { updateStats(); renderMsdsTable(); renderHomeDashboard(); window.showPage(target); }, 0);
 }
 
 function mountAiSettingsCard() {
@@ -128,6 +130,7 @@ function mountAiSettingsCard() {
 
 async function init() {
   mountAiSettingsCard();
+  mountGsWorkspace();
   const previewPage = getDevPreviewPage();
   if (previewPage) {
     previewPage === 'ai-settings' ? showDevAiPreview() : showDevFeaturePreview(previewPage);
@@ -343,7 +346,7 @@ window.enterWorkspace = async function(wsId) {
   document.getElementById('sidebarAvatar').textContent = name.charAt(0).toUpperCase();
   document.getElementById('accountInfo').innerHTML = `이메일: ${user.email}<br>이름: ${name}<br>가입일: ${new Date(user.created_at).toLocaleDateString('ko-KR')}`;
   await Promise.all([loadContractors(), loadWorkTypes(), loadMembers(), loadTokens(), loadPublicLink()]);
-  await Promise.all([loadMsdsRecords(), loadPlacementSnapshots(), loadTodos(), loadRoutineTasks(), loadBusinessLicenses(), loadMeasureRounds(), loadMeasureResults(), loadNotifications(), loadHealthRecords()]);
+  await Promise.all([loadMsdsRecords(), loadPlacementSnapshots(), loadBusinessLicenses(), loadMeasureRounds(), loadMeasureResults(), loadNotifications(), loadHealthRecords()]);
   subscribeNotifications();
   renderHomeDashboard(); // 알림(재업로드 도착) 로드 후 대시보드 갱신
   loadDashWeather();
@@ -636,6 +639,10 @@ window.deleteAiKey = async function(provider) {
 // (PAGES, MOBILE_TABS → src/data/constants.js 로 이동)
 
 window.showPage = function(id) {
+  const linksRequested = id === 'upload-link';
+  if (id === 'calendar') id = 'home';
+  if (linksRequested) id = 'contractors';
+  if (!PAGES.includes(id)) id = 'home';
   PAGES.forEach(p => {
     document.getElementById('page-'+p)?.classList.toggle('active', p === id);
     document.getElementById('nav-'+p)?.classList.toggle('active', p === id);
@@ -643,6 +650,10 @@ window.showPage = function(id) {
   MOBILE_TABS.forEach(t => {
     document.getElementById('mtab-'+t)?.classList.toggle('active', t === id);
   });
+  if (id === 'home') { renderGsHome(); }
+  if (id === 'msds') renderMsdsTable();
+  if (id === 'requests') renderMsdsRequests();
+  if (id === 'contractors') switchContractorTab(linksRequested ? 'links' : contractorTab);
   if (id === 'warning') { renderWarnPickList(); updateWarningPreview(); }
   if (id === 'upload-link') { renderTokenList(); renderPublicLinkUI(); }
   if (id === 'health') switchHealthSub(activeHealthSub);
@@ -684,7 +695,7 @@ async function loadWorkTypes() {
 }
 
 function populateContractorSelects() {
-  ['batchContractor','f_contractor','pkgContractor','linkContractor','workTypeContractor'].forEach(id => {
+  ['batchContractor','f_contractor','linkContractor','workTypeContractor'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const q = (document.getElementById(id + 'Search')?.value || '').trim().toLowerCase();
@@ -775,6 +786,7 @@ function getWorkTypesForContractor(contractorId) {
 }
 
 window.updateBatchWorkTypes = function() {
+  const workInput = document.getElementById('batchWorkTypeSearch'); if (workInput) workInput.value = '';
   const conId = document.getElementById('batchContractor').value;
   const wts = getWorkTypesForContractor(conId);
   document.getElementById('batchWorkType').innerHTML =
@@ -793,7 +805,7 @@ window.renderContractorTags = function() {
   if (!el) return;
   const q = (document.getElementById('conMgrSearch')?.value || '').trim().toLowerCase();
   const submittedIds = new Set(businessLicenses.map(l => l.contractor_id));
-  const hasReceivedMsds = c => msdsRecords.some(r => r.contractor === c.name && r.receipt_status !== 'pending');
+  const hasReceivedMsds = c => msdsRecords.some(r => r.contractor === c.name && msdsReceived(r));
   const missingLicense = contractors.filter(c => !submittedIds.has(c.id));
   const missingMsds = contractors.filter(c => !hasReceivedMsds(c));
   const list = contractors.filter(c => {
@@ -856,6 +868,7 @@ window.setContractorFilter = function(filter) {
 
 window.openContractorPage = function(filter = 'all') {
   showPage('contractors');
+  switchContractorTab(filter === 'missing-license' ? 'licenses' : 'companies');
   setContractorFilter(filter);
 };
 
@@ -896,13 +909,15 @@ window.openContractorMsds = function(id) {
 };
 
 window.openContractorUploadLink = function(id) {
-  showPage('upload-link');
+  showPage('contractors');
+  switchContractorTab('links');
   const select = document.getElementById('linkContractor');
   if (select) select.value = id;
   setTimeout(() => document.getElementById('linkContractor')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
 };
 
 window.scrollToBusinessLicenses = function() {
+  switchContractorTab('licenses');
   document.getElementById('businessLicenseCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
@@ -1226,115 +1241,18 @@ async function loadMsdsRecords() {
 
 function updateStats() {
   const total = msdsRecords.length;
-  const pending = msdsRecords.filter(r => r.receipt_status === 'pending').length;
+  const pending = msdsRecords.filter(r => !msdsReceived(r)).length;
   const special = msdsRecords.filter(r => r.legal_special === 'Y').length;
   const active = msdsRecords.filter(r => (r.status||'active') === 'active').length;
-  document.getElementById('homeStatTotal').textContent = total;
-  document.getElementById('homeStatPending').textContent = pending;
-  document.getElementById('homeStatSpecial').textContent = special;
-  document.getElementById('homeStatActive').textContent = active;
   document.getElementById('msdsSubtitle').textContent = `총 ${total}건`;
   const nb = document.getElementById('navBadgeMsds');
   const mb = document.getElementById('mBadgeMsds');
-  if (pending > 0) { nb.style.display='inline'; nb.textContent=pending; mb.style.display='inline'; mb.textContent=pending; }
+  if (total > 0) { nb.style.display='inline'; nb.textContent=total; mb.style.display='inline'; mb.textContent=total; }
   else { nb.style.display='none'; mb.style.display='none'; }
 }
 
 function renderHomeDashboard() {
-  // ① 경고 배너 — PDF 있고 재분석 안 한 것 + 사업자등록증 미제출 + MSDS 미수령
-  const subNoIssues = msdsRecords.filter(r => r.submission_no_valid === 'N' && r.has_pdf);
-  const licenseMissing = contractors.filter(c => !businessLicenses.some(l => l.contractor_id === c.id));
-  const pending = msdsRecords.filter(r => r.receipt_status === 'pending');
-
-  const alertWrap = document.getElementById('dashAlertWrap');
-  const alertSummary = document.getElementById('dashAlertSummary');
-
-  const alerts = [];
-  const unreadNotifs = (notifs || []).filter(n => !n.read);
-  if (unreadNotifs.length) alerts.push(`협력사 재업로드 도착 ${unreadNotifs.length}건`);
-  if (subNoIssues.length) alerts.push(`MSDS 제출번호 미확인 ${subNoIssues.length}건`);
-  if (licenseMissing.length) alerts.push(`사업자등록증 미제출 ${licenseMissing.length}개사`);
-  if (pending.length) alerts.push(`MSDS 미수령 ${pending.length}건`);
-
-  if (alerts.length) {
-    alertWrap.style.display = 'block';
-    alertSummary.textContent = '⚠️ ' + alerts.join(' · ');
-
-    // 협력사 재업로드 도착 알림
-    const notifInner = document.getElementById('notifAlertInner');
-    const notifList = document.getElementById('notifAlertList');
-    if (notifInner && notifList) {
-      if (unreadNotifs.length) {
-        notifInner.style.display = 'block';
-        notifList.innerHTML = unreadNotifs.slice(0, 6).map(n => `
-          <div class="alert-item">
-            <span><b>${n.title}</b>${n.body ? ` · ${n.body}` : ''}</span>
-            <div style="display:flex;gap:4px;">
-              ${n.record_id ? `<button class="btn btn-warn btn-sm" onclick="openNotifRecord('${n.id}','${n.record_id}')">확인</button>` : ''}
-              <button class="btn btn-secondary btn-sm" onclick="markNotifRead('${n.id}')">읽음</button>
-            </div>
-          </div>`).join('') + (unreadNotifs.length > 6 ? `<div style="font-size:12px;color:var(--warn);margin-top:4px;">외 ${unreadNotifs.length-6}건</div>` : '');
-      } else notifInner.style.display = 'none';
-    }
-
-    // MSDS 제출번호
-    const subInner = document.getElementById('submissionNoAlertInner');
-    const subList = document.getElementById('submissionNoAlertList');
-    if (subNoIssues.length) {
-      subInner.style.display = 'block';
-      subList.innerHTML = subNoIssues.slice(0, 6).map(r => `
-        <div class="alert-item">
-          <span><b>${r.product_name}</b> · ${r.contractor}</span>
-          <button class="btn btn-warn btn-sm" onclick="showMsdsDetail('${r.id}')">확인</button>
-        </div>`).join('') + (subNoIssues.length > 6 ? `<div style="font-size:12px;color:var(--warn);margin-top:4px;">외 ${subNoIssues.length-6}건</div>` : '');
-    } else { subInner.style.display = 'none'; }
-
-    // 사업자등록증
-    const licInner = document.getElementById('licenseAlertInner');
-    const licList = document.getElementById('licenseAlertList');
-    if (licenseMissing.length) {
-      licInner.style.display = 'block';
-      licList.innerHTML = licenseMissing.slice(0, 6).map(c => `
-        <div class="alert-item">
-          <span><b>${c.name}</b></span>
-          <button class="btn btn-warn btn-sm" onclick="openContractorPage('missing-license')">미제출 관리</button>
-        </div>`).join('') + (licenseMissing.length > 6 ? `<div style="font-size:12px;color:var(--warn);margin-top:4px;">외 ${licenseMissing.length-6}개사</div>` : '');
-    } else { licInner.style.display = 'none'; }
-
-    // MSDS 미수령
-    const pendingInner = document.getElementById('pendingAlertInner');
-    const pendingList = document.getElementById('pendingList');
-    if (pending.length) {
-      pendingInner.style.display = 'block';
-      const grouped = {};
-      pending.forEach(r => { grouped[r.contractor] = (grouped[r.contractor]||0)+1; });
-      pendingList.innerHTML = Object.entries(grouped).slice(0,6).map(([con, cnt]) => {
-        const token = tokens.find(t => t.contractor?.name === con);
-        const url = token ? `${window.location.origin}/upload.html?token=${token.token}` : null;
-        return `<div class="alert-item">
-          <span><b>${con}</b> · ${cnt}건</span>
-          ${url ? `<button class="btn btn-warn btn-sm" onclick="copyLink('${url}')">링크 복사</button>` : '<span style="font-size:11px;color:var(--text3)">링크 없음</span>'}
-        </div>`;
-      }).join('') + (Object.keys(grouped).length > 6 ? `<div style="font-size:12px;color:var(--warn);margin-top:4px;">외 ${Object.keys(grouped).length-6}개사</div>` : '');
-    } else { pendingInner.style.display = 'none'; }
-  } else {
-    alertWrap.style.display = 'none';
-  }
-
-  // ② 이번 주 일정 (월~일 7칸)
-  renderDashWeekSchedule();
-
-  // ③ 최근 등록 MSDS
-  const recent = msdsRecords.slice(0, 5);
-  document.getElementById('recentMsdsList').innerHTML = recent.length === 0
-    ? '<div style="color:var(--text3);font-size:13px;text-align:center;padding:20px;">등록된 물질이 없습니다</div>'
-    : recent.map(r => `<div class="recent-item" onclick="showMsdsDetail('${r.id}')">
-        <div class="recent-icon">🧪</div>
-        <div>
-          <div class="recent-name">${r.product_name}</div>
-          <div class="recent-meta">${r.contractor} ${r.work_type ? '/ '+r.work_type : ''} · ${r.legal_special==='Y' ? '<span style="color:var(--danger)">특별관리물질</span>' : '일반'}</div>
-        </div>
-      </div>`).join('');
+  renderGsHome();
 }
 
 function renderDashWeekSchedule() {
@@ -1387,7 +1305,7 @@ function getFilteredMsds() {
   const fCon = window.selectedContractor || '';
   const fWork = document.getElementById('filterWorkType')?.value||'';
   const fSt = document.getElementById('filterStatus')?.value||'';
-  const fRc = document.getElementById('filterReceipt')?.value||'';
+  const fRc = ''; // receipt state lives on the request page
   const fSpc = document.getElementById('filterSpecial')?.value||'';
   return msdsRecords.filter(r => {
     const mq = !q || [r.product_name, r.supplier, r.cas_no, r.contractor, r.work_type].join(' ').toLowerCase().includes(q);
@@ -1408,7 +1326,7 @@ window.renderMsdsTable = function() {
   const filtered = getFilteredMsds();
   const tbody = document.getElementById('msdsTableBody');
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="11">등록된 MSDS가 없습니다</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="10">등록된 MSDS가 없습니다</td></tr>';
     return;
   }
   tbody.innerHTML = filtered.map(r => {
@@ -1429,7 +1347,7 @@ window.renderMsdsTable = function() {
       <td style="font-size:12px;">${r.cas_no||'-'}</td>
       <td>${sp}</td>
       <td>${st}</td>
-      <td>${rc}</td>
+
       <td>${file}</td>
       <td>
         <div style="display:flex;gap:4px;">
@@ -1464,6 +1382,7 @@ window.openMsdsRegister = function() {
 };
 
 window.switchMsdsTab = function(tab) {
+  if (tab === 'manual' && !editingMsdsId) tab = 'upload';
   document.getElementById('msdsUploadTab').style.display = tab === 'upload' ? 'block' : 'none';
   document.getElementById('msdsManualTab').style.display = tab === 'manual' ? 'block' : 'none';
   document.getElementById('msdsManualFooter').style.display = tab === 'manual' ? 'flex' : 'none';
@@ -1599,6 +1518,7 @@ window.parseAllFiles = async function() {
         signal_word: parsed.signalWord||'', h_codes: parsed.hCodes||'', p_codes: parsed.pCodes||'',
         pictograms: parsed.pictograms||'', issue_date: parsed.issueDate||'',
         protective_equipment: parsed.protectiveEquipment||'',
+        handling_precautions: parsed.handlingPrecautions || '', first_aid: parsed.firstAid || '', emergency_response: parsed.emergencyResponse || '',
         legal_measurement: parsed.legalMeasurement||'N', legal_exam: parsed.legalExam||'N',
         legal_exam_cycle: parsed.legalExamCycle||'', legal_manage: parsed.legalManage||'N',
         legal_permit: parsed.legalPermit||'N', legal_special: parsed.legalSpecial||'N',
@@ -1664,6 +1584,7 @@ async function uploadMsdsFile(recId, fileName, base64Data, mediaType) {
 // MSDS Manual Save
 // ═══════════════════════════════════════════════
 window.saveMsdsManual = async function() {
+  if (!editingMsdsId) { toast('MSDS 원본 파일을 먼저 등록해주세요', 'error'); return; }
   const productName = document.getElementById('f_productName').value.trim();
   const supplier = document.getElementById('f_supplier').value.trim();
   const conId = document.getElementById('f_contractor').value;
@@ -1682,6 +1603,9 @@ window.saveMsdsManual = async function() {
     pictograms: document.getElementById('f_pictograms').value,
     issue_date: document.getElementById('f_issueDate').value,
     protective_equipment: document.getElementById('f_protectiveEquipment').value,
+    handling_precautions: document.getElementById('f_handlingPrecautions').value,
+    first_aid: document.getElementById('f_firstAid').value,
+    emergency_response: document.getElementById('f_emergencyResponse').value,
     legal_measurement: document.getElementById('f_legal_measurement').checked ? 'Y' : 'N',
     legal_exam: document.getElementById('f_legal_exam').checked ? 'Y' : 'N',
     legal_exam_cycle: document.getElementById('f_legalExamCycle').value,
@@ -1734,7 +1658,10 @@ window.showMsdsDetail = function(id) {
     <div class="detail-row"><div class="detail-key">신호어</div><div class="detail-val">${r.signal_word||'-'}</div></div>
     <div class="detail-row"><div class="detail-key">H코드</div><div class="detail-val">${r.h_codes||'-'}</div></div>
     <div class="detail-row"><div class="detail-key">P코드</div><div class="detail-val">${r.p_codes||'-'}</div></div>
-    <div class="detail-row"><div class="detail-key">추천 보호구</div><div class="detail-val">${r.protective_equipment||'-'}</div></div>
+    <div class="detail-row"><div class="detail-key">적절한 보호구</div><div class="detail-val">${escapeHtml(r.protective_equipment||'원본 MSDS를 확인하세요')}</div></div>
+    <div class="detail-row"><div class="detail-key">취급상의 주의사항</div><div class="detail-val">${escapeHtml(r.handling_precautions||'원본 MSDS 7항을 확인하세요')}</div></div>
+    <div class="detail-row"><div class="detail-key">응급조치 요령</div><div class="detail-val">${escapeHtml(r.first_aid||'원본 MSDS 4항을 확인하세요')}</div></div>
+    <div class="detail-row"><div class="detail-key">사고 시 대처방법</div><div class="detail-val">${escapeHtml(r.emergency_response||'원본 MSDS 5·6항을 확인하세요')}</div></div>
     <div class="detail-row"><div class="detail-key">작업환경측정</div><div class="detail-val">${yn(r.legal_measurement)}</div></div>
     <div class="detail-row"><div class="detail-key">특수건강진단</div><div class="detail-val">${yn(r.legal_exam)} ${r.legal_exam==='Y'&&r.legal_exam_cycle?'· '+r.legal_exam_cycle:''}</div></div>
     <div class="detail-row"><div class="detail-key">관리대상유해물질</div><div class="detail-val">${yn(r.legal_manage)}</div></div>
@@ -1799,6 +1726,7 @@ window.handleMsdsRenewFile = async function(e) {
       signal_word: parsed.signalWord || '', h_codes: parsed.hCodes || '', p_codes: parsed.pCodes || '',
       pictograms: parsed.pictograms || '', issue_date: parsed.issueDate || '',
       protective_equipment: parsed.protectiveEquipment || '',
+      handling_precautions: parsed.handlingPrecautions || '', first_aid: parsed.firstAid || '', emergency_response: parsed.emergencyResponse || '',
       legal_measurement: parsed.legalMeasurement || 'N', legal_exam: parsed.legalExam || 'N',
       legal_exam_cycle: parsed.legalExamCycle || '', legal_manage: parsed.legalManage || 'N',
       legal_permit: parsed.legalPermit || 'N', legal_special: parsed.legalSpecial || 'N',
@@ -1879,6 +1807,7 @@ window.startMsdsEdit = function(id) {
     }, 50);
     setV('f_casNo', r.cas_no); setV('f_components', r.components); setV('f_signalWord', r.signal_word);
     setV('f_hCodes', r.h_codes); setV('f_pCodes', r.p_codes); setV('f_pictograms', r.pictograms);
+    setV('f_handlingPrecautions', r.handling_precautions); setV('f_firstAid', r.first_aid); setV('f_emergencyResponse', r.emergency_response);
     setV('f_issueDate', r.issue_date); setV('f_protectiveEquipment', r.protective_equipment);
     setV('f_legalExamCycle', r.legal_exam_cycle);
     setC('f_legal_measurement', r.legal_measurement); setC('f_legal_exam', r.legal_exam);
@@ -1911,7 +1840,7 @@ window.toggleMsdsStatus = async function(id) {
 window.openReceipt = function(id) {
   const r = msdsRecords.find(x => x.id === id); if (!r) return;
   receiptEditId = id;
-  const recv = (r.receipt_status||'received') === 'received';
+  const recv = msdsReceived(r);
   document.getElementById('receiptBody').innerHTML = `
     <div style="font-size:13px;color:var(--text2);margin-bottom:16px;"><strong>${r.product_name}</strong> · ${r.contractor}</div>
     <div class="form-field" style="margin-bottom:12px;"><label class="form-label">수령 상태</label>
@@ -2020,6 +1949,7 @@ window.selectAllWarn = function(v) {
 let warnPreviewSingle = null; // 단일 미리보기 중인 레코드 id (선택과 무관)
 
 window.updateWarningPreview = function() {
+  requestAnimationFrame(() => fitWarningLabels(document.getElementById('warningPreview')));
   const prev = document.getElementById('warningPreview');
   const header = document.getElementById('warnPreviewHeader');
   if (!prev) return;
@@ -2142,7 +2072,7 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
 
   // ── 소분용기 간이표지 (고시 제6조②: 100g/100㎖ 이하 → 명칭·그림문자·신호어·공급자정보만) ──
   if (size === 'mini') {
-    return `<div class="wlabel wlabel--mini">
+    return `<div class="wlabel wlabel--mini" data-warning-autofit="true"><div class="wl-fit-content">
       <div class="wl-name-box">${r.product_name}</div>
       <div class="wl-mini-row">
         <div class="wl-picto-row">${pictoHtml}</div>
@@ -2154,31 +2084,33 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
         <div><b>공급</b>${r.supplier || '-'} ${r.supplier_contact ? '(' + r.supplier_contact + ')' : ''}</div>
         <div style="font-weight:700;">■ 자세한 내용은 MSDS 참조 (100㎖ 이하 소분용기용 간이표지)</div>
       </div>
-    </div>`;
+    </div></div>`;
   }
 
   const hList = decodeHCodes(r.h_codes);
   const pRaw = decodePCodes(r.p_codes);
   // 한 라벨의 안전영역을 넘지 않도록 크기별 대표 문구 수를 제한한다.
   // 예방조치문구는 예방·대응·저장·폐기 범주가 빠지지 않도록 condensePCodes가 먼저 선별한다.
-  const hLimit = { a4: 8, a5: 5, a6: 3 }[size] || 8;
-  const hShown = hList.slice(0, hLimit);
+  const hShown = hList; // Preserve safety text; fit to the selected label size after layout.
   const hCondensed = hShown.length < hList.length;
-  const { list: pList, condensed: pCondensed } = condensePCodes(pRaw);
+  const pList = pRaw; const pCondensed = false;
   const autoFit = hCondensed || pCondensed;
   const hHtml = (hShown.length ? hShown.map(h => `<li><span style="color:#888;font-size:0.85em;">[${h.code}]</span> ${h.text}</li>`).join('') : '<li>해당 정보 없음</li>')
     + (hCondensed ? `<li class="wl-condensed-note" data-kind="hazard">그 밖의 유해·위험 문구 ${hList.length - hShown.length}건은 MSDS 참조</li>` : '');
   const pHtml = (pList.length ? pList.map(p => `<li><span style="color:#888;font-size:0.85em;">[${p.code}]</span> ${p.text}</li>`).join('') : '<li>해당 정보 없음</li>')
     + (pCondensed ? `<li class="wl-condensed-note" data-kind="precaution">그 밖의 예방조치 문구 ${pRaw.length - pList.length}건은 MSDS 참조</li>` : '');
 
-  return `<div class="wlabel wlabel--${size}${autoFit ? ' wl-auto-fit' : ''}" data-warning-autofit="true">
+  return `<div class="wlabel wlabel--${size}${autoFit ? ' wl-auto-fit' : ''}" data-warning-autofit="true"><div class="wl-fit-content">
+    ${getDevPreviewPage() ? '<div style="text-align:center;color:#888;font-size:10px;margin-bottom:5px;">미리보기 샘플 · 실제 작업에는 원본 MSDS를 확인하세요</div>' : ''}
     <div class="wl-top">(산업안전보건법 제115조 규정에 의한 경고표지)</div>
     <div class="wl-name-box">${r.product_name}</div>
     <div class="wl-picto-row">${pictoHtml}</div>
     <div class="wl-signal-bar ${isDanger ? 'danger' : 'warning'}">신호어 : ${r.signal_word || '경고'}</div>
     <div class="wl-block"><div class="wl-block-head">유해·위험 문구</div><ul class="wl-list">${hHtml}</ul></div>
     <div class="wl-block"><div class="wl-block-head">예방조치 문구</div><ul class="wl-list">${pHtml}</ul></div>
-    ${r.protective_equipment && size !== 'a6' ? `<div class="wl-block"><div class="wl-block-head">개인보호구</div><div class="wl-pe">${r.protective_equipment}</div></div>` : ''}
+    <div class="wl-block"><div class="wl-block-head">취급상의 주의사항</div><div class="wl-safety-text">${escapeHtml(r.handling_precautions || '원본 MSDS 7항의 취급·저장 지침을 확인하세요.')}</div></div>
+    <div class="wl-block"><div class="wl-block-head">적절한 보호구</div><div class="wl-safety-text">${escapeHtml(r.protective_equipment || '원본 MSDS 8항의 보호구 지침을 확인하세요.')}</div></div>
+    <div class="wl-block"><div class="wl-block-head">응급조치 요령 및 사고 시 대처방법</div><div class="wl-safety-text"><b>응급조치</b> ${escapeHtml(r.first_aid || '원본 MSDS 4항을 확인하세요.')}<br><b>사고 대처</b> ${escapeHtml(r.emergency_response || '원본 MSDS 5·6항을 확인하세요.')}</div></div>
     ${r.legal_special === 'Y' ? `<div class="wl-special">⚠️ 특별관리물질 — 취급 시 관리감독자 확인 및 특별안전보건교육 필수</div>` : ''}
     <div class="wl-spacer"></div>
     <div class="wl-foot-row">
@@ -2188,13 +2120,15 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
         <div style="margin-top:4px;font-weight:700;">■ 기타 자세한 내용은 물질안전보건자료(MSDS) 참조</div>
       </div>
       ${qrBox}
-    </div>
+    </div></div>
   </div>`;
 }
 
 // ═══ 라벨 공통 인쇄 CSS — 크기별 폰트 스케일 + A4 분할 시트 그리드 ═══
 function warnLabelCss() {
   return `
+    .wl-safety-text{padding:6px 10px;font-size:inherit;line-height:1.55;}
+    .wl-fit-content{display:flex;flex-direction:column;}
     .sheet{display:grid;page-break-after:always;width:100%;min-height:283mm;max-height:283mm;overflow:hidden;}
     .sheet:last-child{page-break-after:auto;}
     .sheet-1{grid-template-columns:1fr;grid-template-rows:1fr;}
@@ -2258,31 +2192,28 @@ function warnLabelCss() {
   `;
 }
 
-function warningAutoFitPrintScript() {
-  return `<script>
-    function fitWarningLabels(){
-      document.querySelectorAll('[data-warning-autofit="true"]').forEach(function(label){
-        var lists=Array.from(label.querySelectorAll('.wl-list'));
-        var removed={hazard:0,precaution:0};
-        var guard=40;
-        while(label.scrollHeight>label.clientHeight&&guard-->0){
-          var target=lists.slice().sort(function(a,b){return b.children.length-a.children.length})[0];
-          var items=Array.from(target.children).filter(function(li){return !li.classList.contains('wl-condensed-note')});
-          if(!target||items.length<=1)break;
-          var kind=target.parentElement.querySelector('.wl-block-head').textContent.indexOf('예방')>=0?'precaution':'hazard';
-          items[items.length-1].remove();removed[kind]++;
-        }
-        Object.keys(removed).forEach(function(kind){
-          if(!removed[kind])return;
-          var list=kind==='hazard'?lists[0]:lists[1];
-          var note=list.querySelector('[data-kind="'+kind+'"]');
-          if(note){note.textContent=note.textContent.replace(/(\\d+)건/,function(_,n){return Number(n)+removed[kind]+'건'});}
-          else{note=document.createElement('li');note.className='wl-condensed-note';note.textContent='그 밖의 '+(kind==='hazard'?'유해·위험':'예방조치')+' 문구 '+removed[kind]+'건은 MSDS 참조';list.appendChild(note);}
-        });
-      });
+function fitWarningLabels(root = document) {
+  root?.querySelectorAll('[data-warning-autofit="true"]').forEach(label => {
+    const host = label.closest('.cell');
+    const maxHeight = host ? host.clientHeight - 24 : ({a4: 1010, a5: 490, a6: 480}[warnLabelSize] || 1010);
+    label.style.height = maxHeight + 'px';
+    label.style.zoom = '1';
+    const content = label.querySelector('.wl-fit-content');
+    if (!content) return;
+    content.style.transform = ''; content.style.width = '';
+    const available = maxHeight - 34;
+    let scale = Math.min(1, available / content.scrollHeight);
+    for (let i = 0; i < 4; i++) {
+      content.style.width = (100 / scale) + '%';
+      scale = Math.min(1, available / content.scrollHeight);
     }
-    window.addEventListener('load',function(){requestAnimationFrame(fitWarningLabels)});
-  <\/script>`;
+    content.style.width = (100 / scale) + '%';
+    content.style.transform = `scale(${scale})`; content.style.transformOrigin = 'top left';
+    label.dataset.fitScale = scale.toFixed(3);
+  });
+}
+function warningAutoFitPrintScript() {
+  return `<script>const warnLabelSize=${JSON.stringify(warnLabelSize)};${fitWarningLabels.toString()};window.addEventListener('load',()=>requestAnimationFrame(()=>fitWarningLabels()));<\/script>`;
 }
 
 // 라벨 목록 → A4 분할 시트 HTML로 묶기
@@ -2440,7 +2371,7 @@ window.exportMsdsExcel = function() {
         '특수검진 주기': idx===0?(r.legal_exam==='Y'?(r.legal_exam_cycle||'대상'):''):'',
         '관리대상유해물질': idx===0?YN(r.legal_manage):'', '허가대상유해물질': idx===0?YN(r.legal_permit):'',
         '특별관리물질': idx===0?YN(r.legal_special):'', '위험물 규제': idx===0?YN(r.legal_dangerous):'',
-        '추천 보호구': idx===0?(r.protective_equipment||''):'',
+        '적절한 보호구': idx===0?(r.protective_equipment||''):'',
       });
     });
   });
@@ -2514,30 +2445,22 @@ window.printMsdsList = function() {
 // Package
 // ═══════════════════════════════════════════════
 window.openPackageModal = function() {
-  const sel = document.getElementById('pkgContractor');
-  sel.innerHTML = '<option value="">선택하세요</option>' + contractors.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-  const fc = window.selectedContractor || '';
-  if (fc) sel.value = fc;
-  updatePkgCount(); openModal('packageModal');
+  pkgSelected = new Set(window.selectedContractor ? [window.selectedContractor] : []);
+  document.getElementById('pkgContractorSearch').value = '';
+  renderPkgOptions(); updatePkgCount(); openModal('packageModal');
 };
-
 function pkgTargets() {
-  const con = document.getElementById('pkgContractor').value;
   const st = document.getElementById('pkgStatus').value;
-  if (!con) return [];
-  return msdsRecords.filter(r => r.contractor === con && (!st || (r.status||'active') === st));
+  return msdsRecords.filter(r => pkgSelected.has(r.contractor) && (!st || (r.status || 'active') === st));
 }
-
 window.updatePkgCount = function() {
   const t = pkgTargets();
-  const el = document.getElementById('pkgCount');
-  if (!document.getElementById('pkgContractor').value) { el.textContent=''; return; }
-  el.textContent = `해당 물질 ${t.length}건 (원본 파일 ${t.filter(r=>r.has_pdf).length}건)`;
+  document.getElementById('pkgCount').textContent = `협력사 ${pkgSelected.size}곳 · 물질 ${t.length}건 · 원본 ${t.filter(r=>r.has_pdf).length}건`;
 };
 
 window.exportPackage = async function() {
-  const con = document.getElementById('pkgContractor').value;
-  if (!con) { toast('협력사를 선택하세요', 'error'); return; }
+  const con = pkgSelected.size === 1 ? [...pkgSelected][0] : `협력사_${pkgSelected.size}곳`;
+  if (!pkgSelected.size) { toast('협력사를 선택하세요', 'error'); return; }
   const targets = pkgTargets();
   if (targets.length === 0) { toast('해당 협력사 물질이 없습니다', 'error'); return; }
   const wantList = document.getElementById('pkgList').checked;
@@ -2547,36 +2470,10 @@ window.exportPackage = async function() {
   toast(`${con} 패키지 생성 중...`);
   const zip = new JSZip(); const root = zip.folder(`${con}_MSDS_${today()}`);
   if (wantList) {
-    const YN = v => v === 'Y' ? 'O' : '';
-    const rows = [];
-    let no = 0;
-    filtered.forEach(r => {
-      no++;
-      const comps = splitComponents(r);
-      comps.forEach((comp, idx) => {
-        rows.push(`<tr style="${idx > 0 ? 'background:#fafafa;' : ''}">
-          <td class="ctr">${idx===0 ? no : ''}</td>
-          <td>${idx===0 ? r.contractor : ''}</td>
-          <td>${idx===0 ? (r.work_type||'-') : ''}</td>
-          <td class="pname">${idx===0 ? r.product_name : ''}</td>
-          <td>${idx===0 ? (r.supplier||'-') : ''}</td>
-          <td>${idx===0 ? (r.supplier_contact||'-') : ''}</td>
-          <td class="ctr">${idx===0 ? (r.issue_date||'-') : ''}</td>
-          <td>${comp.cas||'-'}</td>
-          <td>${comp.name||'-'}</td>
-          <td class="ctr">${idx===0 ? YN(r.legal_measurement) : ''}</td>
-          <td class="ctr">${idx===0 ? (r.legal_exam==='Y' ? (r.legal_exam_cycle||'●') : '') : ''}</td>
-          <td class="ctr">${idx===0 ? YN(r.legal_manage) : ''}</td>
-          <td class="ctr">${idx===0 ? YN(r.legal_permit) : ''}</td>
-          <td class="ctr">${idx===0 ? YN(r.legal_special) : ''}</td>
-          <td class="ctr">${idx===0 ? YN(r.legal_dangerous) : ''}</td>
-          <td style="font-size:8px;">${idx===0 ? (r.protective_equipment||'-') : ''}</td>
-        </tr>`);
-      });
-    });
-    const rowsHtml = rows.join('');
-    const ws2 = XLSX.utils.json_to_sheet(rows); const wb2 = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2, ws2, con.slice(0,30));
-    root.file(`${con}_MSDS목록.xlsx`, XLSX.write(wb2, {bookType:'xlsx',type:'array'}));
+    const rows = targets.map(r => ({'협력사':r.contractor,'공종':r.work_type||'', '제품명':r.product_name,'공급업체':r.supplier||'','CAS':r.cas_no||'','적절한 보호구':r.protective_equipment||''}));
+    const sheet = XLSX.utils.json_to_sheet(rows); const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, 'MSDS 목록');
+    root.file(`${con}_MSDS목록.xlsx`, XLSX.write(book, {bookType:'xlsx',type:'array'}));
   }
   if (wantPdf) {
     const pf = root.folder('원본파일');
@@ -2586,7 +2483,7 @@ window.exportPackage = async function() {
       if (!data) continue;
       let fname = r.pdf_name || (r.product_name+'.pdf');
       let n = fname, c = 1; while (pf.file(n)) { n = fname.replace(/\.(\w+)$/,`_${c}.$1`); c++; }
-      pf.file(n, data);
+      pf.folder(r.contractor.replace(/[\\/:*?"<>|]/g, '_')).file(n, data);
     }
   }
   const content = await zip.generateAsync({type:'blob'});
@@ -2603,6 +2500,7 @@ window.exportPackage = async function() {
 // ═══════════════════════════════════════════════
 window.openMsdsFullPrintModal = function() {
   const el = document.getElementById('fullPrintContractorList');
+  document.getElementById('fullPrintSearch').value = '';
   const sorted = [...contractors].sort((a,b) => a.name.localeCompare(b.name, 'ko'));
   el.innerHTML = sorted.map(c => {
     const items = msdsRecords.filter(r => r.contractor === c.name);
@@ -3349,7 +3247,6 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.q
 // ═══════════════════════════════════════════════
 // Init
 // ═══════════════════════════════════════════════
-init();
 // ═══════════════════════════════════════════════
 // CAS 기반 법정물질 일괄 재판정
 // ═══════════════════════════════════════════════
@@ -6134,3 +6031,150 @@ window.handleKgFile = function(file) {
   };
   reader.readAsArrayBuffer(file);
 };
+
+// GS health and site workspace. Only preview mode uses sample records/weather.
+let contractorTab = 'companies';
+let pkgSelected = new Set();
+let gsHomeForecast = null;
+let gsHomeForecastKey = '';
+let gsHomeForecastPending = false;
+const gsCombos = new Map();
+
+function msdsReceived(record) {
+  return Boolean(record.has_pdf || record.pdf_path || record.receipt_status === 'received');
+}
+
+function mountGsWorkspace() {
+  const content = document.querySelector('#page-contractors > .content-scroll');
+  if (!content || document.getElementById('gsContractorTabs')) return;
+  const originals = [...content.children];
+  const tabs = document.createElement('div'); tabs.id = 'gsContractorTabs'; tabs.className = 'gs-tabs'; tabs.setAttribute('role','tablist');
+  tabs.innerHTML = ['companies','licenses','links'].map((id,i)=>`<button role="tab" id="gs-tab-${id}" aria-controls="gs-con-${id}" onclick="switchContractorTab('${id}')">${['협력사 관리','사업자등록증 미제출 협력사','업로드 링크'][i]}</button>`).join('');
+  content.prepend(tabs);
+  ['companies','licenses','links'].forEach(id=>{const pane=document.createElement('div');pane.id='gs-con-'+id;pane.setAttribute('role','tabpanel');pane.setAttribute('aria-labelledby','gs-tab-'+id);content.appendChild(pane)});
+  originals.forEach(el => document.getElementById(el.id==='businessLicenseCard'?'gs-con-licenses':'gs-con-companies').appendChild(el));
+  const linkContent = document.querySelector('#page-upload-link > .content-scroll');
+  if (linkContent) [...linkContent.children].forEach(el=>document.getElementById('gs-con-links').appendChild(el));
+  // Remove separate search/select pairs; retain hidden select as the value source for existing handlers.
+  ['batchContractor','batchWorkType','warnFilterContractor','linkContractor'].forEach(id=>mountGsCombo(id));
+  document.querySelectorAll('.nav-item').forEach((el,i)=>{el.tabIndex=0;el.setAttribute('role','button');el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click()}};const icon=el.querySelector('.nav-icon');if(icon)icon.innerHTML=gsIcon(i)});
+  document.querySelectorAll('.more-item').forEach(el=>{if(el.getAttribute('onclick')?.includes("'calendar'"))el.remove()});
+  switchContractorTab('companies');
+}
+
+function gsIcon(index) {
+  const paths=['M3 10 12 3l9 7v10H3Z M9 20v-7h6v7','M5 3h14v18H5Z M8 8h8M8 12h8M8 16h5','m12 3 10 17H2ZM12 9v4m0 3v1','M5 6h13m-4-4 4 4-4 4M19 18H6m4-4-4 4 4 4','M4 5h16v14H4Z M8 2v6m8-6v6M8 12h8','M9 3h6v6h6v6h-6v6H9v-6H3V9h6Z','M3 6h18v14H3Z M7 6l2-3h6l2 3M8 13a4 4 0 1 0 8 0 4 4 0 1 0-8 0','M7 7a5 5 0 1 0 10 0 5 5 0 1 0-10 0M3 22v-3a5 5 0 0 1 5-5h8a5 5 0 0 1 5 5v3','M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8M12 1v3m0 16v3M1 12h3m16 0h3M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2'];
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[index%paths.length]}"/></svg>`;
+}
+
+window.switchContractorTab = function(tab) {
+  contractorTab = ['companies','licenses','links'].includes(tab) ? tab : 'companies';
+  ['companies','licenses','links'].forEach(id=>{const pane=document.getElementById('gs-con-'+id),button=document.getElementById('gs-tab-'+id);if(pane)pane.hidden=id!==contractorTab;if(button){button.classList.toggle('active',id===contractorTab);button.setAttribute('aria-selected',String(id===contractorTab));button.tabIndex=id===contractorTab?0:-1;button.onkeydown=e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const ids=['companies','licenses','links'];switchContractorTab(ids[(ids.indexOf(id)+(e.key==='ArrowRight'?1:2))%3]);document.getElementById('gs-tab-'+contractorTab).focus()}}}});
+  if(contractorTab==='links'){renderTokenList();renderPublicLinkUI()}
+  if(contractorTab==='licenses') renderBusinessLicenseStatus();
+};
+
+window.addContractorFromSearch = async function() {
+  const name=document.getElementById('conMgrSearch').value.trim();
+  if(!name)return;
+  const existing=contractors.find(c=>normalizeContractorName(c.name)===normalizeContractorName(name));
+  if(existing){renderContractorTags();return}
+  try {const {contractor}=await insertContractor(name);populateContractorSelects();renderContractorTags();toast(`${contractor.name} 등록 완료`,'success')}catch(e){toast('협력사 등록 실패: '+e.message,'error')}
+};
+
+function mountGsCombo(id) {
+  const select=document.getElementById(id);if(!select)return;
+  const inputId=id+'Search';let input=document.getElementById(inputId);
+  if(input){const row=input.closest('.contractor-search-row');if(row)row.removeChild(input);if(row)row.remove()}
+  else {input=document.createElement('input');input.id=inputId;input.className='form-input'}
+  const wrapper=document.createElement('div');wrapper.className='gs-combobox';
+  select.before(wrapper);wrapper.appendChild(input);
+  const list=document.createElement('div');list.className='gs-combo-options';list.id=id+'Options';list.setAttribute('role','listbox');list.hidden=true;wrapper.appendChild(list);
+  input.removeAttribute('oninput');input.removeAttribute('onkeydown');input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-expanded','false');input.setAttribute('aria-controls',list.id);input.autocomplete='off';
+  input.placeholder=id==='batchWorkType'?'공종 검색 또는 새 공종 입력':id==='warnFilterContractor'?'전체 협력사 · 검색해서 선택':'협력사 검색 또는 이름 입력';
+  select.hidden=true;select.classList.add('gs-value-select');select.setAttribute('aria-hidden','true');select.tabIndex=-1;
+  const oldAdd=document.getElementById(id+'AddBtn');if(oldAdd)oldAdd.hidden=true;
+  const state={input,select,list,wrapper,index:0};gsCombos.set(id,state);
+  input.oninput=()=>{select.value='';if(id==='batchContractor'){updateBatchWorkTypes();const wt=gsCombos.get('batchWorkType');if(wt)wt.input.value=''}if(id==='warnFilterContractor')renderWarnPickList();renderGsCombo(id)};
+  input.onfocus=()=>renderGsCombo(id);
+  input.onkeydown=async e=>{if(e.key==='Escape'){list.hidden=true;input.setAttribute('aria-expanded','false');return}if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();if(list.hidden)renderGsCombo(id);const options=[...list.querySelectorAll('button')];state.index=(state.index+(e.key==='ArrowDown'?1:-1)+options.length)%Math.max(1,options.length);options.forEach((el,i)=>el.classList.toggle('highlighted',i===state.index));if(options[state.index])input.setAttribute('aria-activedescendant',options[state.index].id)}if(e.key==='Enter'){e.preventDefault();if(list.hidden)renderGsCombo(id);const options=[...list.querySelectorAll('button')];options[state.index]?.click()}};
+  select.addEventListener('change',()=>{input.value=select.selectedOptions[0]?.value?select.selectedOptions[0].textContent:''});
+  document.addEventListener('pointerdown',e=>{if(!wrapper.contains(e.target)){list.hidden=true;input.setAttribute('aria-expanded','false')}});
+}
+
+function renderGsCombo(id) {
+  const state=gsCombos.get(id);if(!state)return;
+  const {input,select,list}=state,q=input.value.trim(),key=q.toLowerCase();state.index=0;
+  const isWork=id==='batchWorkType',isName=id==='warnFilterContractor';
+  const items=isWork?getWorkTypesForContractor(document.getElementById('batchContractor').value).map(w=>({value:w.name,name:w.name})):contractors.map(c=>({value:isName?c.name:c.id,name:c.name}));
+  const matches=items.filter(c=>c.name.toLowerCase().includes(key));
+  list.replaceChildren();
+  function addOption(label,fn){const button=document.createElement('button');button.type='button';button.id=id+'Option'+list.children.length;button.setAttribute('role','option');button.setAttribute('aria-selected','false');button.textContent=label;button.onclick=async()=>{try{await fn();list.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant')}catch(e){toast(e.message,'error')}};list.appendChild(button)}
+  addOption(isWork?'공종 미선택 (선택사항)':isName?'전체 협력사':'협력사 선택 해제',()=>{select.value='';input.value='';select.dispatchEvent(new Event('change'))});
+  matches.forEach(c=>addOption(c.name,()=>{if(![...select.options].some(o=>o.value===c.value))select.add(new Option(c.name,c.value));select.value=c.value;input.value=c.name;select.dispatchEvent(new Event('change'))}));
+  if(q&&!items.some(c=>normalizeContractorName(c.name)===normalizeContractorName(q))&&!isName){addOption(`+ '${q}' ${isWork?'공종':'협력사'} 추가하기`,async()=>{
+    if(isWork){const conId=document.getElementById('batchContractor').value;if(!conId)throw new Error('협력사를 먼저 선택해주세요');let item;
+      if(getDevPreviewPage())item={id:'preview-wt-'+Date.now(),contractor_id:conId,name:q};else {const {data,error}=await supabase.from('work_types').insert({workspace_id:currentWS.id,contractor_id:conId,name:q}).select().single();if(error)throw error;item=data}workTypes.push(item);updateBatchWorkTypes();select.value=item.name;input.value=item.name;
+    }else {const {contractor}=await insertContractor(q);input.value=contractor.name;populateContractorSelects();if(![...select.options].some(o=>o.value===contractor.id))select.add(new Option(contractor.name,contractor.id));select.value=contractor.id;select.dispatchEvent(new Event('change'));renderContractorTags()}
+    toast('추가했습니다','success');
+  })}
+  if(!matches.length&&!q)input.removeAttribute('aria-activedescendant');
+  list.hidden=false;input.setAttribute('aria-expanded','true');
+}
+
+window.renderPkgOptions = function() {
+  const q=document.getElementById('pkgContractorSearch').value.trim().toLowerCase();
+  const list=document.getElementById('pkgContractorOptions');list.replaceChildren();
+  contractors.filter(c=>c.name.toLowerCase().includes(q)).forEach(c=>{const label=document.createElement('label'),cb=document.createElement('input');cb.type='checkbox';cb.checked=pkgSelected.has(c.name);cb.onchange=()=>{cb.checked?pkgSelected.add(c.name):pkgSelected.delete(c.name);updatePkgCount();document.getElementById('pkgSelectAll').checked=pkgSelected.size===contractors.length};label.append(cb,document.createTextNode(c.name));list.appendChild(label)});
+  if(!list.children.length)list.textContent='검색 결과가 없습니다';
+  document.getElementById('pkgSelectAll').checked=contractors.length>0&&pkgSelected.size===contractors.length;
+};
+window.selectAllPkg=function(checked){pkgSelected=new Set(checked?contractors.map(c=>c.name):[]);renderPkgOptions();updatePkgCount()};
+window.filterFullPrintContractors=function(){const q=document.getElementById('fullPrintSearch').value.trim().toLowerCase();document.querySelectorAll('#fullPrintContractorList label').forEach(el=>el.hidden=!el.textContent.toLowerCase().includes(q))};
+
+window.renderMsdsRequests=function(){
+  const q=(document.getElementById('requestSearch')?.value||'').toLowerCase();
+  const list=contractors.map(c=>{const issued=tokens.filter(t=>(t.contractor_id||t.contractor?.id)===c.id||t.contractor?.name===c.name).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));const records=msdsRecords.filter(r=>r.contractor===c.name);const received=records.filter(msdsReceived);const redo=records.filter(r=>r.reupload_requested);return {c,token:issued[0],records,received,redo}}).filter(x=>x.token||x.records.length).filter(x=>x.c.name.toLowerCase().includes(q));
+  const pending=list.filter(x=>!x.received.length||x.redo.length).length;
+  document.getElementById('gsRequestStats').innerHTML=[['요청·등록 협력사',list.length],['확인 필요',pending],['원본 등록 완료',list.length-pending]].map(([title,n])=>`<div class="card"><span>${title}</span><b>${n}<small>개사</small></b></div>`).join('');
+  document.getElementById('gsRequestRows').innerHTML=list.map(({c,token,received,redo})=>`<tr><td><strong>${escapeHtml(c.name)}</strong></td><td>${token?.created_at?escapeHtml(token.created_at.slice(0,10)):'—'}</td><td><span class="badge ${redo.length?'badge-warn':received.length?'badge-ok':'badge-gray'}">${redo.length?'재업로드 요청':received.length?'원본 등록 완료':token?'제출 대기':'원본 확인 필요'}</span></td><td>원본 ${received.length}건${redo.length?' · 재요청 '+redo.length+'건':''}</td><td><div class="gs-inline-actions"><button class="btn btn-secondary btn-sm" onclick="openContractorMsds('${c.id}')">대장 보기</button><button class="btn btn-outline btn-sm" onclick="openContractorUploadLink('${c.id}')">링크 관리</button></div></td></tr>`).join('')||'<tr class="empty-row"><td colspan="5">요청 내역이 없습니다. 협력사 관리에서 업로드 링크를 발급하세요.</td></tr>';
+};
+
+function gsWeatherIcon(code){if(code>=95)return '⛈';if(code>=71&&code<=86)return '❄';if(code>=51&&code<=82)return '☂';if(code>=45&&code<=48)return '≋';if(code>=2)return '☁';return '☀'}
+function gsWeatherLabel(code){if(code>=95)return '뇌우';if(code>=71&&code<=86)return '눈';if(code>=51&&code<=82)return '비';if(code>=45&&code<=48)return '안개';if(code>=2)return '흐림';return '맑음'}
+function renderGsHome(){
+  const name=profile?.name||user?.user_metadata?.name||user?.email?.split('@')[0]||'관리자';
+  document.getElementById('gsGreeting').textContent=`${name}님,\n오늘 하루도 좋은 하루 되세요!`;
+  document.getElementById('gsSiteName').textContent=currentWS?.name||'현장 홈';
+  document.getElementById('gsPreviewLabel').textContent=getDevPreviewPage()?'미리보기 · 예시 데이터':'';
+  document.getElementById('homeDate').textContent=new Date().toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'long',day:'numeric',weekday:'long'});
+  const month=Number(new Intl.DateTimeFormat('en',{timeZone:'Asia/Seoul',month:'numeric'}).format(new Date()));
+  const season=month>=6&&month<=9?'summer':month>=11||month<=2?'winter':month>=3&&month<=5?'spring':'autumn';
+  const seasonal={summer:['여름철, 온열질환을 예방하세요',['물·그늘·휴식 준비','체감온도와 휴식시간 확인','취약 근로자 건강상태 확인']],winter:['겨울철, 한랭질환에 대비하세요',['방한복·따뜻한 휴게공간 준비','저체온증·동상 증상 확인','결빙 구간과 난방기 환기 점검']],spring:['봄철, 호흡기 건강을 살펴주세요',['미세먼지 예보 확인','작업에 맞는 호흡 보호구 점검','일교차에 따른 체온 관리']],autumn:['가을철, 일교차에 대비하세요',['작업 전 근로자 건강상태 확인','아침·저녁 보온과 수분 섭취','건조한 날 분진·환기 상태 점검']]};
+  const [title,checks]=seasonal[season];document.getElementById('gsSeasonTitle').textContent=title;
+  document.getElementById('gsSeasonChecks').innerHTML=checks.map((t,i)=>`<div class="gs-check"><span>${String(i+1).padStart(2,'0')}</span><p>${t}</p></div>`).join('');
+  const cards=[['☀','더운 날','식수·그늘·휴게공간을 점검하고 온열질환 의심 증상을 확인하세요.'],['☂','비 오는 날','미끄럼·감전 위험과 젖은 보호구, 작업장 배수 상태를 확인하세요.'],['≋','건조하고 바람 부는 날','비산먼지와 눈·호흡기 보호구, 국소배기 상태를 살펴보세요.']];
+  document.getElementById('gsWeatherChecks').innerHTML=cards.map(([icon,t,d])=>`<div><span class="gs-weather-symbol">${icon}</span><h3>${t}</h3><p>${d}</p></div>`).join('');
+  if(gsHomeForecast&&gsHomeForecastKey===currentWS?.id)renderGsWeek(gsHomeForecast);
+  else if(!gsHomeForecastPending)loadGsWeekWeather();
+}
+async function loadGsWeekWeather(){
+  const el=document.getElementById('gsWeekWeather'),source=document.getElementById('gsWeatherSource');
+  if(!currentWS?.latitude||!currentWS?.longitude){el.innerHTML='<div class="gs-weather-empty">현장 주소를 설정하면 이번 주 예보를 볼 수 있습니다.<button class="btn btn-outline btn-sm" onclick="openSiteLocationSettings()">현장 주소 설정</button></div>';source.textContent='';return}
+  gsHomeForecastPending=true;const workspaceId=currentWS.id;el.innerHTML='<p class="gs-muted">현장 날씨를 불러오는 중입니다…</p>';
+  try {let fc;if(getDevPreviewPage()){
+    const day=new Date(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'})+'T12:00:00+09:00');
+    const monday=new Date(day);monday.setDate(day.getDate()-((day.getDay()+6)%7));
+    fc={week:Array.from({length:7},(_,i)=>{const d=new Date(monday);d.setDate(d.getDate()+i);return {date:d.toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'}),code:[0,2,3,61,2,0,1][i],max:[23,22,21,19,20,22,23][i],min:[13,14,14,15,12,11,12][i]}}),source:'preview'};
+  }else {const {data,error}=await supabase.functions.invoke('site-weather',{body:{action:'forecast',address:currentWS.address,latitude:currentWS.latitude,longitude:currentWS.longitude}});if(error||data?.error)throw new Error(error?.message||data.error);fc=data.result}
+    if(currentWS.id!==workspaceId)return;gsHomeForecast=fc;gsHomeForecastKey=workspaceId;renderGsWeek(fc);
+  }catch(e){el.innerHTML='<div class="gs-weather-empty">예보를 불러오지 못했습니다.<button class="btn btn-outline btn-sm" onclick="retryGsWeather()">다시 시도</button></div>';source.textContent=e.message}
+  finally{gsHomeForecastPending=false;if(currentWS?.id!==workspaceId&&document.getElementById('page-home')?.classList.contains('active'))loadGsWeekWeather()}
+}
+window.retryGsWeather=function(){gsHomeForecast=null;loadGsWeekWeather()};
+function renderGsWeek(fc){const el=document.getElementById('gsWeekWeather');const source=document.getElementById('gsWeatherSource');if(!Array.isArray(fc.week)||!fc.week.length){el.innerHTML='<div class="gs-weather-empty">주간 예보를 준비 중입니다. 잠시 후 새로고침해주세요.<button class="btn btn-outline btn-sm" onclick="retryGsWeather()">새로고침</button></div>';source.textContent='';return}
+  const todayKst=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'});
+  el.innerHTML=fc.week.map(d=>`<div class="gs-day ${d.date===todayKst?'today':''}"><b>${d.date===todayKst?'오늘':new Date(d.date+'T12:00:00+09:00').toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',weekday:'short'})}</b><small>${Number(d.date.slice(5,7))}.${Number(d.date.slice(8))}</small><span class="gs-day-icon" aria-label="${gsWeatherLabel(d.code)}">${gsWeatherIcon(d.code)}</span><span class="gs-day-description">${gsWeatherLabel(d.code)}</span><div><strong>${Math.round(d.max)}°</strong><span>${Math.round(d.min)}°</span></div></div>`).join('');source.textContent=fc.source==='preview'?'미리보기 예시 · 실제 현장 날씨가 아닙니다.':'Open-Meteo · 현장 저장 좌표 기준 · 이번 주 월–일';
+}
+
+init();

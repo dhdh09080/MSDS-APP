@@ -28,8 +28,10 @@ export function openPrintWindow(html) {
   doc.open(); doc.write(html); doc.close();
   const cleanup = () => { try { iframe.remove(); } catch {} };
   try { iframe.contentWindow.onafterprint = cleanup; } catch {}
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
+      await Promise.race([Promise.all([doc.fonts?.ready, ...Array.from(doc.images).map(image => image.decode().catch(() => {}))]), new Promise(resolve => setTimeout(resolve, 2500))]);
+      iframe.contentWindow.fitWarningLabels?.();
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
     } catch (e) {

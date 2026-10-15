@@ -3,11 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#2563EB">
-<title>현장관리시스템</title>
+<meta name="theme-color" content="#fafafa">
+<title>GS 보건 현장관리 시스템</title>
 <link rel="stylesheet" href="/src/style.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<link rel="stylesheet" href="/src/gs-design.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script defer src="https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
@@ -16,7 +15,7 @@
 
 <!-- 로딩 -->
 <div id="loadingScreen">
-  <div class="loading-logo">🛡️ 현장관리시스템</div>
+  <div class="loading-logo">🛡️ GS 보건 현장관리 시스템</div>
   <div class="spinner"></div>
   <div class="loading-sub">잠시만 기다려주세요...</div>
 </div>
@@ -26,9 +25,9 @@
   <div class="auth-screen">
     <div class="auth-card">
       <div class="auth-logo">
-        <div class="auth-badge">SAFETY MANAGER</div>
-        <div class="auth-title">현장관리시스템</div>
-        <div class="auth-sub">MSDS · 작업환경측정 · 건강진단</div>
+        <div class="auth-badge">GS · HEALTH & SITE</div>
+        <div class="auth-title">GS 보건 현장관리 시스템</div>
+        <div class="auth-sub">현장의 건강과 안전을 한곳에서 관리하세요</div>
       </div>
 
       <div class="auth-tabs" id="authTabs">
@@ -86,7 +85,7 @@
 <div id="workspaceScreen" style="display:none">
   <div class="ws-screen">
     <div class="ws-topbar">
-      <div class="ws-topbar-logo">🛡️ 현장관리시스템</div>
+      <div class="ws-topbar-logo">🛡️ GS 보건 현장관리 시스템</div>
       <div style="display:flex;gap:8px;align-items:center;">
         <span id="topbarUser" style="font-size:13px;color:var(--text2);"></span>
         <button class="btn btn-secondary btn-sm" onclick="handleLogout()">로그아웃</button>
@@ -118,7 +117,7 @@
     <!-- 사이드바 (데스크탑) -->
     <div class="sidebar">
       <div class="sidebar-header" onclick="goWorkspaces()">
-        <div class="sidebar-back">← 현장 목록</div>
+        <div class="gs-brand"><span>GS</span><div>보건 현장관리<small>HEALTH & SITE</small></div></div><div class="sidebar-back">← 현장 목록</div>
         <div class="sidebar-ws-name" id="sidebarWSName">현장명</div>
       </div>
       <nav class="sidebar-nav">
@@ -126,9 +125,7 @@
         <div class="nav-item active" id="nav-home" onclick="showPage('home')">
           <span class="nav-icon">🏠</span> 홈
         </div>
-        <div class="nav-item" id="nav-calendar" onclick="showPage('calendar')">
-          <span class="nav-icon">📅</span> 일정관리
-        </div>
+
 
         <div class="nav-section">화학물질</div>
         <div class="nav-item" id="nav-msds" onclick="showPage('msds')">
@@ -138,9 +135,7 @@
         <div class="nav-item" id="nav-warning" onclick="showPage('warning')">
           <span class="nav-icon">⚠️</span> 경고표지
         </div>
-        <div class="nav-item" id="nav-upload-link" onclick="showPage('upload-link')">
-          <span class="nav-icon">🔗</span> 협력사 링크
-        </div>
+        <div class="nav-item" id="nav-requests" onclick="showPage('requests')"><span class="nav-icon">↗</span> MSDS 요청 목록</div>
 
         <div class="nav-section">측정 · 진단</div>
         <div class="nav-item" id="nav-measure" onclick="showPage('measure')">
@@ -195,116 +190,7 @@
     <!-- 메인 콘텐츠 -->
     <div class="main" id="mainContent">
 
-      <!-- ═══ 홈 ═══ -->
-      <div class="page active" id="page-home">
-        <div class="page-header">
-          <div>
-            <div class="page-title" id="homeTitle">대시보드</div>
-            <div class="page-subtitle" id="homeDate"></div>
-          </div>
-          <div class="header-actions">
-            <button class="btn btn-primary" onclick="showPage('msds');setTimeout(()=>document.getElementById('msdsRegisterBtn').click(),100)">+ MSDS 등록</button>
-          </div>
-        </div>
-        <div class="content-scroll">
-
-          <!-- ① 경고 배너 (접기 가능) -->
-          <div id="dashAlertWrap" style="display:none;margin-bottom:20px;">
-            <div class="dash-alert-bar" id="dashAlertBar" onclick="toggleDashAlerts()">
-              <span id="dashAlertSummary"></span>
-              <span class="dash-alert-toggle" id="dashAlertToggleIcon">▾ 펼치기</span>
-            </div>
-            <div id="dashAlertDetail" style="display:none;">
-              <div id="notifAlertInner" style="display:none;">
-                <div class="dash-alert-section-title">🔁 협력사 재업로드 도착</div>
-                <div id="notifAlertList"></div>
-              </div>
-              <div id="licenseAlertInner" style="display:none;">
-                <div class="dash-alert-section-title">📑 사업자등록증 미제출</div>
-                <div id="licenseAlertList"></div>
-              </div>
-              <div id="submissionNoAlertInner" style="display:none;">
-                <div class="dash-alert-section-title">⚠️ MSDS 제출번호 미확인 (PDF 있는 것만)</div>
-                <div id="submissionNoAlertList"></div>
-              </div>
-              <div id="pendingAlertInner" style="display:none;">
-                <div class="dash-alert-section-title">📤 MSDS 미수령 협력사</div>
-                <div id="pendingList"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- ①.5 체감온도 (혹서기) -->
-          <div class="card" id="dashWeatherCard" style="display:none;margin-bottom:18px;cursor:pointer;" onclick="showPage('weather')">
-            <div id="dashWeatherBody"></div>
-          </div>
-
-          <!-- ② 이번 주 일정 (가장 크게) -->
-          <div class="card dash-calendar-card" style="margin-bottom:18px;">
-            <div class="dash-section-header">
-              <div class="dash-section-title">📅 이번 주 일정</div>
-              <button class="btn btn-outline btn-sm" onclick="showPage('calendar')">캘린더 보기</button>
-            </div>
-            <div id="dashWeekSchedule"></div>
-          </div>
-
-          <!-- ③ 오늘 할 일 + 루틴 업무 (2열) -->
-          <div class="dash-two-col" style="margin-bottom:18px;">
-            <div class="card">
-              <div class="dash-section-header">
-                <div class="dash-section-title">✅ 오늘 할 일</div>
-              </div>
-              <div class="add-tag-row" style="margin-bottom:10px;">
-                <input type="text" id="newTodoInput" placeholder="할 일 입력 후 Enter" onkeydown="if(event.key==='Enter')addTodo()">
-                <button class="btn btn-primary btn-sm" onclick="addTodo()">추가</button>
-              </div>
-              <div id="todoList"></div>
-            </div>
-            <div class="card">
-              <div class="dash-section-header">
-                <div class="dash-section-title">🔁 루틴 업무</div>
-                <button class="btn btn-outline btn-sm" onclick="showPage('settings')">관리</button>
-              </div>
-              <div id="routineTaskDashList">
-                <div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">등록된 루틴 업무가 없습니다</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- ④ 통계 (작게, 클릭하면 해당 페이지로) -->
-          <div class="stats-row" style="margin-bottom:18px;">
-            <div class="stat-card" onclick="showPage('msds')">
-              <div class="stat-label">MSDS 등록</div>
-              <div class="stat-value primary" id="homeStatTotal">0</div>
-              <div class="stat-sub">전체 물질</div>
-            </div>
-            <div class="stat-card" onclick="showPage('msds');document.getElementById('filterReceipt').value='pending';renderMsdsTable()">
-              <div class="stat-label">MSDS 미수령</div>
-              <div class="stat-value danger" id="homeStatPending">0</div>
-              <div class="stat-sub">링크 전송 필요</div>
-            </div>
-            <div class="stat-card" onclick="showPage('msds');document.getElementById('filterSpecial').value='Y';renderMsdsTable()">
-              <div class="stat-label">특별관리물질</div>
-              <div class="stat-value warn" id="homeStatSpecial">0</div>
-              <div class="stat-sub">CMR 물질</div>
-            </div>
-            <div class="stat-card" onclick="showPage('msds');document.getElementById('filterStatus').value='active';renderMsdsTable()">
-              <div class="stat-label">사용중 물질</div>
-              <div class="stat-value ok" id="homeStatActive">0</div>
-              <div class="stat-sub">현재 반입중</div>
-            </div>
-          </div>
-
-          <!-- ⑤ 최근 등록 MSDS (하단) -->
-          <div class="ws-section-title" style="margin-bottom:10px;">최근 등록 MSDS</div>
-          <div class="recent-list" id="recentMsdsList">
-            <div style="color:var(--text3);font-size:13px;text-align:center;padding:20px;">등록된 물질이 없습니다</div>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- ═══ MSDS 대장 ═══ -->
+<div class="page active" id="page-home"><div class="page-header"><div><div class="page-title" id="homeTitle">현장 홈</div><div class="page-subtitle" id="homeDate"></div></div><span class="gs-context">GS HEALTH & SITE</span></div><div class="content-scroll gs-home"><section class="gs-welcome"><div class="gs-eyebrow">매일의 건강한 현장을 위해</div><h1 id="gsGreeting">오늘 하루도 좋은 하루 되세요!</h1><p>날씨를 살피고, 오늘 현장에 필요한 보건 관리를 시작하세요.</p><div class="gs-welcome-bottom"><span id="gsSiteName"></span><span id="gsPreviewLabel"></span></div></section><div class="gs-home-grid"><section class="card gs-week-card"><div class="gs-section-head"><div><div class="gs-eyebrow">WEEKLY WEATHER</div><h2>이번 주 현장 날씨</h2></div><button class="btn btn-outline btn-sm" onclick="showPage('weather')">날씨 자세히 ↗</button></div><div id="gsWeekWeather" class="gs-week"></div><p class="gs-weather-source" id="gsWeatherSource"></p></section><section class="card gs-season-card"><div class="gs-eyebrow">SEASONAL CARE</div><h2 id="gsSeasonTitle">계절별 보건 관리</h2><div id="gsSeasonChecks"></div></section></div><section class="gs-shortcuts"><button onclick="showPage('health')"><span class="gs-shortcut-icon">＋</span><div><b>건강진단 관리</b><small>결과와 대상자 확인</small></div><span>↗</span></button><button onclick="showPage('measure')"><span class="gs-shortcut-icon">⌁</span><div><b>작업환경측정</b><small>측정결과와 유해인자</small></div><span>↗</span></button><button onclick="showPage('contractors')"><span class="gs-shortcut-icon">◇</span><div><b>협력사 관리</b><small>서류와 업로드 링크</small></div><span>↗</span></button><button onclick="showPage('msds')"><span class="gs-shortcut-icon">▤</span><div><b>MSDS 대장</b><small>화학물질과 경고표지</small></div><span>↗</span></button></section><section class="card"><div class="gs-section-head"><h2>날씨별 현장 확인사항</h2><span class="gs-muted">작업 전 확인</span></div><div class="gs-weather-checks" id="gsWeatherChecks"></div></section></div></div>      <!-- ═══ MSDS 대장 ═══ -->
 <div class="page" id="page-msds">
   <div class="page-header">
     <div>
@@ -337,7 +223,7 @@
         </div>
         <select class="filter-select" id="filterWorkType" onchange="renderMsdsTable()"><option value="">전체 공종</option></select>
         <select class="filter-select" id="filterStatus" onchange="renderMsdsTable()"><option value="">전체 상태</option><option value="active">사용중</option><option value="ended">사용종료</option></select>
-        <select class="filter-select" id="filterReceipt" onchange="renderMsdsTable()"><option value="">전체 수령</option><option value="received">수령완료</option><option value="pending">미수령</option></select>
+        <input type="hidden" id="filterReceipt" value="">
         <select class="filter-select" id="filterSpecial" onchange="renderMsdsTable()"><option value="">전체</option><option value="Y">특별관리만</option></select>
       </div>
       <div class="hint">💡 협력사 선택 → '패키지' 버튼으로 목록+PDF+경고표지 한번에 출력</div>
@@ -347,10 +233,10 @@
             <thead><tr>
               <th style="width:36px"><input type="checkbox" id="checkAll" onchange="toggleAll(this)"></th>
               <th>제품명</th><th>협력사</th><th>공종</th><th>공급업체</th><th>CAS</th>
-              <th>특별</th><th>상태</th><th>수령</th><th>원본</th><th>관리</th>
+              <th>특별</th><th>상태</th><th>원본</th><th>관리</th>
             </tr></thead>
             <tbody id="msdsTableBody">
-              <tr class="empty-row"><td colspan="11">로딩 중...</td></tr>
+              <tr class="empty-row"><td colspan="10">로딩 중...</td></tr>
             </tbody>
           </table>
         </div>
@@ -445,7 +331,7 @@
             </div>
             <div class="warn-right">
               <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;letter-spacing:.5px;" id="warnPreviewHeader">미리보기 (인쇄 결과와 동일)</div>
-              <div class="warn-autofit-note">한 페이지의 안전영역을 넘으면 유해·위험 문구와 예방조치 문구를 대표 문구로 자동 맞춤하고, 생략 건수는 표지에 표시합니다.</div>
+              <div class="warn-autofit-note">선택한 규격에 맞춰 글자 크기를 자동 조정합니다. 원문에 없는 안전정보는 원본 확인 안내로 표시합니다.</div>
               <div class="warn-preview-wrap">
                 <div class="warn-preview-scroll" id="warningPreview">
                   <div class="warn-empty">왼쪽에서 물질을 선택하세요</div>
@@ -983,7 +869,7 @@
       </div>
 
       <!-- ═══ 일정관리 ═══ -->
-      <div class="page" id="page-calendar">
+      <div class="page" id="page-calendar" data-retired="true">
         <div class="page-header">
           <div>
             <div class="page-title">일정관리</div>
@@ -1091,7 +977,7 @@
             </div>
             <div class="contractor-toolbar">
               <div class="contractor-search-main">
-                <input type="search" class="form-input" id="conMgrSearch" placeholder="등록된 협력사 검색" oninput="renderContractorTags()">
+                <input type="search" class="form-input" id="conMgrSearch" placeholder="협력사 검색 · 없으면 Enter로 등록" oninput="renderContractorTags()" onkeydown="if(event.key==='Enter'){event.preventDefault();addContractorFromSearch()}">
                 <button class="btn btn-primary" id="contractorAddToggleBtn" onclick="toggleNewContractorForm()">+ 협력사 등록</button>
               </div>
               <select class="form-input" id="conMgrFilter" onchange="setContractorFilter(this.value)">
@@ -1136,7 +1022,7 @@
         <div class="page-header">
           <div>
             <div class="page-title">설정</div>
-            <div class="page-subtitle">현장 · 루틴 업무 · 팀원 · 계정 관리</div>
+            <div class="page-subtitle">현장 · 팀원 · 계정 관리</div>
           </div>
         </div>
         <div class="content-scroll">
@@ -1164,7 +1050,7 @@
             <button class="btn btn-primary btn-sm" onclick="updateWorkspaceInfo()">현장 정보 저장</button>
           </div>
 
-          <div class="card">
+<div hidden inert>          <div class="card">
             <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
               <span><span class="card-title-icon">🔁</span> 루틴 업무 관리</span>
             </div>
@@ -1202,7 +1088,7 @@
             </div>
           </div>
 
-          <div class="card">
+</div>          <div class="card">
             <div class="card-title"><span class="card-title-icon">👥</span> 팀원 관리</div>
             <div id="memberList" style="margin-bottom:16px;">
               <div style="color:var(--text3);font-size:13px;">로딩 중...</div>
@@ -1222,7 +1108,7 @@
         </div>
       </div>
 
-    </div><!-- /main -->
+<div class="page" id="page-requests"><div class="page-header"><div><div class="page-title">협력사 MSDS 요청 목록</div><div class="page-subtitle">발급한 요청 링크와 업로드 결과를 함께 확인합니다</div></div><button class="btn btn-primary" onclick="showPage('contractors');switchContractorTab('links')">+ MSDS 요청</button></div><div class="content-scroll"><div class="gs-request-stats" id="gsRequestStats"></div><div class="card"><div class="gs-section-head"><h2>요청 및 제출 현황</h2><input class="form-input" id="requestSearch" placeholder="협력사명 검색" oninput="renderMsdsRequests()" style="max-width:260px"></div><div class="table-wrap-scroll"><table><thead><tr><th>협력사</th><th>요청일</th><th>요청 상태</th><th>제출 결과</th><th>관리</th></tr></thead><tbody id="gsRequestRows"></tbody></table></div><p class="form-note" style="margin-top:16px">요청일은 협력사별 링크 발급일 기준입니다. 제출 결과는 등록 원본과 재업로드 요청 상태로 판정합니다. 공용 링크는 협력사별 요청일을 생성하지 않습니다.</p></div></div></div>    </div><!-- /main -->
   </div><!-- /app -->
 
   <!-- KOSHA 물질 검색 모달 -->
@@ -1259,9 +1145,9 @@
         <span class="mobile-tab-label">MSDS</span>
         <span class="mobile-tab-badge" id="mBadgeMsds" style="display:none">0</span>
       </button>
-      <button class="mobile-tab" id="mtab-calendar" onclick="showPage('calendar')">
+      <button class="mobile-tab" id="mtab-contractors" onclick="showPage('contractors')">
         <span class="mobile-tab-icon">📅</span>
-        <span class="mobile-tab-label">일정</span>
+        <span class="mobile-tab-label">협력사</span>
       </button>
       <button class="mobile-tab" id="mtab-health" onclick="showPage('health')">
         <span class="mobile-tab-icon">🏥</span>
@@ -1285,7 +1171,7 @@
     <div class="modal-body">
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
         <button class="more-item" onclick="showPage('warning');closeModal('moreSheet')">⚠️<span>경고표지</span></button>
-        <button class="more-item" onclick="showPage('upload-link');closeModal('moreSheet')">🔗<span>협력사 링크</span></button>
+        <button class="more-item" onclick="showPage('requests');closeModal('moreSheet')">↗<span>MSDS 요청 목록</span></button>
         <button class="more-item" onclick="showPage('measure');closeModal('moreSheet')">📊<span>작업환경측정</span></button>
         <button class="more-item" onclick="showPage('photos');closeModal('moreSheet')">📷<span>사진 클라우드</span></button>
         <button class="more-item" onclick="showPage('manpower');closeModal('moreSheet')">👷<span>투입인원</span></button>
@@ -1371,7 +1257,7 @@
           <button class="btn btn-primary" id="parseAllBtn" onclick="parseAllFiles()">✨ 분석 후 일괄 저장</button>
         </div>
         <div style="text-align:center;margin-top:8px;">
-          <button class="auth-link" onclick="switchMsdsTab('manual')">직접 입력하기 →</button>
+          
         </div>
       </div>
 
@@ -1445,8 +1331,8 @@
               <input class="form-input" id="f_pCodes" placeholder="예) P210, P280, P305">
             </div>
             <div class="form-field span2">
-              <label class="form-label">추천 보호구</label>
-              <input class="form-input" id="f_protectiveEquipment" placeholder="예) 내화학성 장갑, 보안경, 방독마스크">
+              <label class="form-label">적절한 보호구</label>
+              <input class="form-input" id="f_protectiveEquipment" placeholder="예) 내화학성 장갑, 보안경, 방독마스크"></div><div class="form-field span2"><label class="form-label">취급상의 주의사항</label><textarea class="form-input" id="f_handlingPrecautions"></textarea></div><div class="form-field span2"><label class="form-label">응급조치 요령</label><textarea class="form-input" id="f_firstAid"></textarea></div><div class="form-field span2"><label class="form-label">사고 시 대처방법</label><textarea class="form-input" id="f_emergencyResponse"></textarea>
             </div>
           </div>
         </div>
@@ -1584,12 +1470,7 @@
     <div class="modal-body">
       <div class="form-field" style="margin-bottom:14px;">
         <label class="form-label">협력사 선택</label>
-        <div class="contractor-search-row">
-          <input class="form-input" id="pkgContractorSearch" placeholder="협력사명 검색" oninput="searchContractorSelect('pkgContractor')" onkeydown="if(event.key==='Enter'){event.preventDefault();searchContractorSelect('pkgContractor');}">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="searchContractorSelect('pkgContractor')">검색</button>
-        </div>
-        <select class="form-input" id="pkgContractor" onchange="updatePkgCount()"><option value="">선택하세요</option></select>
-      </div>
+<div class="gs-multi"><input class="form-input" id="pkgContractorSearch" placeholder="협력사명 검색" oninput="renderPkgOptions()" role="combobox" aria-expanded="true" aria-controls="pkgContractorOptions"><div class="gs-multi-toolbar"><label><input type="checkbox" id="pkgSelectAll" onchange="selectAllPkg(this.checked)"> 전체 협력사 선택</label><button class="btn btn-outline btn-sm" onclick="selectAllPkg(false)">해제</button></div><div id="pkgContractorOptions" class="gs-multi-options"></div></div></div>
       <div class="form-field" style="margin-bottom:14px;">
         <label class="form-label">사용 상태</label>
         <select class="form-input" id="pkgStatus" onchange="updatePkgCount()"><option value="">전체</option><option value="active">사용중만</option><option value="ended">사용종료만</option></select>
@@ -1626,7 +1507,7 @@
         <input type="checkbox" id="fullPrintSelectAll" onchange="toggleAllFullPrintContractors(this.checked)">
         <div style="font-size:13px;font-weight:700;">전체 선택</div>
       </label>
-      <div id="fullPrintContractorList" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px;">
+      <input class="form-input" id="fullPrintSearch" placeholder="협력사명 검색" oninput="filterFullPrintContractors()" style="margin-bottom:12px"><div id="fullPrintContractorList" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px;">
       </div>
       <div id="fullPrintCount" style="font-size:13px;color:var(--primary);font-weight:600;margin-top:14px;"></div>
       <div style="font-size:12px;font-weight:700;color:var(--text2);margin:16px 0 8px;">인쇄 레이아웃</div>

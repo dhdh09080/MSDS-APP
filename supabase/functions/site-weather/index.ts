@@ -72,7 +72,9 @@ async function forecast(latitude: number, longitude: number) {
   url.searchParams.set('longitude', String(longitude));
   url.searchParams.set('hourly', 'apparent_temperature,temperature_2m,relative_humidity_2m');
   url.searchParams.set('timezone', 'Asia/Seoul');
-  url.searchParams.set('forecast_days', '2');
+  url.searchParams.set('forecast_days', '7');
+  url.searchParams.set('past_days', '7');
+  url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min');
   const response = await fetch(url);
   if (!response.ok) throw new Error('현장 날씨를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
   const data = await response.json();
@@ -90,7 +92,15 @@ async function forecast(latitude: number, longitude: number) {
     humidity: Number(humidity[index]),
   })).filter(item => item.date === targetDate && item.hour >= 6 && item.hour <= 19 && Number.isFinite(item.feel));
   if (!hours.length) throw new Error('오늘 시간별 체감온도 예보가 아직 없습니다.');
-  return { date: targetDate, hours };
+  const monday = new Date(targetDate + 'T12:00:00Z');
+  monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
+  const start = monday.toISOString().slice(0,10);
+  const sunday = new Date(monday); sunday.setUTCDate(sunday.getUTCDate() + 6);
+  const end = sunday.toISOString().slice(0,10);
+  const week = (data.daily?.time || []).map((date: string, i: number) => ({
+    date, code: data.daily.weather_code[i], max: data.daily.temperature_2m_max[i], min: data.daily.temperature_2m_min[i],
+  })).filter((day: {date: string; max: unknown; min: unknown}) => day.date >= start && day.date <= end && typeof day.max === 'number' && typeof day.min === 'number');
+  return { date: targetDate, hours, week, source: 'Open-Meteo' };
 }
 
 serve(async (req) => {
@@ -133,3 +143,5 @@ serve(async (req) => {
     return json({ error: error?.message || String(error) }, 400);
   }
 });
+
+

@@ -121,7 +121,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 
 <!-- 헤더 -->
 <div class="header">
-  <div class="header-logo">🛡️ 현장관리시스템</div>
+  <div class="header-logo">🛡️ GS 보건 현장관리 시스템</div>
   <div class="header-ws" id="headerWS">현장 MSDS 업로드</div>
   <div class="header-desc" id="headerDesc">MSDS 파일을 업로드해주세요</div>
 </div>
@@ -504,6 +504,7 @@ window.startUpload = async function() {
         pictograms: parsed.pictograms || '',
         issue_date: parsed.issueDate || '',
         protective_equipment: parsed.protectiveEquipment || '',
+      handling_precautions: parsed.handlingPrecautions || '', first_aid: parsed.firstAid || '', emergency_response: parsed.emergencyResponse || '',
         legal_measurement: parsed.legalMeasurement || 'N',
         legal_exam: parsed.legalExam || 'N',
         legal_exam_cycle: parsed.legalExamCycle || '',
@@ -743,6 +744,7 @@ async function doReupload(recordId, file) {
       pictograms: parsed.pictograms || '',
       issue_date: parsed.issueDate || '',
       protective_equipment: parsed.protectiveEquipment || '',
+      handling_precautions: parsed.handlingPrecautions || '', first_aid: parsed.firstAid || '', emergency_response: parsed.emergencyResponse || '',
       legal_measurement: parsed.legalMeasurement || 'N',
       legal_exam: parsed.legalExam || 'N',
       legal_exam_cycle: parsed.legalExamCycle || '',
