@@ -1154,6 +1154,8 @@ function hydrateWorkspaceLocationInputs() {
   renderSiteCoordinateResult();
 }
 
+let siteCoordinateRequest = 0;
+
 function renderSiteCoordinateResult() {
   const box = document.getElementById('siteCoordinateResult');
   const text = document.getElementById('siteCoordinateText');
@@ -1163,6 +1165,8 @@ function renderSiteCoordinateResult() {
   const ready =
     Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
   box.classList.toggle('found', ready);
+  box.classList.remove('error');
+  const retry = document.getElementById('siteCoordinateRetry'); if (retry) retry.hidden = true;
   text.textContent = ready
     ? `좌표 확인됨 · 위도 ${lat.toFixed(5)}, 경도 ${lng.toFixed(5)}`
     : '주소를 입력하고 좌표를 확인해주세요.';
@@ -1184,17 +1188,12 @@ window.openSiteAddressSearch = function () {
     document.getElementById('wsLatitudeEdit').value = '';
     document.getElementById('wsLongitudeEdit').value = '';
     renderSiteCoordinateResult();
-    const found = await findSiteCoordinates({ silent: true });
-    if (found)
-      toast(
-        `${zonecode ? `[${zonecode}] ` : ''}주소와 좌표를 확인했습니다. 현장 정보를 저장해주세요`,
-        'success',
-      );
-    else
-      toast(
-        '주소는 선택했지만 좌표를 찾지 못했습니다. 다른 주소 결과를 선택해주세요',
-        'error',
-      );
+    try {
+      const found = await findSiteCoordinates({ silent: true, throwOnError: true });
+      if (found) toast(`${zonecode ? `[${zonecode}] ` : ''}주소와 좌표를 확인했습니다. 현장 정보를 저장해주세요`, 'success');
+    } catch (error) {
+      toast(error.message, 'error');
+    }
   };
 
   if (getDevPreviewPage()) {
@@ -1225,39 +1224,38 @@ window.findSiteCoordinates = async function (options = {}) {
     if (!options.silent) toast('현장 주소를 입력하세요', 'error');
     return null;
   }
+  const request = ++siteCoordinateRequest;
   const btn = document.getElementById('siteGeocodeBtn');
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = '좌표 확인 중...';
-  }
+  const text = document.getElementById('siteCoordinateText');
+  const box = document.getElementById('siteCoordinateResult');
+  if (btn) { btn.disabled = true; btn.textContent = '좌표 확인 중...'; }
+  box?.classList.remove('found', 'error');
+  if (text) text.textContent = '선택한 주소의 좌표를 확인하고 있습니다…';
+  const retry = document.getElementById('siteCoordinateRetry'); if (retry) retry.hidden = true;
   try {
     const result = getDevPreviewPage()
       ? { address, latitude: 37.5663, longitude: 127.0541 }
-      : await (async () => {
-          const { data, error } = await supabase.functions.invoke(
-            'site-weather',
-            { body: { action: 'geocode', address } },
-          );
-          if (error || data?.error)
-            throw new Error(error?.message || data?.error);
-          return data.result;
-        })();
-    document.getElementById('wsAddressEdit').value = result.address || address;
-    document.getElementById('wsLatitudeEdit').value = result.latitude;
-    document.getElementById('wsLongitudeEdit').value = result.longitude;
+      : (await invokeEdgeJson('site-weather', { action: 'geocode', address })).result;
+    if (request !== siteCoordinateRequest || document.getElementById('wsAddressEdit').value.trim() !== address) return null;
+    const latitude = Number(result?.latitude), longitude = Number(result?.longitude);
+    if (!result || result.latitude === null || result.longitude === null || !Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude <= 0 || latitude > 90 || longitude <= 0 || longitude > 180) throw new Error('좌표 서비스가 유효한 좌표를 반환하지 않았습니다. 다시 시도해주세요.');
+    document.getElementById('wsLatitudeEdit').value = latitude;
+    document.getElementById('wsLongitudeEdit').value = longitude;
     renderSiteCoordinateResult();
-    if (!options.silent)
-      toast('현장 좌표를 찾았습니다. 저장 버튼을 눌러주세요', 'success');
-    return result;
+    if (!options.silent) toast('현장 좌표를 찾았습니다. 저장 버튼을 눌러주세요', 'success');
+    return { ...result, address, latitude, longitude };
   } catch (error) {
-    if (!options.silent)
-      toast(`좌표를 찾지 못했습니다: ${error.message}`, 'error');
+    if (request !== siteCoordinateRequest) return null;
+    document.getElementById('wsLatitudeEdit').value = '';
+    document.getElementById('wsLongitudeEdit').value = '';
+    box?.classList.remove('found'); box?.classList.add('error');
+    if (text) text.textContent = error.message;
+    if (retry) retry.hidden = false;
+    if (options.throwOnError) throw error;
+    if (!options.silent) toast(error.message, 'error');
     return null;
   } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = '🔍 주소 검색';
-    }
+    if (btn && request === siteCoordinateRequest) { btn.disabled = false; btn.textContent = '주소 검색'; }
   }
 };
 
@@ -1277,11 +1275,8 @@ window.updateWorkspaceInfo = async function () {
       !latitude ||
       !longitude)
   ) {
-    const found = await findSiteCoordinates({ silent: true });
-    if (!found) {
-      toast('주소의 좌표를 먼저 확인해주세요', 'error');
-      return;
-    }
+    const found = await findSiteCoordinates();
+    if (!found) return;
     latitude = Number(found.latitude);
     longitude = Number(found.longitude);
   }
@@ -1310,6 +1305,8 @@ window.updateWorkspaceInfo = async function () {
   document.getElementById('homeTitle').textContent = name;
   document.getElementById('warningSite').value = name;
   wxForecast = null;
+  gsHomeForecast = null;
+  gsHomeForecastKey = '';
   toast('현장 정보와 위치가 저장됐습니다', 'success');
 };
 

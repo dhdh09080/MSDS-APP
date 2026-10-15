@@ -12,6 +12,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 });
 
 const validCoordinate = (value: unknown, min: number, max: number) => {
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
   const number = Number(value);
   return Number.isFinite(number) && number >= min && number <= max ? number : null;
 };
@@ -41,11 +42,15 @@ async function geocodeWithOpenStreetMap(address: string) {
   url.searchParams.set('q', address);
   const response = await fetch(url, {
     headers: {
-      'User-Agent': 'MSDS-APP/1.0 site-location',
+      'User-Agent': 'GSHealthSiteManager/1.0 (+https://gshealthk.vercel.app)',
+      'Referer': 'https://gshealthk.vercel.app/',
       'Accept-Language': 'ko-KR,ko;q=0.9',
     },
   });
-  if (!response.ok) throw new Error('주소 검색 서비스가 응답하지 않습니다. 잠시 후 다시 시도해주세요.');
+  if (!response.ok) {
+    console.warn(JSON.stringify({event:'geocode_provider_error',provider:'OpenStreetMap',status:response.status}));
+    throw new Error(`좌표 검색 서비스가 응답하지 않습니다 (OpenStreetMap ${response.status}). 잠시 후 다시 시도해주세요.`);
+  }
   const rows = await response.json();
   const match = rows?.[0];
   if (!match) throw new Error('입력한 주소를 찾지 못했습니다. 도로명과 건물번호를 함께 입력해주세요.');
@@ -61,9 +66,19 @@ async function geocode(address: string) {
   const kakaoKey = Deno.env.get('KAKAO_REST_API_KEY');
   if (kakaoKey) {
     try { return await geocodeWithKakao(address, kakaoKey); }
-    catch { /* 키·쿼터 오류 시 표준 주소 기반 공개 좌표 검색으로 대체 */ }
+    catch (error) { console.warn(JSON.stringify({event:'geocode_provider_error',provider:'Kakao',message:error instanceof Error ? error.message : 'request failed'})); }
   }
-  return geocodeWithOpenStreetMap(address);
+  try { return await geocodeWithOpenStreetMap(address); }
+  catch (error) {
+    if (error instanceof Error && error.message.startsWith('입력한 주소를 찾지 못했습니다')) throw error;
+    const message = kakaoKey
+      ? '좌표 조회 서비스 연결에 실패했습니다. 잠시 후 다시 시도해주세요.'
+      : '좌표 조회 서비스 설정이 필요합니다. 주소를 변경하지 말고 관리자에게 좌표 서비스 설정을 요청해주세요.';
+    const failure = new Error(message) as Error & {code: string};
+    failure.code = kakaoKey ? 'GEOCODER_UNAVAILABLE' : 'GEOCODER_NOT_CONFIGURED';
+    console.warn(JSON.stringify({event:'geocode_unavailable',kakaoConfigured:!!kakaoKey}));
+    throw failure;
+  }
 }
 
 async function forecast(latitude: number, longitude: number) {
@@ -140,7 +155,8 @@ serve(async (req) => {
       },
     });
   } catch (error) {
-    return json({ error: error?.message || String(error) }, 400);
+    const failure = error as Error & {code?: string};
+    return json({ error: failure.message || String(error), code: failure.code || 'LOCATION_REQUEST_FAILED' }, failure.code?.startsWith('GEOCODER_') ? 503 : 400);
   }
 });
 
