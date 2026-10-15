@@ -11,3 +11,10 @@ body{background:var(--bg);font-family:var(--font);letter-spacing:-.18px}button,i
 @media(max-width:768px){.page-header>div:first-child:before{content:'GS · 보건 현장관리';display:block;font-size:10px;color:#777783;font-weight:500;letter-spacing:.3px;margin-bottom:9px}.gs-shortcuts b{font-size:11px}.gs-shortcuts small{font-size:9px}.gs-welcome>p{font-size:12px}.gs-combo-options button{min-height:42px}.gs-tabs button{font-size:12px}}
 
 .site-coordinate-result.error{color:#a23c3c;background:#fff4f3;border-color:#efcdca;flex-wrap:wrap}.site-coordinate-result.error .site-coordinate-dot{background:#c5564e}.site-coordinate-result.error #siteCoordinateText{flex:1;min-width:200px}.site-coordinate-result.error #siteCoordinateRetry{margin-left:auto;white-space:nowrap}
+.team-invite-notice { padding: 16px; margin: 14px 0; border: 1px solid #cbd9eb; border-radius: 12px; background: #f3f7fc; color: #243c59; font-size: 13px; }
+.team-invite-notice p { margin: 7px 0; line-height: 1.65; }
+.team-invite-notice button { margin: 6px 6px 0 0; }
+.team-invite-heading { font-size: 13px; font-weight: 650; margin: 20px 0 8px; }
+.team-invite-result { margin-top: 16px; padding: 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; }
+.team-invite-result input { margin: 6px 0 10px; font-size: 12px; }
+[hidden] { display: none !important; }

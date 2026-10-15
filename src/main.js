@@ -111,6 +111,20 @@ let currentMeasureData = null;
 // Init
 // ═══════════════════════════════════════════════
 let passwordRecoveryMode = false;
+const TEAM_INVITE_STORAGE = 'gs_pending_team_invite';
+let pendingTeamInvite = '';
+let createdTeamInvite = null;
+{
+  const incoming = new URLSearchParams(location.hash.slice(1)).get('team-invite');
+  if (incoming !== null) history.replaceState({}, '', location.pathname + location.search);
+  try { pendingTeamInvite = incoming ?? sessionStorage.getItem(TEAM_INVITE_STORAGE) ?? ''; }
+  catch { pendingTeamInvite = incoming || ''; }
+  if (!/^[a-f0-9]{64}$/.test(pendingTeamInvite)) pendingTeamInvite = '';
+  try {
+    if (pendingTeamInvite) sessionStorage.setItem(TEAM_INVITE_STORAGE, pendingTeamInvite);
+    else sessionStorage.removeItem(TEAM_INVITE_STORAGE);
+  } catch { /* Keep the invitation in memory when browser storage is blocked. */ }
+}
 
 function isPasswordRecoveryUrl() {
   const query = new URLSearchParams(window.location.search);
@@ -698,6 +712,7 @@ function showAuth() {
   document.getElementById('appScreen').style.display = 'none';
   const autoLogin = document.getElementById('autoLoginChk');
   if (autoLogin) autoLogin.checked = isAutoLoginEnabled();
+  renderTeamInviteNotice();
 }
 
 window.switchTab = function (tab) {
@@ -772,26 +787,9 @@ window.handleSignup = async function () {
 };
 
 window.handleForgot = async function () {
-  const email = document.getElementById('forgotEmail').value.trim();
   const msg = document.getElementById('forgotMsg');
-  const btn = document.getElementById('forgotBtn');
-  if (!email) {
-    msg.className = 'auth-msg error';
-    msg.textContent = '이메일을 입력하세요';
-    return;
-  }
-  btn.disabled = true;
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin,
-  });
-  btn.disabled = false;
-  if (error) {
-    msg.className = 'auth-msg error';
-    msg.textContent = translateAuthError(error.message);
-    return;
-  }
-  msg.className = 'auth-msg success';
-  msg.textContent = '재설정 링크를 전송했습니다. 이메일을 확인하세요.';
+  msg.className = 'auth-msg error';
+  msg.textContent = '비밀번호 재설정 이메일 기능은 현재 중지되어 있습니다.';
 };
 
 window.handlePasswordUpdate = async function () {
@@ -863,6 +861,11 @@ function translateAuthError(m) {
 // Workspace
 // ═══════════════════════════════════════════════
 function resetWorkspaceScopedState() {
+  createdTeamInvite = null;
+  const inviteUrl = document.getElementById('teamInviteUrl');
+  if (inviteUrl) inviteUrl.value = '';
+  const inviteResult = document.getElementById('teamInviteResult');
+  if (inviteResult) inviteResult.hidden = true;
   contractors = [];
   workTypes = [];
   msdsRecords = [];
@@ -955,6 +958,11 @@ async function showWorkspaces(autoEnter = false) {
   await refreshSystemAdminRole();
   await loadWorkspaces();
   setSystemAdminVisibility();
+  renderTeamInviteNotice();
+  if (pendingTeamInvite) {
+    await window.reviewTeamInvite();
+    return;
+  }
   if (autoEnter && isSystemAdmin) {
     await window.enterAdminConsole();
     return;
@@ -3203,180 +3211,168 @@ window.removeWorkType = async function (id) {
 // ═══════════════════════════════════════════════
 // Members
 // ═══════════════════════════════════════════════
+async function teamRpc(name, args) {
+  const { data, error } = await supabase.rpc(name, args);
+  if (error) throw new Error(error.message || '초대 정보를 처리하지 못했습니다.');
+  return data;
+}
+
+function canManageTeam() {
+  return currentWS?.owner_id === user?.id ||
+    members.some((m) => m.user_id === user?.id && m.role === 'admin');
+}
+
 async function loadMembers() {
-  const { data } = await supabase
-    .from('workspace_members')
-    .select('*, user:user_id(email, raw_user_meta_data)')
-    .eq('workspace_id', currentWS.id);
-  members = data || [];
-  const { data: inviteData } = await supabase
-    .from('workspace_invites')
-    .select('*')
-    .eq('workspace_id', currentWS.id)
-    .is('accepted_at', null)
-    .order('created_at');
-  pendingInvites = inviteData || [];
-  renderMemberList();
+  const workspaceId = currentWS.id;
+  try {
+    const [team, links] = await Promise.all([
+      teamRpc('list_workspace_team', { p_workspace: workspaceId }),
+      teamRpc('list_workspace_invite_links', { p_workspace: workspaceId }),
+    ]);
+    if (currentWS?.id !== workspaceId) return;
+    members = team || [];
+    pendingInvites = links || [];
+    renderMemberList();
+  } catch (error) {
+    if (currentWS?.id !== workspaceId) return;
+    document.getElementById('memberList').textContent = '팀원 정보를 불러오지 못했습니다. ' + error.message;
+    document.getElementById('createTeamInviteBtn').hidden = true;
+  }
 }
 
 function renderMemberList() {
   const el = document.getElementById('memberList');
   if (!el) return;
-  const canManage =
-    currentWS.owner_id === user.id ||
-    members.find((m) => m.user_id === user.id)?.role === 'admin';
-  const memberHtml = members
-    .map((m) => {
-      const email = m.user?.email || '알 수 없음';
-      const name = m.user?.raw_user_meta_data?.name || email.split('@')[0];
-      const isMe = m.user_id === user.id;
-      const isOwner = currentWS.owner_id === m.user_id;
-      return `<div class="member-item">
-      <div class="member-avatar">${name.charAt(0).toUpperCase()}</div>
-      <div class="member-info">
-        <div class="member-name">${name}${isMe ? ' (나)' : ''}</div>
-        <div class="member-email">${email}</div>
-      </div>
-      <span class="member-role ${m.role}">${isOwner ? '소유자' : m.role === 'admin' ? '관리자' : '멤버'}</span>
-      ${!isMe && !isOwner && canManage ? `<button class="btn btn-danger btn-sm" onclick="removeMember('${m.id}')">제거</button>` : ''}
-    </div>`;
-    })
-    .join('');
-  const inviteHtml = pendingInvites
-    .map(
-      (inv) => `
-    <div class="member-item">
-      <div class="member-avatar" style="background:var(--text3);">✉️</div>
-      <div class="member-info">
-        <div class="member-name">${inv.email}</div>
-        <div class="member-email">초대 대기 중 · 가입 시 자동 합류</div>
-      </div>
-      <span class="member-role ${inv.role}">${inv.role === 'admin' ? '관리자' : '멤버'}</span>
-      ${
-        canManage
-          ? `
-        <button class="btn btn-secondary btn-sm" onclick="resendInvite('${inv.email.replace(/'/g, "\\'")}')">재전송</button>
-        <button class="btn btn-danger btn-sm" onclick="cancelInvite('${inv.id}')">취소</button>`
-          : ''
-      }
-    </div>`,
-    )
-    .join('');
-  el.innerHTML = memberHtml + inviteHtml;
+  const canManage = canManageTeam();
+  document.getElementById('createTeamInviteBtn').hidden = !canManage;
+  const memberHtml = members.map((m) => {
+    const email = m.user?.email || '이메일 없음';
+    const name = m.user?.raw_user_meta_data?.name || email.split('@')[0];
+    const isMe = m.user_id === user.id, isOwner = currentWS.owner_id === m.user_id;
+    return `<div class="member-item"><div class="member-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</div>
+      <div class="member-info"><div class="member-name">${escapeHtml(name)}${isMe ? ' (나)' : ''}</div><div class="member-email">${escapeHtml(email)}</div></div>
+      <span class="member-role ${m.role === 'admin' ? 'admin' : 'member'}">${isOwner ? '소유자' : m.role === 'admin' ? '관리자' : '멤버'}</span>
+      ${!isMe && !isOwner && canManage ? `<button class="btn btn-danger btn-sm" onclick="removeMember('${m.id}')">제거</button>` : ''}</div>`;
+  }).join('');
+  const inviteHtml = pendingInvites.map((inv) => {
+    const active = !inv.revoked_at && !inv.accepted_at && new Date(inv.expires_at) > new Date();
+    const status = inv.revoked_at ? '취소됨' : inv.accepted_at ? '사용 완료' : active ? '참여 대기' : '만료됨';
+    const expiry = new Date(inv.expires_at).toLocaleDateString('ko-KR');
+    return `<div class="member-item"><div class="member-avatar">↗</div><div class="member-info">
+      <div class="member-name">${inv.role === 'admin' ? '관리자' : '멤버'} 초대 링크 · ${status}</div>
+      <div class="member-email">${expiry}까지 · 1명 참여 가능</div></div>
+      ${canManage && active ? `<button class="btn btn-danger btn-sm" onclick="cancelInvite('${inv.id}')">링크 취소</button>` : ''}</div>`;
+  }).join('');
+  el.innerHTML = memberHtml + (canManage ? `<div class="team-invite-heading">발급한 초대 링크</div>${inviteHtml || '<div class="form-note">발급한 초대 링크가 없습니다.</div>'}` : '');
 }
 
-window.handleInvite = async function () {
-  const emailInput = document.getElementById('inviteEmail');
-  const email = emailInput.value.trim().toLowerCase();
-  const role = document.getElementById('inviteRole').value;
-  const msg = document.getElementById('inviteMsg');
-  const btn = document.getElementById('inviteBtn');
-  if (!email) {
-    msg.className = 'auth-msg error';
-    msg.textContent = '이메일을 입력하세요';
-    return;
-  }
-  if (email === user.email.toLowerCase()) {
-    msg.className = 'auth-msg error';
-    msg.textContent = '본인은 이미 팀원입니다';
-    return;
-  }
-  if (members.some((m) => (m.user?.email || '').toLowerCase() === email)) {
-    msg.className = 'auth-msg error';
-    msg.textContent = '이미 팀원으로 등록되어 있습니다';
-    return;
-  }
-
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = '처리 중...';
-  }
-  msg.className = 'auth-msg';
-  msg.textContent = '';
-
-  try {
-    // 1) 이미 가입된 사용자인지 확인
-    const { data: existingUserId, error: rpcErr } = await supabase.rpc(
-      'get_workspace_user_id_by_email',
-      {
-        email_input: email,
-        workspace_input: currentWS.id,
-      },
-    );
-    if (rpcErr) throw rpcErr;
-
-    if (existingUserId) {
-      const { error } = await supabase
-        .from('workspace_members')
-        .insert({ workspace_id: currentWS.id, user_id: existingUserId, role });
-      if (error) throw error;
-      msg.className = 'auth-msg success';
-      msg.textContent = '팀원으로 추가되었습니다!';
-      emailInput.value = '';
-      await loadMembers();
-      return;
-    }
-
-    // 2) 미가입자 → 초대 대기 등록 + 가입 유도 메일 발송
-    const { error: inviteErr } = await supabase
-      .from('workspace_invites')
-      .upsert(
-        {
-          workspace_id: currentWS.id,
-          email,
-          role,
-          invited_by: user.id,
-          accepted_at: null,
-        },
-        { onConflict: 'workspace_id,email' },
-      );
-    if (inviteErr) throw inviteErr;
-
-    const { error: otpErr } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: window.location.origin,
-      },
-    });
-    if (otpErr) throw otpErr;
-
-    msg.className = 'auth-msg success';
-    msg.textContent =
-      '초대 메일을 보냈습니다. 상대방이 메일의 링크로 가입하면 자동으로 팀에 합류합니다.';
-    emailInput.value = '';
-    await loadMembers();
-  } catch (error) {
-    msg.className = 'auth-msg error';
-    msg.textContent = '초대 실패: ' + (error?.message || '알 수 없는 오류');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = '초대';
-    }
-  }
+window.openTeamInvite = function () {
+  if (!canManageTeam()) return toast('현장 관리자만 초대 링크를 만들 수 있습니다.', 'error');
+  createdTeamInvite = null;
+  document.getElementById('teamInviteResult').hidden = true;
+  document.getElementById('teamInviteUrl').value = '';
+  document.getElementById('inviteMsg').textContent = '';
+  document.getElementById('inviteRole').value = 'member';
+  openModal('inviteModal');
 };
 
-window.resendInvite = async function (email) {
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      shouldCreateUser: true,
-      emailRedirectTo: window.location.origin,
-    },
-  });
-  if (error) {
-    toast('재전송 실패: ' + error.message, 'error');
-    return;
-  }
-  toast('초대 메일을 다시 보냈습니다', 'success');
+window.handleInvite = async function () {
+  if (!canManageTeam()) return toast('현장 관리자만 초대 링크를 만들 수 있습니다.', 'error');
+  const btn = document.getElementById('inviteBtn'), msg = document.getElementById('inviteMsg');
+  const workspaceId = currentWS.id;
+  btn.disabled = true; msg.textContent = ''; btn.textContent = '생성 중...';
+  createdTeamInvite = null;
+  document.getElementById('teamInviteResult').hidden = true;
+  try {
+    const result = await teamRpc('create_workspace_invite_link', { p_workspace: workspaceId, p_role: document.getElementById('inviteRole').value });
+    if (currentWS?.id !== workspaceId) return;
+    const url = new URL(import.meta.env.DEV ? location.origin : 'https://gshealthk.vercel.app');
+    url.hash = 'team-invite=' + result.token;
+    createdTeamInvite = { workspaceId, id: result.id, url: url.href };
+    document.getElementById('teamInviteUrl').value = url.href;
+    document.getElementById('teamInviteResult').hidden = false;
+    msg.className = 'auth-msg success';
+    msg.textContent = '링크를 만들었습니다. 복사해 초대할 팀원에게 전달하세요.';
+    await loadMembers();
+  } catch (error) {
+    msg.className = 'auth-msg error'; msg.textContent = error.message;
+  } finally { btn.disabled = false; btn.textContent = '새 링크 만들기'; }
+};
+
+window.copyTeamInvite = async function () {
+  if (createdTeamInvite?.workspaceId !== currentWS?.id) return;
+  const input = document.getElementById('teamInviteUrl');
+  try { await navigator.clipboard.writeText(createdTeamInvite.url); toast('초대 링크를 복사했습니다.', 'success'); }
+  catch { input.focus(); input.select(); toast('링크를 선택했습니다. 복사해서 전달해주세요.'); }
 };
 
 window.cancelInvite = async function (id) {
-  if (!confirm('초대를 취소하시겠습니까?')) return;
-  await supabase.from('workspace_invites').delete().eq('id', id);
-  await loadMembers();
-  toast('초대가 취소됐습니다');
+  if (!confirm('이 초대 링크를 취소하시겠습니까? 취소하면 사용할 수 없습니다.')) return;
+  try {
+    await teamRpc('revoke_workspace_invite_link', { p_id: id });
+    if (createdTeamInvite?.id === id) {
+      createdTeamInvite = null;
+      document.getElementById('teamInviteResult').hidden = true;
+      document.getElementById('teamInviteUrl').value = '';
+    }
+    await loadMembers(); toast('초대 링크를 취소했습니다.', 'success');
+  } catch (error) { toast(error.message, 'error'); }
+};
+
+function renderTeamInviteNotice() {
+  for (const [id, anchor] of [['teamInviteAuthNotice', document.getElementById('authTabs')], ['teamInviteWorkspaceNotice', document.getElementById('wsList')]]) {
+    let note = document.getElementById(id);
+    if (!note && anchor) {
+      note = document.createElement('div'); note.id = id; note.className = 'team-invite-notice'; anchor.before(note);
+    }
+    if (!note) continue;
+    note.hidden = !pendingTeamInvite;
+    note.innerHTML = id === 'teamInviteAuthNotice'
+      ? '<b>현장 초대 링크로 접속했습니다.</b><p>로그인 또는 회원가입 후 초대받은 현장과 권한을 확인할 수 있습니다.</p><button type="button" class="btn btn-outline btn-sm" onclick="dismissTeamInvite()">초대 닫기</button>'
+      : '<b>받은 현장 초대가 있습니다.</b><button type="button" class="btn btn-primary btn-sm" onclick="reviewTeamInvite()">초대 확인</button><button type="button" class="btn btn-outline btn-sm" onclick="dismissTeamInvite()">닫기</button>';
+  }
+}
+
+function ensureTeamInviteModal() {
+  if (document.getElementById('acceptTeamInviteModal')) return;
+  const modal = document.createElement('div'); modal.id = 'acceptTeamInviteModal'; modal.className = 'modal-backdrop';
+  modal.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="acceptTeamInviteTitle" style="max-width:440px"><div class="modal-header"><div class="modal-title" id="acceptTeamInviteTitle">현장 초대 확인</div><button class="modal-close" onclick="closeModal('acceptTeamInviteModal')" aria-label="닫기">✕</button></div><div class="modal-body"><div id="teamInviteDetails"></div><div class="auth-msg" id="teamInviteAcceptMsg" role="status"></div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="dismissTeamInvite()">참여하지 않기</button><button class="btn btn-primary" id="acceptTeamInviteBtn" onclick="acceptTeamInvite()" disabled>이 현장에 참여</button></div></div>`;
+  document.body.append(modal);
+}
+
+window.reviewTeamInvite = async function () {
+  if (!pendingTeamInvite || !user) return;
+  ensureTeamInviteModal();
+  const requestedToken = pendingTeamInvite;
+  const details = document.getElementById('teamInviteDetails'), btn = document.getElementById('acceptTeamInviteBtn');
+  document.getElementById('teamInviteAcceptMsg').textContent = '';
+  details.textContent = '초대 정보를 확인하고 있습니다...'; btn.disabled = true; openModal('acceptTeamInviteModal');
+  try {
+    const preview = await teamRpc('preview_workspace_invite_link', { p_token: requestedToken });
+    if (pendingTeamInvite !== requestedToken) return;
+    details.innerHTML = `<h3>${escapeHtml(preview.workspaceName)}</h3><p>참여 권한: <b>${preview.role === 'admin' ? '현장 관리자' : '멤버'}</b></p><p class="form-note">${escapeHtml(user.email)} 계정으로 참여합니다. 현장과 권한을 확인한 뒤 참여해주세요.</p>`;
+    btn.disabled = false;
+  } catch (error) { if (pendingTeamInvite === requestedToken) details.textContent = error.message; }
+};
+
+window.dismissTeamInvite = function () {
+  pendingTeamInvite = '';
+  try { sessionStorage.removeItem(TEAM_INVITE_STORAGE); } catch {}
+  closeModal('acceptTeamInviteModal'); renderTeamInviteNotice();
+};
+
+window.acceptTeamInvite = async function () {
+  if (!pendingTeamInvite || !user) return;
+  const btn = document.getElementById('acceptTeamInviteBtn'), msg = document.getElementById('teamInviteAcceptMsg');
+  btn.disabled = true; btn.textContent = '참여 중...';
+  try {
+    const result = await teamRpc('accept_workspace_invite_link', { p_token: pendingTeamInvite });
+    window.dismissTeamInvite();
+    await loadWorkspaces();
+    toast(result.alreadyMember ? '이미 참여 중인 현장입니다.' : '현장에 참여했습니다.', 'success');
+    await enterWorkspace(result.workspaceId);
+  } catch (error) { msg.className = 'auth-msg error'; msg.textContent = error.message; }
+  finally { btn.disabled = false; btn.textContent = '이 현장에 참여'; }
 };
 
 window.removeMember = async function (memberId) {

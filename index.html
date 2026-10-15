@@ -53,9 +53,7 @@
 <button class="auth-btn" id="loginBtn" onclick="handleLogin()">
               로그인
             </button>
-<button class="auth-link" onclick="switchTab('forgot')">
-              비밀번호를 잊으셨나요?
-            </button>
+<div class="form-note">비밀번호 재설정 이메일은 현재 이용할 수 없습니다.</div>
 <div class="auth-msg" id="loginMsg"></div>
 </div>
 <!-- 회원가입 -->
@@ -76,13 +74,11 @@
                 line-height: 1.6;
                 margin-bottom: 8px;
               ">
-              가입하신 이메일을 입력하면
-              <br/>
-              비밀번호 재설정 링크를 보내드립니다.
+              비밀번호 재설정 이메일 기능은 현재 중지되어 있습니다.
             </div>
-<input class="auth-input" id="forgotEmail" placeholder="이메일" type="email"/>
-<button class="auth-btn" id="forgotBtn" onclick="handleForgot()">
-              재설정 링크 전송
+<input class="auth-input" disabled id="forgotEmail" placeholder="이메일" type="email"/>
+<button class="auth-btn" disabled id="forgotBtn" onclick="handleForgot()">
+              현재 이용할 수 없습니다
             </button>
 <button class="auth-link" onclick="switchTab('login')">
               ← 로그인으로 돌아가기
@@ -2138,8 +2134,8 @@
                     로딩 중...
                   </div>
 </div>
-<button class="btn btn-secondary btn-sm" onclick="openModal('inviteModal')">
-                  + 팀원 초대
+<button class="btn btn-secondary btn-sm" id="createTeamInviteBtn" onclick="openTeamInvite()">
+                  + 초대 링크 만들기
                 </button>
 </div>
 <div class="card">
@@ -3569,29 +3565,29 @@
 <div class="modal-backdrop" id="inviteModal">
 <div class="modal" style="max-width: 420px">
 <div class="modal-header">
-<div class="modal-title">팀원 초대</div>
+<div class="modal-title">초대 링크 만들기</div>
 <button class="modal-close" onclick="closeModal('inviteModal')">
             ✕
           </button>
 </div>
 <div class="modal-body">
 <div class="form-note" style="margin-bottom: 14px">
-            아직 가입하지 않은 이메일이면 가입 안내 메일이 자동으로 발송되고,
-            가입 완료 시 이 현장에 자동으로 합류합니다.
+            링크를 복사해 초대할 팀원에게 직접 전달하세요. 상대방이 로그인하거나
+            회원가입한 뒤 참여를 확인하면 이 현장에 합류합니다.
+            링크는 7일간 유효하며 한 명만 사용할 수 있습니다.
           </div>
-<div class="form-field" style="margin-bottom: 12px">
-<label class="form-label">
-              이메일
-              <span class="required">*</span>
-</label>
-<input class="form-input" id="inviteEmail" placeholder="team@example.com" type="email"/>
-</div>
 <div class="form-field">
 <label class="form-label">권한</label>
 <select class="form-input" id="inviteRole">
 <option value="member">멤버 — 조회 및 등록</option>
 <option value="admin">관리자 — 모든 권한</option>
 </select>
+</div>
+<div class="team-invite-result" id="teamInviteResult" hidden>
+<label class="form-label" for="teamInviteUrl">생성된 초대 링크</label>
+<input class="form-input" id="teamInviteUrl" readonly type="text"/>
+<button class="btn btn-secondary btn-sm" onclick="copyTeamInvite()" type="button">링크 복사</button>
+<p class="form-note">링크를 가진 사람이 표시된 권한으로 참여할 수 있습니다. 초대할 팀원에게만 전달하세요. 이 창을 떠나면 링크 원문은 다시 표시되지 않습니다.</p>
 </div>
 <div class="auth-msg" id="inviteMsg" style="margin-top: 10px"></div>
 </div>
@@ -3600,7 +3596,7 @@
             취소
           </button>
 <button class="btn btn-primary" id="inviteBtn" onclick="handleInvite()">
-            초대
+            링크 만들기
           </button>
 </div>
 </div>
