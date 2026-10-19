@@ -85,13 +85,25 @@ serve(async (req) => {
     const action = body.action || 'status';
 
     if (action === 'status') {
+      const monthStart = new Date();
+      monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0);
       const [{ data: credentials, error: credError }, { data: preference, error: prefError }] = await Promise.all([
         admin.from('user_ai_credentials').select('provider,key_hint,status,last_error,last_validated_at').eq('user_id', user.id),
-        admin.from('user_ai_preferences').select('preferred_provider').eq('user_id', user.id).maybeSingle(),
+        admin.from('user_ai_preferences').select('preferred_provider,allow_sensitive_documents,gemini_paid_data_protection_confirmed,monthly_request_limit').eq('user_id', user.id).maybeSingle(),
       ]);
       if (credError || prefError) throw credError || prefError;
+      const { count: monthlyUsed, error: usageError } = await admin.from('ai_usage_events')
+        .select('id', { count: 'exact', head: true }).eq('user_id', user.id)
+        .eq('status', 'success').gte('created_at', monthStart.toISOString());
+      if (usageError) throw usageError;
       return json({
         preferredProvider: preference?.preferred_provider || credentials?.[0]?.provider || 'claude',
+        privacy: {
+          allowSensitiveDocuments: preference?.allow_sensitive_documents || false,
+          geminiPaidDataProtectionConfirmed: preference?.gemini_paid_data_protection_confirmed || false,
+          monthlyRequestLimit: preference?.monthly_request_limit ?? 0,
+          monthlyUsed: monthlyUsed || 0,
+        },
         providers: Object.fromEntries(providers.map((provider) => {
           const row = credentials?.find((item) => item.provider === provider);
           return [provider, row ? {
@@ -100,6 +112,19 @@ serve(async (req) => {
           } : { configured: false }];
         })),
       });
+    }
+
+    if (action === 'privacy') {
+      const monthlyRequestLimit = Math.max(0, Math.min(Number(body.monthlyRequestLimit ?? 0), 200));
+      const { error } = await admin.from('user_ai_preferences').upsert({
+        user_id: user.id,
+        allow_sensitive_documents: body.allowSensitiveDocuments === true,
+        gemini_paid_data_protection_confirmed: body.geminiPaidDataProtectionConfirmed === true,
+        monthly_request_limit: monthlyRequestLimit,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+      return json({ ok: true, message: 'AI 개인정보 보호와 사용 한도를 저장했습니다.' });
     }
 
     if (!isProvider(body.provider)) return json({ error: '지원하지 않는 AI 제공자입니다.' }, 400);

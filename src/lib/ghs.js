@@ -1,4 +1,4 @@
-const BASE = 'https://zobflntvegpunktphauf.supabase.co/storage/v1/object/public/ghs-icons';
+const BASE = '/ghs'; // Bundled source pictograms work in preview and print without a remote image request.
 
 export const GHS_NAMES = {
   GHS01: '폭발성', GHS02: '인화성', GHS03: '산화성', GHS04: '고압가스',
