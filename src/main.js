@@ -5,6 +5,7 @@ import { CAS_MEASUREMENT, CAS_HEALTH_EXAM, CAS_MANAGE, CAS_PERMIT, CAS_SPECIAL, 
 import { openModal, closeModal, toast, openPrintWindow, buildPrintHtml } from './lib/ui.js';
 import { PAGES, MOBILE_TABS, WARN_SIZES, CAL_CATEGORY_COLOR, CAL_CATEGORY_LABEL, PHOTO_FOLDER_PRESETS } from './data/constants.js';
 import qrcode from 'qrcode-generator';
+import { analyzeMeasurePdf } from './lib/measure-analysis.js';
 
 // ═══════════════════════════════════════════════
 // State
@@ -2260,13 +2261,14 @@ function warnLabelCss() {
 
 function warningAutoFitPrintScript() {
   return `<script>
-    function fitWarningLabels(){
+    window.addEventListener('load',function(){requestAnimationFrame(function(){
       document.querySelectorAll('[data-warning-autofit="true"]').forEach(function(label){
         var lists=Array.from(label.querySelectorAll('.wl-list'));
         var removed={hazard:0,precaution:0};
         var guard=40;
         while(label.scrollHeight>label.clientHeight&&guard-->0){
           var target=lists.slice().sort(function(a,b){return b.children.length-a.children.length})[0];
+          if(!target)break;
           var items=Array.from(target.children).filter(function(li){return !li.classList.contains('wl-condensed-note')});
           if(!target||items.length<=1)break;
           var kind=target.parentElement.querySelector('.wl-block-head').textContent.indexOf('예방')>=0?'precaution':'hazard';
@@ -2280,8 +2282,7 @@ function warningAutoFitPrintScript() {
           else{note=document.createElement('li');note.className='wl-condensed-note';note.textContent='그 밖의 '+(kind==='hazard'?'유해·위험':'예방조치')+' 문구 '+removed[kind]+'건은 MSDS 참조';list.appendChild(note);}
         });
       });
-    }
-    window.addEventListener('load',function(){requestAnimationFrame(fitWarningLabels)});
+    })});
   <\/script>`;
 }
 
@@ -2843,7 +2844,10 @@ window.handleMeasureFile = function(e) {
 };
 
 function loadMeasureFile(file) {
+  if (file.type !== 'application/pdf') { toast('PDF 파일만 가능합니다', 'error'); return; }
+  if (file.size > 20 * 1024 * 1024) { toast('파일은 20MB 이하여야 합니다', 'error'); return; }
   const reader = new FileReader();
+  reader.onerror = () => toast('파일을 읽지 못했습니다. 다시 선택해주세요.', 'error');
   reader.onload = ev => {
     measureFileB64 = ev.target.result.split(',')[1];
     measureFileName_val = file.name;
@@ -2871,32 +2875,25 @@ window.analyzeMeasure = async function() {
   const period = `${dateFrom} ~ ${dateTo}`;
   if (!measureFileB64) { toast('파일을 먼저 업로드하세요', 'error'); return; }
   const btn = document.getElementById('measureAnalyzeBtn');
+  if (btn.disabled) return;
+  const sourceBase64 = measureFileB64;
+  const sourceFileName = measureFileName_val;
   btn.disabled = true; btn.textContent = '🤖 AI 분석 중...';
   try {
-    const data = await invokeEdgeJson('parse-msds', {
-        fileBase64: measureFileB64, mediaType: 'application/pdf',
-        mode: 'measure',
-        prompt: `이 작업환경측정 결과 보고서에서 분진 측정결과와 소음 측정결과를 추출하세요. JSON만 응답:
-{
-  "dust": [{"no":1,"process":"공정명","agent":"유해인자명","measured":"측정치(단위포함)","limit":"노출기준(단위포함)","reason":"적용사유"}],
-  "noise": [{"no":1,"process":"공종명","measured":"측정치 dB(A)","limit":"90dB(A)","reason":"적용사유"}],
-  "workTypes": ["공종명1","공종명2"],
-  "dustExceeded": false,
-  "noiseExceeded": false,
-  "mixedExceeded": false
-}`
+    const result = await analyzeMeasurePdf(sourceBase64, invokeEdgeJson, ({ completed, total, from, to }) => {
+      btn.textContent = completed === total ? '🤖 분석 완료' : `🤖 ${from}~${to} / ${total}쪽 분석 중...`;
     });
-    currentMeasureData = { round, period, ...data.result };
+    currentMeasureData = { ...result, round, period };
     closeModal('measureUploadModal');
     showMeasureResult(currentMeasureData);
 
     // DB 저장 + 원본 PDF 보관 (백그라운드, 실패해도 결과 화면은 그대로 유지)
     btn.textContent = '💾 저장 중...';
     try {
-      const recId = await saveMeasureResult(currentMeasureData, measureFileName_val);
-      await uploadMeasurePdf(recId, measureFileName_val, measureFileB64);
+      const recId = await saveMeasureResult(currentMeasureData, sourceFileName);
+      await uploadMeasurePdf(recId, sourceFileName, sourceBase64);
       currentMeasureData.id = recId;
-      currentMeasureData.file_name = measureFileName_val;
+      currentMeasureData.file_name = sourceFileName;
       await loadMeasureResults();
     } catch (saveErr) {
       console.error('측정결과 저장 실패:', saveErr);
