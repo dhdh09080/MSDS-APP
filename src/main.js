@@ -39,6 +39,7 @@ import {
   buildPrintHtml,
 } from './lib/ui.js';
 import { createMeasureAftercareDocx } from './lib/measure-docx.js';
+import { buildMeasureAftercare } from './lib/measure-aftercare.js';
 import {
   PAGES,
   MOBILE_TABS,
@@ -6523,10 +6524,9 @@ function showMeasureResult(d) {
   const noise = Array.isArray(d.noise)
     ? d.noise.filter((row) => row && typeof row === 'object')
     : [];
-  const resultRows = getMeasureResultRows(d);
-  const improvements = Array.isArray(d.aftercare?.improvements)
-    ? d.aftercare.improvements
-    : [];
+  const aftercareSummary = buildMeasureAftercare({ ...d, aftercare: { ...d.aftercare, resultRows: getMeasureResultRows(d) } });
+  const resultRows = aftercareSummary.resultRows;
+  const improvements = aftercareSummary.improvements;
   const dustRows = dust
     .map(
       (row) =>
@@ -6567,14 +6567,14 @@ function showMeasureResult(d) {
   const improvementRows = improvements
     .map(
       (item, index) =>
-        `<tr><td class="ctr">${item.no || index + 1}</td><td>${escapeHtml(item.target || '')}</td><td>${escapeHtml(item.method || '')}${item.source === 'AI 제안' ? '<div class="td-sub" style="color:var(--warn)">AI 제안 · 원문 확인 필요</div>' : ''}</td><td>${escapeHtml(item.assignee || d.defaultAssignee || '')}</td></tr>`,
+        `<tr><td class="ctr">${item.no || index + 1}</td><td>${escapeHtml(item.target || '')}</td><td>${escapeHtml(item.method || '')}${item.source === 'AI 제안' || item.source === '사후관리 작성안' ? '<div class="td-sub" style="color:var(--warn)">관리대책 작성안 · 현장 여건 확인</div>' : ''}</td><td>${escapeHtml(item.assignee || d.defaultAssignee || '')}</td></tr>`,
     )
     .join('');
 
   body.innerHTML = `
     <div class="form-note" id="measureSaveStatus" role="status" style="margin-bottom:8px;">${d.id ? '저장된 결과' : '결과와 원본 PDF 저장 중...'}</div>
     <div style="background:var(--ok-light);border:1.5px solid #86EFAC;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--ok);">
-      ${d.aftercare?.analysisMethod === 'local' ? '✅ 빠른 분석 완료 — 보고서에 기재된 결과와 개선대책을 직접 추출했습니다. 노출기준은 보고서 요약표 기준이며, 최고측정치만 있는 항목은 적용사유에 표시했습니다.' : '✅ AI 분석 완료 — 단위와 초과 판정, 개선대책을 원본 보고서와 대조한 뒤 Word 파일을 내려받으세요.'}
+      ${d.aftercare?.analysisMethod === 'local' ? '✅ 빠른 분석 완료 — 보고서의 측정값·판정을 추출하고 공사 단위로 사후관리 내용을 정리했습니다. 개선대책과 담당자를 현장 여건에 맞게 확인한 뒤 원본 양식으로 내려받으세요.' : '✅ AI 분석 완료 — 단위와 초과 판정, 개선대책을 원본 보고서와 대조한 뒤 Word 파일을 내려받으세요.'}
     </div>
     <h4 style="margin-bottom:8px;font-size:14px;">📋 분진·화학물질 측정결과 (${dust.length}건)</h4>
     <div style="overflow-x:auto;margin-bottom:20px;">
