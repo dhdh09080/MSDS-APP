@@ -1,4 +1,4 @@
-import { distanceKm, parseObservation, parseStations } from './lib/observations.js';
+import { distanceKm, parseObservation, parseStations, tableRows } from './lib/observations.js';
 
 type Kind = 'AWS' | 'ASOS';
 type Station = { id: number; latitude: number; longitude: number };
@@ -43,7 +43,8 @@ async function current(kind: Kind, latitude: number, longitude: number, key: str
     // Verify observation-service permission separately from station metadata.
     if (error instanceof HubError && error.code === 'HUB_NOT_APPROVED') {
       const path = kind === 'AWS' ? 'cgi-bin/url/nph-aws2_min' : 'url/kma_sfctm2.php';
-      await hubText(path, { stn: '0', help: '0' }, key);
+      const readings = await hubText(path, { stn: '0', help: '0' }, key);
+      if (!tableRows(readings).some(row => /^\d{12}$/.test(row[0]))) throw new HubError('HUB_NO_OBSERVATIONS');
       throw new HubError('HUB_STATIONS_NOT_APPROVED');
     }
     throw error;
