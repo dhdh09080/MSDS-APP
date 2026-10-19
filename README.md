@@ -72,3 +72,25 @@ AWS and ASOS have distinct column layouts, wind-direction units and missing-valu
 codes. Negative temperatures are retained; missing humidity, rain and wind values
 remain null. AWS 60-minute rain is not substituted with ASOS rain of an unknown
 accumulation period. Readings appear separately from forecast rain probability.
+
+### Seasonal health posters and weather views
+
+Weather opens a compact five-tab workspace: health poster, hourly chart, detailed
+forecast (7 days by default), observations, and archive. Tabs request data when
+selected; poster and hourly chart share their forecast. Keyboard arrows/Home/End
+navigate the tab list. Hidden panels do not contribute to page height.
+
+The 1440×1120 SVG/PNG health poster shows every forecast hour from 06–19 with
+actual temperature and apparent-temperature lines, a separately scaled wind-speed
+bar chart (m/s), and an exact hourly table. Mobile uses a readable health summary
+and an original-size poster link; the chart and table scroll horizontally.
+
+Automatic topics use summer (June–September), winter (November–February), and
+transition months; forecast apparent temperatures ≥31°C or ≤0°C select heat/cold
+preparation respectively. These select editorial guidance, not official alerts or
+work-stoppage decisions. A topic selector can override automatic selection.
+Each topic has seven daily guidance sets selected deterministically by the Korean
+calendar date. The same date keeps the same advice; the next date rotates it.
+An open weather page checks for Korean-date rollover every minute and when the
+page becomes visible, refreshing the forecast and daily guidance. This creates
+on-demand posters, not a scheduled background archive or message delivery.

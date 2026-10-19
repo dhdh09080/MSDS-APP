@@ -1,3 +1,4 @@
+import { buildHealthPosterSvg, hourlyWeatherHtml, posterModel, kstDate, metric as weatherMetric } from './lib/weather-poster.js';
 import { loadWeatherDetail, loadWeatherObservations } from './lib/weather-detail.js';
 import { renderPpe, labelSafetySections } from './lib/warning-label.js';
 import warningLabelStyles from './warning-label.css?inline';
@@ -9849,18 +9850,12 @@ window.cancelReupload = async function (id) {
 // 혹서기 날씨 (예보 포스터 + 기상청 A48 예보)
 // ═══════════════════════════════════════════════
 const WX_REPO = 'dhdh09080/seongdongxi';
-// 기상청 건설현장(A48) 기준: <31 파랑 / 31~34.9 주황 / 35↑ 빨강(옥외중지) / 38↑ 전면중지
-function wxColor(fl) {
-  return fl >= 35 ? '#ef4444' : fl >= 31 ? '#f97316' : '#3b82f6';
-}
-function wxStage(fl) {
-  if (fl >= 38) return { label: '전면 작업중지', color: '#b91c1c' };
-  if (fl >= 35) return { label: '옥외작업 중지', color: '#ef4444' };
-  if (fl >= 33) return { label: '2시간마다 20분 휴식', color: '#f97316' };
-  if (fl >= 31) return { label: '주의 · 휴식 준비', color: '#f59e0b' };
-  return { label: '정상', color: '#3b82f6' };
-}
-
+let wxSeasonMode = 'auto';
+let wxWeatherView = 'poster';
+let wxViewKey = '';
+let wxViewLoaded = new Set();
+let wxPageRequest = 0;
+let wxForecastPending = null;
 let wxForecast = null; // {hours:[{hour,feel}]} — 기상청 예보 (엣지펑션)
 let wxTab = 'forecast';
 let wxPosterCache = {};
@@ -9870,19 +9865,11 @@ let wxPosterObjectUrl = '';
 async function fetchWxForecast() {
   if (getDevPreviewPage()) {
     return {
-      date: today(),
+      date: kstDate(),
       latitude: currentWS.latitude,
       longitude: currentWS.longitude,
       address: currentWS.address,
-      hours: [
-        { hour: 7, feel: 28.4, temp: 27.1, humidity: 71 },
-        { hour: 9, feel: 30.2, temp: 29.0, humidity: 67 },
-        { hour: 11, feel: 32.7, temp: 31.3, humidity: 62 },
-        { hour: 13, feel: 34.4, temp: 32.5, humidity: 61 },
-        { hour: 15, feel: 35.6, temp: 33.0, humidity: 64 },
-        { hour: 17, feel: 34.1, temp: 31.8, humidity: 68 },
-        { hour: 19, feel: 31.5, temp: 29.7, humidity: 72 },
-      ],
+      hours: Array.from({length:14}, (_, i) => ({hour:i+6, temp:10+6*Math.sin(i/13*Math.PI), feel:9+7*Math.sin(i/13*Math.PI), humidity:60+i, wind:1.2+(i%5)*0.7})),
       source: 'preview',
     };
   }
@@ -9929,102 +9916,15 @@ function renderWxSiteSummary() {
   return ready;
 }
 
-function wxPosterGuidance(stage) {
-  if (stage.includes('전면'))
-    return [
-      '즉시 모든 작업을 중지하세요',
-      '근로자를 시원한 장소로 이동',
-      '응급 증상자를 즉시 확인하세요',
-    ];
-  if (stage.includes('옥외'))
-    return [
-      '옥외 작업을 중지하세요',
-      '작업 시간대를 조정하세요',
-      '취약 근로자를 우선 보호하세요',
-    ];
-  if (stage.includes('20분'))
-    return [
-      '매 2시간마다 20분 이상 휴식',
-      '시원한 물을 자주 섭취',
-      '그늘·휴게시설 상태를 확인하세요',
-    ];
-  if (stage.includes('주의'))
-    return [
-      '물·그늘·휴식 준비상태 확인',
-      '취약 근로자 건강상태 확인',
-      '체감온도를 수시로 확인하세요',
-    ];
-  return [
-    '물을 충분히 섭취하세요',
-    '작업 전 건강상태를 확인하세요',
-    '기온 상승에 대비하세요',
-  ];
-}
-
-function buildWxPosterSvg(fc) {
-  const nowH = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
-  const cur = fc.hours.reduce(
-    (best, h) =>
-      Math.abs(h.hour - nowH) < Math.abs(best.hour - nowH) ? h : best,
-    fc.hours[0],
-  );
-  const max = fc.hours.reduce(
-    (best, h) => (h.feel > best.feel ? h : best),
-    fc.hours[0],
-  );
-  const stage = wxStage(cur.feel);
-  const guide = wxPosterGuidance(stage.label);
-  const shown = fc.hours.filter((h) => h.hour >= 7 && h.hour <= 19).slice(0, 7);
-  const cellW = 104;
-  const hourCells = shown
-    .map((h, i) => {
-      const x = 64 + i * (cellW + 12);
-      return `<g transform="translate(${x} 545)"><rect width="${cellW}" height="132" rx="18" fill="${wxColor(h.feel)}"/><text x="${cellW / 2}" y="40" text-anchor="middle" fill="white" font-size="22" font-weight="700">${h.hour}시</text><text x="${cellW / 2}" y="86" text-anchor="middle" fill="white" font-size="34" font-weight="900">${Math.round(h.feel)}°</text><text x="${cellW / 2}" y="114" text-anchor="middle" fill="white" font-size="15">체감</text></g>`;
-    })
-    .join('');
-  const safeName = escapeHtml(currentWS?.name || '현장');
-  const safeAddress = escapeHtml(
-    (currentWS?.address || fc.address || '').slice(0, 52),
-  );
-  const dateLabel = new Date(
-    `${fc.date || today()}T00:00:00`,
-  ).toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    weekday: 'short',
-  });
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200" viewBox="0 0 900 1200">
-    <rect width="900" height="1200" fill="#f8fafc"/>
-    <rect x="34" y="34" width="832" height="1132" rx="32" fill="white" stroke="#e2e8f0" stroke-width="3"/>
-    <rect x="34" y="34" width="832" height="176" rx="32" fill="#0f172a"/>
-    <text x="72" y="92" fill="#fbbf24" font-size="24" font-weight="800">혹서기 안전 예보</text>
-    <text x="72" y="142" fill="white" font-size="42" font-weight="900">${safeName}</text>
-    <text x="72" y="180" fill="#cbd5e1" font-size="18">${safeAddress}</text>
-    <text x="828" y="92" text-anchor="end" fill="white" font-size="20" font-weight="700">${dateLabel}</text>
-    <text x="72" y="286" fill="#64748b" font-size="22" font-weight="700">현재 체감온도</text>
-    <text x="72" y="402" fill="${stage.color}" font-size="118" font-weight="900">${cur.feel.toFixed(1)}°</text>
-    <rect x="545" y="284" width="255" height="82" rx="41" fill="${stage.color}"/>
-    <text x="672" y="337" text-anchor="middle" fill="white" font-size="25" font-weight="900">${stage.label}</text>
-    <text x="545" y="405" fill="#475569" font-size="22">오늘 최고 <tspan fill="${wxColor(max.feel)}" font-weight="900">${max.feel.toFixed(1)}°C</tspan> · ${max.hour}시</text>
-    <line x1="64" x2="836" y1="490" y2="490" stroke="#e2e8f0" stroke-width="2"/>
-    ${hourCells}
-    <rect x="64" y="730" width="772" height="312" rx="28" fill="#fff7ed" stroke="#fed7aa" stroke-width="2"/>
-    <text x="104" y="792" fill="#9a3412" font-size="28" font-weight="900">오늘의 현장 조치</text>
-    ${guide.map((g, i) => `<circle cx="112" cy="${850 + i * 62}" r="15" fill="#f97316"/><text x="112" y="${856 + i * 62}" text-anchor="middle" fill="white" font-size="18" font-weight="900">${i + 1}</text><text x="148" y="${857 + i * 62}" fill="#431407" font-size="24" font-weight="700">${escapeHtml(g)}</text>`).join('')}
-    <text x="64" y="1100" fill="#64748b" font-size="17">체감온도는 현장 저장 좌표(${Number(fc.latitude).toFixed(4)}, ${Number(fc.longitude).toFixed(4)}) 기준 · 출처 Open-Meteo</text>
-    <text x="836" y="1132" text-anchor="end" fill="#94a3b8" font-size="16">현장관리시스템 자동 생성</text>
-  </svg>`;
-}
-
 function renderWxSitePoster(fc) {
-  wxPosterSvg = buildWxPosterSvg(fc);
+  wxPosterSvg = buildHealthPosterSvg(fc, currentWS, wxSeasonMode);
   if (wxPosterObjectUrl) URL.revokeObjectURL(wxPosterObjectUrl);
   wxPosterObjectUrl = URL.createObjectURL(
     new Blob([wxPosterSvg], { type: 'image/svg+xml;charset=utf-8' }),
   );
+  const model = posterModel(fc, wxSeasonMode);
   document.getElementById('wxLatestPoster').innerHTML =
-    `<img class="wx-site-poster" src="${wxPosterObjectUrl}" alt="${escapeHtml(currentWS?.name || '현장')} 혹서기 예보 포스터"><div style="font-size:12px;color:var(--text3);margin-top:8px;">저장된 현장 좌표를 기준으로 생성했습니다. PNG로 저장해 카카오톡 등에 공유할 수 있습니다.</div>`;
+    `<div class="wx-mobile-health"><h3>${model.title}</h3><p>${model.action}</p><div class="wx-mobile-health-metrics"><div><small>06–19시 최고 / 최저 기온</small><b>${weatherMetric(model.high,'°')} / ${weatherMetric(model.low,'°')}</b></div><div><small>06–19시 최고 체감온도</small><b>${weatherMetric(model.maxFeel,'°C')}</b></div><div><small>06–19시 최대 풍속</small><b>${weatherMetric(model.maxWind,' m/s')}</b></div></div><ol>${model.tips.map(tip => `<li>${escapeHtml(tip)}</li>`).join('')}</ol></div><a class="wx-poster-original" href="${wxPosterObjectUrl}" target="_blank" rel="noopener" aria-label="건강관리 포스터 원본 크게 보기"><img class="wx-site-poster" src="${wxPosterObjectUrl}" alt="${escapeHtml(currentWS?.name || '현장')} ${model.title} · 시간별 기온, 체감온도, 풍속 그래프"></a><p class="wx-detail-note"><a class="wx-poster-open-link" href="${wxPosterObjectUrl}" target="_blank" rel="noopener">포스터 원본 크게 보기 ↗</a> · PNG로 저장해 현장에 게시하거나 공유하세요.</p>`;
   document.getElementById('wxDownloadPosterBtn').style.display = 'inline-flex';
 }
 
@@ -10039,8 +9939,8 @@ window.downloadWxSitePoster = function () {
   const img = new Image();
   img.onload = () => {
     const canvas = document.createElement('canvas');
-    canvas.width = 900;
-    canvas.height = 1200;
+    canvas.width = 1440;
+    canvas.height = 1120;
     canvas.getContext('2d').drawImage(img, 0, 0);
     URL.revokeObjectURL(url);
     canvas.toBlob(
@@ -10048,7 +9948,7 @@ window.downloadWxSitePoster = function () {
         blob &&
         downloadBlob(
           blob,
-          `혹서기_예보_${currentWS?.name || '현장'}_${today()}.png`,
+          `현장_건강관리_${currentWS?.name || '현장'}_${kstDate()}.png`,
         ),
       'image/png',
     );
@@ -10080,33 +9980,7 @@ async function fetchWxPosterList(kind) {
 }
 
 function wxHourlyHtml(fc) {
-  const nowH = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
-  const cur = fc.hours.reduce(
-    (best, h) =>
-      Math.abs(h.hour - nowH) < Math.abs(best.hour - nowH) ? h : best,
-    fc.hours[0],
-  );
-  const max = fc.hours.reduce((m, h) => (h.feel > m.feel ? h : m), fc.hours[0]);
-  const st = wxStage(cur.feel);
-  const strip = fc.hours
-    .map(
-      (h) => `
-    <div class="wx-hour" style="background:${wxColor(h.feel)};${h.hour === cur.hour ? 'outline:2.5px solid var(--text);' : ''}">
-      <div class="wx-hour-t">${Math.round(h.feel)}°</div>
-      <div class="wx-hour-h">${h.hour}시</div>
-    </div>`,
-    )
-    .join('');
-  return `
-    <div class="wx-now" style="margin-bottom:8px;">
-      <div class="wx-big" style="color:${wxColor(cur.feel)}">${cur.feel.toFixed(1)}°C</div>
-      <div>
-        <span class="wx-stage-badge" style="background:${st.color}">${st.label}</span>
-        <div style="font-size:12px;color:var(--text2);margin-top:4px;">${cur.hour}시 예보 기준 · 오늘 최고 <b style="color:${wxColor(max.feel)}">${max.feel.toFixed(1)}°C</b> (${max.hour}시)</div>
-      </div>
-    </div>
-    <div class="wx-hours">${strip}</div>
-    <div style="font-size:11.5px;color:var(--text3);margin-top:8px;">기준: 체감 31°C↑ 주의 · 33°C↑ 매 2시간 20분 휴식 · 35°C↑ 옥외작업 중지 · 38°C↑ 전면중지 · ${escapeHtml(currentWS?.name || '현재 현장')} 저장 좌표 기준</div>`;
+  return hourlyWeatherHtml(fc, wxSeasonMode);
 }
 
 async function loadDashWeather() {
@@ -10123,41 +9997,90 @@ async function loadDashWeather() {
   }
 }
 
+window.setWxSeasonMode = function (mode) {
+  wxSeasonMode = ['auto', 'summer', 'transition', 'winter'].includes(mode) ? mode : 'auto';
+  if (wxForecast) renderWxSitePoster(wxForecast);
+};
+
+window.setWeatherView = function (view) {
+  const views = ['poster', 'hourly', 'forecast', 'observations', 'archive'];
+  if (!views.includes(view)) return;
+  wxWeatherView = view;
+  views.forEach(key => {
+    const active = key === view;
+    const button = document.getElementById('wxView-' + key);
+    button.setAttribute('aria-selected', String(active));
+    button.tabIndex = active ? 0 : -1;
+    document.getElementById('wxPanel-' + key).hidden = !active;
+  });
+  loadWeatherPage();
+};
+window.weatherViewKeydown = function (event) {
+  const tabs = [...document.querySelectorAll('.wx-view-tabs [role="tab"]')];
+  const index = tabs.indexOf(event.currentTarget);
+  const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null;
+  if (next === null) return;
+  event.preventDefault();
+  tabs[next].focus();
+  tabs[next].click();
+};
+
 window.loadWeatherPage = async function (force) {
-  const options = { workspace: currentWS, invoke: invokeEdgeJson, preview: !!getDevPreviewPage(), weatherIcon: gsWeatherIcon, weatherLabel: gsWeatherLabel };
-  loadWeatherDetail(options);
-  loadWeatherObservations(options);
-  if (force) {
+  const key = `${currentWS?.id}:${currentWS?.latitude}:${currentWS?.longitude}:${kstDate()}`;
+  if (force || key !== wxViewKey) {
+    wxViewKey = key;
+    ++wxPageRequest;
+    wxViewLoaded.clear();
     wxForecast = null;
+    wxForecastPending = null;
     wxPosterCache = {};
+    wxPosterSvg = '';
+    document.getElementById('wxDownloadPosterBtn').style.display = 'none';
   }
-  const weatherWorkspaceId = currentWS?.id;
   const ready = renderWxSiteSummary();
+  const view = wxWeatherView;
+  if (wxViewLoaded.has(view)) return;
+  const options = { workspace: currentWS, invoke: invokeEdgeJson, preview: !!getDevPreviewPage(), weatherIcon: gsWeatherIcon, weatherLabel: gsWeatherLabel };
+  if (view === 'forecast') { await loadWeatherDetail(options); if (key === wxViewKey) wxViewLoaded.add(view); return; }
+  if (view === 'observations') { await loadWeatherObservations(options); if (key === wxViewKey) wxViewLoaded.add(view); return; }
+  if (view === 'archive') { await loadWxPosters(); if (key === wxViewKey) wxViewLoaded.add(view); return; }
+  const token = ++wxPageRequest;
   const latest = document.getElementById('wxLatestPoster');
   const el = document.getElementById('wxTodayBody');
-  const downloadBtn = document.getElementById('wxDownloadPosterBtn');
   if (!ready) {
-    latest.innerHTML =
-      '<div class="mp-empty">현장 주소를 설정하면 이곳에 현장 전용 포스터가 생성됩니다.</div>';
-    el.innerHTML =
-      '<div class="mp-empty" style="padding:14px;">현장 위치 설정 후 시간별 체감온도를 확인할 수 있습니다.</div>';
-    downloadBtn.style.display = 'none';
-  } else {
-    try {
-      const forecast = wxForecast || await fetchWxForecast();
-      if (currentWS?.id !== weatherWorkspaceId) return;
-      wxForecast = forecast;
-      renderWxSitePoster(wxForecast);
-      document.getElementById('wxHourlyCard').style.display = 'block';
-      el.innerHTML = wxHourlyHtml(wxForecast);
-    } catch (e) {
-      latest.innerHTML = `<div class="mp-empty">현장 포스터를 만들지 못했습니다<br><span style="font-size:11px;">${escapeHtml(e.message)}</span></div>`;
-      el.innerHTML = `<div class="mp-empty" style="padding:14px;">시간별 예보를 불러오지 못했습니다<br><span style="font-size:11px;">${escapeHtml(e.message)}</span></div>`;
-      downloadBtn.style.display = 'none';
-    }
+    latest.innerHTML = '<div class="mp-empty">현장 주소를 설정하면 오늘의 건강관리 포스터가 생성됩니다.</div>';
+    el.innerHTML = '<div class="mp-empty">현장 주소를 설정하면 시간별 기온·체감온도·풍속을 볼 수 있습니다.</div>';
+    return;
   }
-  loadWxPosters(force);
+  if (!wxForecast) {
+    latest.innerHTML = '<div class="mp-empty" role="status">오늘의 건강관리 포스터를 준비하고 있습니다…</div>';
+    el.innerHTML = '<div class="mp-empty" role="status">시간별 그래프를 준비하고 있습니다…</div>';
+  }
+  try {
+    if (!wxForecastPending) wxForecastPending = wxForecast ? Promise.resolve(wxForecast) : fetchWxForecast();
+    const forecast = await wxForecastPending;
+    if (key !== wxViewKey || token !== wxPageRequest) return;
+    wxForecast = forecast;
+    renderWxSitePoster(forecast);
+    el.innerHTML = wxHourlyHtml(forecast);
+    wxViewLoaded.add('poster');
+    wxViewLoaded.add('hourly');
+  } catch (error) {
+    if (key !== wxViewKey || token !== wxPageRequest) return;
+    const message = `<div class="mp-empty">${escapeHtml(error.message)}<br><button class="btn btn-outline btn-sm" onclick="loadWeatherPage(true)">다시 시도</button></div>`;
+    latest.innerHTML = message;
+    el.innerHTML = message;
+    document.getElementById('wxDownloadPosterBtn').style.display = 'none';
+    wxForecastPending = null;
+  }
 };
+
+// A screen left open overnight gets a new forecast and new daily health guidance.
+function refreshWeatherDate() {
+  if (document.getElementById('page-weather')?.classList.contains('active') && wxViewKey && !wxViewKey.endsWith(kstDate())) loadWeatherPage(true);
+}
+setInterval(refreshWeatherDate, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshWeatherDate(); });
 
 async function loadWxPosters() {
   const grid = document.getElementById('wxPosterGrid');

@@ -1218,41 +1218,45 @@
                   </button>
 </div>
 </div>
-<section class="card" style="margin-bottom:14px" aria-labelledby="wxObservationTitle">
-<div class="gs-section-head"><div><div class="gs-eyebrow">WEATHER OBSERVATIONS</div><h2 id="wxObservationTitle">주변 관측소의 실제 날씨</h2></div></div>
-<p class="wx-detail-note">현장과 가까운 기상청 AWS·ASOS 관측소 자료입니다. 현장 직접 측정값과 차이가 있을 수 있습니다. 강수확률과 미래 날씨는 아래 예보를 확인하세요.</p>
-<div id="wxObservationBody" aria-live="polite"><p class="wx-detail-message">관측자료를 불러오는 중입니다…</p></div>
-</section>
-<section class="card" style="margin-bottom:14px" aria-labelledby="wxDetailTitle">
-<div class="gs-section-head"><div><div class="gs-eyebrow">SITE WEATHER</div><h2 id="wxDetailTitle">현장 상세 날씨</h2></div><a class="btn btn-outline btn-sm" href="https://www.weather.go.kr/w/index.do" target="_blank" rel="noopener noreferrer">기상청 날씨누리 ↗</a></div>
-<p class="wx-detail-note">앞으로 30일을 살펴보세요. 기상청 단기예보와 Open-Meteo 보조 예보(최대 16일)를 구분해 표시합니다. 1개월 전망은 주별 기온·강수 경향으로, 30일 전체의 날짜별 상세 수치는 제공되지 않습니다.</p>
-<div id="wxDetailBody" aria-busy="false"><p class="wx-detail-message">상세 예보를 불러오는 중입니다…</p></div>
-</section>
-<div class="card" style="margin-bottom: 14px">
+<div class="wx-view-tabs" role="tablist" aria-label="날씨 보기"><button type="button" id="wxView-poster" role="tab" aria-controls="wxPanel-poster" aria-selected="true" tabindex="0" onclick="setWeatherView('poster')" onkeydown="weatherViewKeydown(event)">건강관리 포스터</button><button type="button" id="wxView-hourly" role="tab" aria-controls="wxPanel-hourly" aria-selected="false" tabindex="-1" onclick="setWeatherView('hourly')" onkeydown="weatherViewKeydown(event)">시간별 그래프</button><button type="button" id="wxView-forecast" role="tab" aria-controls="wxPanel-forecast" aria-selected="false" tabindex="-1" onclick="setWeatherView('forecast')" onkeydown="weatherViewKeydown(event)">상세 예보</button><button type="button" id="wxView-observations" role="tab" aria-controls="wxPanel-observations" aria-selected="false" tabindex="-1" onclick="setWeatherView('observations')" onkeydown="weatherViewKeydown(event)">현재 관측</button><button type="button" id="wxView-archive" role="tab" aria-controls="wxPanel-archive" aria-selected="false" tabindex="-1" onclick="setWeatherView('archive')" onkeydown="weatherViewKeydown(event)">보관함</button></div>
+<div id="wxPanel-poster" class="wx-view-panel" role="tabpanel" aria-labelledby="wxView-poster" tabindex="0"><div class="card" style="margin-bottom: 14px">
 <div class="dash-section-header">
-<div class="dash-section-title">이 현장 예보 포스터</div>
+<div class="dash-section-title">오늘의 건강관리 포스터</div>
 <button class="btn btn-primary btn-sm" id="wxDownloadPosterBtn" onclick="downloadWxSitePoster()" style="display: none">
                     PNG 저장
                   </button>
 </div>
+<div class="wx-season-control"><label for="wxSeasonMode">건강관리 주제</label><select id="wxSeasonMode" onchange="setWxSeasonMode(this.value)"><option value="auto">계절·날씨에 맞게 자동</option><option value="summer">혹서기 건강관리</option><option value="transition">환절기 건강관리</option><option value="winter">동절기 건강관리</option></select><span>안내 문구는 매일 바뀝니다.</span></div>
 <div id="wxLatestPoster" style="text-align: center">
 <div class="mp-empty">불러오는 중...</div>
 </div>
 </div>
-<div class="card" id="wxHourlyCard" style="margin-bottom: 14px">
+</div>
+<div id="wxPanel-hourly" class="wx-view-panel" role="tabpanel" aria-labelledby="wxView-hourly" tabindex="0" hidden><div class="card" id="wxHourlyCard" style="margin-bottom: 14px">
 <div class="dash-section-header">
 <div class="dash-section-title">
-                    오늘 시간별 체감온도 예보
+                    시간별 기온 · 체감온도 · 풍속
                   </div>
 </div>
 <div id="wxTodayBody">
 <div class="mp-empty">불러오는 중...</div>
 </div>
 </div>
-<details class="card wx-archive-details">
-<summary class="wx-archive-summary">
-                  기존 공용 포스터 보관함 보기
-                </summary>
+</div>
+<div id="wxPanel-forecast" class="wx-view-panel" role="tabpanel" aria-labelledby="wxView-forecast" tabindex="0" hidden><section class="card" style="margin-bottom:14px" aria-labelledby="wxDetailTitle">
+<div class="gs-section-head"><div><div class="gs-eyebrow">SITE WEATHER</div><h2 id="wxDetailTitle">현장 상세 날씨</h2></div><a class="btn btn-outline btn-sm" href="https://www.weather.go.kr/w/index.do" target="_blank" rel="noopener noreferrer">기상청 날씨누리 ↗</a></div>
+<p class="wx-detail-note">앞으로 30일을 살펴보세요. 기상청 단기예보와 Open-Meteo 보조 예보(최대 16일)를 구분해 표시합니다. 1개월 전망은 주별 기온·강수 경향으로, 30일 전체의 날짜별 상세 수치는 제공되지 않습니다.</p>
+<div id="wxDetailBody" aria-busy="false"><p class="wx-detail-message">상세 예보를 불러오는 중입니다…</p></div>
+</section>
+</div>
+<div id="wxPanel-observations" class="wx-view-panel" role="tabpanel" aria-labelledby="wxView-observations" tabindex="0" hidden><section class="card" style="margin-bottom:14px" aria-labelledby="wxObservationTitle">
+<div class="gs-section-head"><div><div class="gs-eyebrow">WEATHER OBSERVATIONS</div><h2 id="wxObservationTitle">주변 관측소의 실제 날씨</h2></div></div>
+<p class="wx-detail-note">현장과 가까운 기상청 AWS·ASOS 관측소 자료입니다. 현장 직접 측정값과 차이가 있을 수 있습니다. 강수확률과 미래 날씨는 상세 예보 탭을 확인하세요.</p>
+<div id="wxObservationBody" aria-live="polite"><p class="wx-detail-message">관측자료를 불러오는 중입니다…</p></div>
+</section>
+</div>
+<div id="wxPanel-archive" class="wx-view-panel" role="tabpanel" aria-labelledby="wxView-archive" tabindex="0" hidden><section class="card wx-archive-details">
+
 <div style="margin-top: 14px">
 <div class="dash-section-header">
 <div class="dash-section-title">포스터 아카이브</div>
@@ -1266,14 +1270,14 @@
 </div>
 </div>
 <div class="form-note" style="margin-bottom: 10px">
-                    매일 06:10 / 18:10 / 22:10에 자동 생성된 포스터가 쌓입니다.
+                    이전 공용 포스터를 확인할 수 있습니다. 오늘의 계절별 건강 안내는 건강관리 포스터 탭에서 확인하세요.
                     클릭하면 원본이 열립니다 — 길게 눌러 카톡으로 공유하세요.
                   </div>
 <div class="wx-grid" id="wxPosterGrid">
 <div class="mp-empty">불러오는 중...</div>
 </div>
 </div>
-</details>
+</section></div>
 </div>
 </div>
 <!-- ═══ 취약자 명단 ═══ -->

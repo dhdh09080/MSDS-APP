@@ -23,3 +23,21 @@
 .wx-observation-stale {font-size:12px;line-height:1.8;color:#94612b;background:#fff6e8;padding:9px;border-radius:5px}
 @media(max-width:900px) {.wx-observation-grid {grid-template-columns:1fr}}
 @media(max-width:400px) {.wx-observation-values {grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Compact weather workspace: only the selected panel participates in layout. */
+#page-weather .wx-view-panel[hidden] { display:none!important; }
+.wx-view-tabs { display:flex; gap:5px; overflow-x:auto; padding:5px; margin:0 0 18px; border:1px solid var(--border); border-radius:11px; background:#f4f6f6; }
+.wx-view-tabs [role=tab] { flex:1; border:0; background:transparent; padding:12px 16px; border-radius:7px; white-space:nowrap; font:inherit; font-size:13px; color:#62716f; cursor:pointer; }
+.wx-view-tabs [aria-selected=true] { color:white; background:#244c43; font-weight:650; box-shadow:0 2px 5px #193d3420; }
+.wx-view-tabs [role=tab]:focus-visible { outline:2px solid #236559; outline-offset:2px; }
+#page-weather .wx-site-card {padding:14px 20px}#page-weather .wx-site-name {font-size:16px}#page-weather .wx-site-address {font-size:11px}
+#page-weather .wx-site-poster {width:100%;max-width:1040px;border:0;border-radius:12px;box-shadow:none;}
+.wx-poster-original {display:block;max-width:1040px;margin:auto;cursor:zoom-in;}
+.wx-season-control {display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0 18px;}
+.wx-season-control label {font-size:12px;font-weight:600;color:#40564f}.wx-season-control select {width:auto;max-width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;background:#fafcfb;font:inherit;font-size:12px}.wx-season-control span {font-size:11px;color:var(--text3)}
+.wx-chart-intro {display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;margin:12px 0 18px}.wx-chart-intro h3 {font-size:17px;color:#263e47}.wx-chart-intro p {font-size:12px;color:#62716f;margin-top:7px}
+.wx-chart-legend {display:flex;gap:17px;flex-wrap:wrap;font-size:12px}.wx-chart-legend span:before {content:'';display:inline-block;width:20px;margin-right:6px;vertical-align:middle;border-top:3px solid #3265b4}.wx-chart-legend .feel:before {border-color:#c46132;border-top-style:dashed}.wx-chart-legend .wind:before {border-color:#79a89d;border-top-width:7px}
+.wx-chart-scroll {overflow-x:auto;border:1px solid var(--border);border-radius:10px;background:#fafcfb;padding:14px 8px}.wx-chart-scroll svg {display:block;width:100%;min-width:720px;height:auto;}
+.wx-hourly-table {overflow-x:auto;margin:18px 0}.wx-hourly-table table {min-width:950px;width:100%;font-variant-numeric:tabular-nums}.wx-hourly-table th,.wx-hourly-table td {padding:14px 10px;text-align:center;white-space:nowrap;font-size:13px;border-bottom:1px solid var(--border)}.wx-hourly-table th:first-child {position:sticky;left:0;background:#f4f7f6;text-align:left;min-width:125px}.wx-hourly-table thead th {background:#f4f7f6}.wx-hourly-table caption {font-size:12px;text-align:left;padding:9px 0;color:var(--text3)}
+@media(max-width:600px) {.wx-view-tabs [role=tab] {padding:10px 12px;font-size:12px;flex:none}.wx-season-control {gap:8px}.wx-season-control span {width:100%}#page-weather .wx-site-card {padding:12px}.wx-chart-intro p {line-height:1.8}}
+.wx-mobile-health {display:none}.wx-poster-open-link {color:#236559;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:600px) {.wx-mobile-health {display:block;text-align:left;border:1px solid #dbe8e1;background:#f1f7f3;border-radius:12px;padding:18px}.wx-mobile-health h3 {font-size:22px;color:#204b40}.wx-mobile-health>p {font-size:12px;line-height:1.8;color:#52685f;margin-top:8px}.wx-mobile-health-metrics {display:grid;grid-template-columns:repeat(2,1fr);gap:13px;margin:18px 0}.wx-mobile-health-metrics small {font-size:11px;color:#52685f;display:block;margin-bottom:6px}.wx-mobile-health-metrics b {font-size:19px;color:#1c3d34}.wx-mobile-health ol {padding-left:20px;font-size:13px;color:#294f42;line-height:1.9}.wx-mobile-health li+li {margin-top:8px}#page-weather .wx-poster-original {display:none}}

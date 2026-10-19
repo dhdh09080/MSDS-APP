@@ -4,7 +4,7 @@ import './weather-detail.css';
 const value = (v, unit = '') => typeof v === 'number' && Number.isFinite(v) ? `${Math.round(v * 10) / 10}${unit}` : '—';
 const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const dateLabel = date => new Date(date + 'T12:00:00+09:00').toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month:'numeric', day:'numeric', weekday:'short' });
-let data = null, selected = '', range = 30, request = 0;
+let data = null, selected = '', range = 7, request = 0;
 let icon, label;
 
 export async function loadWeatherDetail({ workspace, invoke, preview, weatherIcon, weatherLabel }) {

@@ -1,3 +1,4 @@
+import { numeric } from './lib/forecast.js';
 import { siteObservations } from './observations.ts';
 import { detailedForecast } from './detailed.ts';
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
@@ -87,8 +88,9 @@ async function forecast(latitude: number, longitude: number) {
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.searchParams.set('latitude', String(latitude));
   url.searchParams.set('longitude', String(longitude));
-  url.searchParams.set('hourly', 'apparent_temperature,temperature_2m,relative_humidity_2m');
+  url.searchParams.set('hourly', 'apparent_temperature,temperature_2m,relative_humidity_2m,wind_speed_10m');
   url.searchParams.set('timezone', 'Asia/Seoul');
+  url.searchParams.set('wind_speed_unit', 'ms');
   url.searchParams.set('forecast_days', '7');
   url.searchParams.set('past_days', '7');
   url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min');
@@ -104,9 +106,10 @@ async function forecast(latitude: number, longitude: number) {
   const hours = time.map((value, index) => ({
     date: value.slice(0, 10),
     hour: Number(value.slice(11, 13)),
-    feel: Number(apparent[index]),
-    temp: Number(temperature[index]),
-    humidity: Number(humidity[index]),
+    feel: numeric(apparent[index]),
+    temp: numeric(temperature[index]),
+    humidity: numeric(humidity[index]),
+    wind: numeric(data?.hourly?.wind_speed_10m?.[index]),
   })).filter(item => item.date === targetDate && item.hour >= 6 && item.hour <= 19 && Number.isFinite(item.feel));
   if (!hours.length) throw new Error('오늘 시간별 체감온도 예보가 아직 없습니다.');
   const monday = new Date(targetDate + 'T12:00:00Z');
