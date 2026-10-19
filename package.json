@@ -17,6 +17,7 @@
     "docx": "^9.6.1",
     "jszip": "^3.10.1",
     "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.4.299",
     "qrcode-generator": "^2.0.4",
     "xlsx": "^0.18.5"
   },

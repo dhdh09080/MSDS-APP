@@ -1,0 +1,22 @@
+/* The same safety-content styles are used in preview and in the print document. */
+.wlabel .wl-ppe-grid { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 12px 18px; padding: 12px; }
+.wlabel .wl-ppe-item { display: flex; flex: 0 1 112px; flex-direction: column; align-items: center; text-align: center; gap: 5px; min-width: 0; break-inside: avoid; }
+.wlabel .wl-ppe-item img { display: block; width: 64px; height: 64px; flex-shrink: 0; object-fit: contain; }
+.wlabel .wl-ppe-item strong { display: block; font-size: 11px; line-height: 1.4; color: #111; font-weight: 800; }
+.wlabel .wl-ppe-item > span { display: block; font-size: 9px; line-height: 1.4; color: #333; overflow-wrap: anywhere; }
+.wlabel .wl-safety-text { white-space: pre-line; overflow-wrap: anywhere; }
+.wlabel .wl-missing { color: #856404; font-weight: 600; }
+.wlabel .wl-condensed-note { list-style: none; font-size: .85em; margin-top: 5px; color: #666; font-weight: 400; }
+.wlabel--a5 .wl-ppe-grid { padding: 7px; gap: 6px 10px; }
+.wlabel--a5 .wl-ppe-item { flex-basis: 88px; gap: 3px; }
+.wlabel--a5 .wl-ppe-item img { width: 45px; height: 45px; }
+.wlabel--a5 .wl-ppe-item strong { font-size: 9px; }
+.wlabel--a5 .wl-ppe-item > span { font-size: 8px; }
+.wlabel--a6 .wl-ppe-grid { padding: 5px; gap: 5px 7px; }
+.wlabel--a6 .wl-ppe-item { flex-basis: 70px; gap: 2px; }
+.wlabel--a6 .wl-ppe-item img { width: 34px; height: 34px; }
+.wlabel--a6 .wl-ppe-item strong { font-size: 8px; }
+.wlabel--a6 .wl-ppe-item > span { font-size: 7px; }
+#page-warning #warnPreviewDataNote.has-missing { color: #9c6d27; }
+
+.wlabel .wl-ppe-text-only { align-self: center; padding: 8px 0; }

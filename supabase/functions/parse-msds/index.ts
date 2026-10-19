@@ -1385,6 +1385,13 @@ function extractJsonValue(text: string) {
   };
 }
 
+function validateMeasureText(rawText: unknown) {
+  if (typeof rawText !== 'string' || !rawText.trim() || rawText.length > 24000) {
+    return { error: '추출한 문서 텍스트가 비어 있거나 처리 한도를 초과했습니다.', code: 'DOCUMENT_TEXT_INVALID', status: 400 } as const;
+  }
+  return { fileBase64: rawText, mediaType: 'text/plain', inputBytes: new TextEncoder().encode(rawText).length };
+}
+
 function validateResultShape(mode: AnalysisMode, parsed: any) {
   if (mode === 'health') {
     if (
@@ -1621,8 +1628,9 @@ async function callClaude(
   maxTokens: number,
   timeoutMs: number,
 ) {
-  const sourceBlock =
-    mediaType === 'application/pdf'
+  const sourceBlock = mediaType === 'text/plain'
+    ? { type: 'text', text: fileBase64 }
+    : mediaType === 'application/pdf'
       ? {
           type: 'document',
           source: {
@@ -1678,8 +1686,9 @@ async function callOpenAI(
   maxTokens: number,
   timeoutMs: number,
 ) {
-  const filePart =
-    mediaType === 'application/pdf'
+  const filePart = mediaType === 'text/plain'
+    ? { type: 'input_text', text: fileBase64 }
+    : mediaType === 'application/pdf'
       ? {
           type: 'input_file',
           filename: 'document.pdf',
@@ -1755,7 +1764,7 @@ async function callGemini(
           {
             role: 'user',
             parts: [
-              { inline_data: { mime_type: mediaType, data: fileBase64 } },
+              mediaType === 'text/plain' ? { text: fileBase64 } : { inline_data: { mime_type: mediaType, data: fileBase64 } },
               { text: prompt },
             ],
           },
@@ -1835,7 +1844,9 @@ serve(async (req) => {
     }
     const normalizedMode = rawMode as AnalysisMode;
     const forceReanalysis = body.forceReanalysis === true;
-    const validatedFile = validateFilePayload(body.fileBase64, body.mediaType);
+    const validatedFile = normalizedMode === 'measure' && body.documentText !== undefined
+      ? validateMeasureText(body.documentText)
+      : validateFilePayload(body.fileBase64, body.mediaType);
     if ('error' in validatedFile) {
       return json(
         { error: validatedFile.error, code: validatedFile.code },
@@ -1957,7 +1968,7 @@ serve(async (req) => {
 
     const promptVersion =
       normalizedMode === 'measure'
-        ? '2026-10-measure-batches-v3'
+        ? '2026-10-measure-text-v4'
         : normalizedMode === 'health'
           ? '2026-08-health-v1-failover'
           : '2026-10-gs-msds-v4-safety';
@@ -2177,6 +2188,8 @@ serve(async (req) => {
           status: 'error',
           input_bytes: inputBytes,
         });
+        // Shrink the input immediately instead of paying for the same oversized output on every provider.
+        if (normalizedMode === 'measure' && mapped.code === 'AI_RESPONSE_TRUNCATED') break;
       }
     }
 
