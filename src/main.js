@@ -1,3 +1,5 @@
+import { renderPpe, labelSafetySections } from './lib/warning-label.js';
+import warningLabelStyles from './warning-label.css?inline';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import {
@@ -5051,121 +5053,142 @@ function getFilteredWarnRecords() {
   });
 }
 
+let warnPickView = 'all';
+let warnPreviewZoom = 'read';
+
+window.setWarnPickView = function(view) {
+  warnPickView = view === 'selected' ? 'selected' : 'all';
+  renderWarnPickList();
+};
+
+function visibleWarnRecords() {
+  return getFilteredWarnRecords().filter(r => warnPickView !== 'selected' || warnSelected.has(r.id));
+}
+
+function updateWarnWorkbench() {
+  const count = warnSelected.size;
+  const cfg = WARN_SIZES[warnLabelSize];
+  const sheets = Math.ceil(count * warnCopies / cfg.perPage);
+  const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  setText('warnAllCount', msdsRecords.length);
+  setText('warnSelectedCount', count);
+  setText('warnPrintSummary', count ? `${count}개 물질 · 표지 ${count * warnCopies}매 · A4 ${sheets}장` : '인쇄할 물질을 선택하세요');
+  setText('warnPrintScope', count ? '검색 조건과 관계없이 인쇄 선택한 물질을 모두 출력합니다.' : '체크박스로 선택한 물질만 인쇄됩니다.');
+  setText('warnPrintButtonLabel', count ? `선택한 ${count}개 물질 인쇄` : '선택한 물질 인쇄');
+  const printBtn = document.getElementById('warnPrintSelectedBtn');
+  if (printBtn) printBtn.disabled = !count;
+  ['all','selected'].forEach(view => {
+    const tab = document.getElementById(view === 'all' ? 'warnTabAll' : 'warnTabSelected');
+    if (tab) { tab.classList.toggle('active', warnPickView === view); tab.setAttribute('aria-pressed', String(warnPickView === view)); }
+  });
+  const records = visibleWarnRecords();
+  const checked = records.filter(r => warnSelected.has(r.id)).length;
+  const master = document.getElementById('warnCheckVisible');
+  if (master) {
+    master.checked = records.length > 0 && checked === records.length;
+    master.indeterminate = checked > 0 && checked < records.length;
+    master.disabled = !records.length;
+  }
+}
+
 function renderWarnPickList() {
   const el = document.getElementById('warnPickList');
   if (!el) return;
   populateWarnContractorFilter();
-  const filtered = getFilteredWarnRecords();
-  const countLabel = document.getElementById('warnPickCountLabel');
-  if (countLabel)
-    countLabel.textContent = `물질 선택 (${filtered.length}건 표시 중 · ${warnSelected.size}건 선택됨)`;
-  if (msdsRecords.length === 0) {
-    el.innerHTML =
-      '<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">등록된 물질이 없습니다</div>';
-    return;
-  }
-  if (filtered.length === 0) {
-    el.innerHTML =
-      '<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">검색/필터 조건에 맞는 물질이 없습니다</div>';
-    return;
-  }
-  el.innerHTML = filtered
-    .map(
-      (r) => `
-    <div class="warn-pick-item ${warnPreviewSingle === r.id ? 'previewing' : ''}">
-      <input type="checkbox" class="warn-check" value="${r.id}" onclick="event.stopPropagation()" onchange="onWarnCheck('${r.id}',this.checked)" ${warnSelected.has(r.id) ? 'checked' : ''} title="인쇄 대상으로 선택">
-      <button type="button" class="warn-pick-preview" onclick="warnPreviewOne('${r.id}')" title="이 표지만 미리보기">
-        <span style="flex:1;min-width:0;">
-          <span class="wp-name">${escapeHtml(r.product_name)}</span>
-          <span class="wp-sub">${escapeHtml(r.contractor)} ${r.work_type ? '/ ' + escapeHtml(r.work_type) : ''} ${r.signal_word ? '· ' + escapeHtml(r.signal_word) : ''} ${r.cas_no ? '· CAS ' + escapeHtml(r.cas_no) : ''}</span>
-        </span>
-        ${r.legal_special === 'Y' ? '<span class="badge badge-danger">특별</span>' : ''}
+  const records = visibleWarnRecords();
+  const scroll = el.scrollTop;
+  const count = document.getElementById('warnPickCountLabel');
+  if (count) count.textContent = `${records.length}개 물질${warnPickView === 'selected' ? ' · 인쇄 선택 목록' : ' · 검색 결과'}`;
+  el.innerHTML = records.map(r => {
+    const selected = warnSelected.has(r.id);
+    const previewing = warnPreviewSingle === r.id;
+    return `<div class="warn-pick-item ${selected ? 'selected' : ''} ${previewing ? 'previewing' : ''}">
+      <input type="checkbox" class="warn-check" value="${r.id}" onchange="onWarnCheck('${r.id}',this.checked)" ${selected ? 'checked' : ''} aria-label="${escapeHtml(r.product_name)} 인쇄 선택">
+      <button type="button" class="warn-pick-preview" onclick="warnPreviewOne('${r.id}')" aria-label="${escapeHtml(r.product_name)} 미리보기" ${previewing ? 'aria-current="true"' : ''}>
+        <span class="wb-row-top"><span class="wp-name">${escapeHtml(r.product_name)}</span>${previewing ? '<span class="wb-viewing-badge">미리보기</span>' : selected ? '<span class="wb-selected-dot" aria-label="선택됨">✓</span>' : ''}</span>
+        <span class="wp-sub">${escapeHtml(r.contractor)}${r.supplier ? ' · '+escapeHtml(r.supplier) : ''}</span>
+        <span class="wp-cas" title="${escapeHtml(r.cas_no || '')}">${r.cas_no ? 'CAS '+escapeHtml(r.cas_no) : 'CAS 번호 미등록'}</span>
       </button>
-    </div>`,
-    )
-    .join('');
-  renderWarnSelPanel();
+    </div>`;
+  }).join('') || `<div class="wb-list-empty">${warnPickView === 'selected' && !warnSelected.size ? '아직 선택한 물질이 없습니다.<br>전체 물질에서 체크박스를 눌러주세요.' : '검색 결과가 없습니다.<br>물질명이나 협력사를 다시 확인해주세요.'}</div>`;
+  el.scrollTop = scroll;
+  updateWarnWorkbench();
 }
 window.renderWarnPickList = renderWarnPickList;
 
-window.onWarnCheck = function (id, checked) {
-  if (checked) warnSelected.add(id);
+window.onWarnCheck = function(id, checked) {
+  if (checked) { warnSelected.add(id); warnPreviewSingle = id; }
   else warnSelected.delete(id);
-  const countLabel = document.getElementById('warnPickCountLabel');
-  if (countLabel)
-    countLabel.textContent = countLabel.textContent.replace(
-      /\d+건 선택됨/,
-      `${warnSelected.size}건 선택됨`,
-    );
-  renderWarnSelPanel();
+  renderWarnPickList();
   updateWarningPreview();
 };
-window.selectAllWarn = function (v) {
-  // 현재 검색/필터 조건에 맞는 물질만 대상으로 전체 선택·해제 (다른 필터의 기존 선택은 유지)
-  const filtered = getFilteredWarnRecords();
-  if (v) filtered.forEach((r) => warnSelected.add(r.id));
-  else filtered.forEach((r) => warnSelected.delete(r.id));
+
+window.selectAllWarn = function(selected) {
+  const records = visibleWarnRecords();
+  records.forEach(r => selected ? warnSelected.add(r.id) : warnSelected.delete(r.id));
+  if (selected && !warnPreviewSingle && records.length) warnPreviewSingle = records[0].id;
   renderWarnPickList();
-  renderWarnSelPanel();
   updateWarningPreview();
 };
 
 let warnPreviewSingle = null; // 단일 미리보기 중인 레코드 id (선택과 무관)
 
-window.updateWarningPreview = function () {
-  requestAnimationFrame(() =>
-    fitWarningLabels(document.getElementById('warningPreview')),
-  );
+window.setWarnPreviewZoom = function(mode) {
+  warnPreviewZoom = mode === 'read' ? 'read' : 'fit';
+  layoutWarnPreview();
+};
+
+function layoutWarnPreview() {
+  const viewport = document.getElementById('warningPreview');
+  const sheet = viewport?.querySelector('.wb-canvas-sheet');
+  const stage = viewport?.querySelector('.wb-sheet-stage');
+  ['fit','read'].forEach(mode => {
+    const button = document.getElementById(mode === 'fit' ? 'warnZoomFit' : 'warnZoomRead');
+    if (button) { button.classList.toggle('active', warnPreviewZoom === mode); button.setAttribute('aria-pressed', String(warnPreviewZoom === mode)); }
+  });
+  if (!sheet || !stage) return;
+  const width = sheet.offsetWidth;
+  const height = sheet.offsetHeight;
+  const availableWidth = Math.max(180, viewport.clientWidth - 48);
+  const availableHeight = Math.max(200, viewport.clientHeight - 48);
+  const scale = Math.min(1, availableWidth / width, warnPreviewZoom === 'fit' ? availableHeight / height : 1);
+  stage.style.width = `${width * scale}px`;
+  stage.style.height = `${height * scale}px`;
+  sheet.style.transform = `scale(${scale})`;
+  viewport.scrollTo(0, 0);
+}
+window.addEventListener('resize', () => {
+  if (document.getElementById('page-warning')?.classList.contains('active')) layoutWarnPreview();
+});
+
+window.updateWarningPreview = function() {
   const prev = document.getElementById('warningPreview');
-  const header = document.getElementById('warnPreviewHeader');
   if (!prev) return;
-  const site =
-    document.getElementById('warningSite')?.value ||
-    currentWS?.name ||
-    '현장명';
-
-  // ── 단일 미리보기 모드: 행 클릭으로 진입, 선택 여부와 무관 ──
-  if (warnPreviewSingle) {
-    const r = msdsRecords.find((x) => x.id === warnPreviewSingle);
-    if (!r) {
-      warnPreviewSingle = null;
-    } else {
-      const sel = warnSelected.has(r.id);
-      if (header) header.textContent = `단일 미리보기 — ${r.product_name}`;
-      prev.innerHTML = `
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
-          <button class="btn ${sel ? 'btn-secondary' : 'btn-primary'} btn-sm" onclick="onWarnCheck('${r.id}',${!sel});warnPreviewOne('${r.id}');renderWarnPickList();">${sel ? '✓ 선택됨 — 선택 해제' : '＋ 인쇄 선택에 추가'}</button>
-          <button class="btn btn-outline btn-sm" onclick="printSingleWarning('${r.id}')">🖨 이 표지만 인쇄</button>
-          <button class="btn btn-secondary btn-sm" onclick="warnShowAllPreview()">← 선택 전체 보기 (${warnSelected.size}건)</button>
-        </div>
-        <div style="transform:scale(0.85);transform-origin:top left;width:calc(100% / 0.85);">${buildWarnLabel(r, site)}</div>`;
-      return;
-    }
-  }
-
-  // ── 선택 전체 미리보기 모드 (기본) ──
-  if (header) header.textContent = '미리보기 (인쇄 결과와 동일)';
-  const ids = [...warnSelected];
-  if (ids.length === 0) {
-    prev.innerHTML =
-      '<div class="warn-empty">체크박스로 인쇄할 물질을 선택하거나,<br>물질 이름을 클릭해 표지를 미리 확인하세요</div>';
+  updateWarnWorkbench();
+  const record = msdsRecords.find(r => r.id === warnPreviewSingle) || msdsRecords.find(r => warnSelected.has(r.id));
+  const header = document.getElementById('warnPreviewHeader');
+  const state = document.getElementById('warnPreviewState');
+  if (!record) {
+    if (header) header.textContent = '물질을 선택하세요';
+    if (state) state.textContent = '';
+    prev.innerHTML = '<div class="warn-empty"><div class="wb-empty-paper">▤</div><strong>어떤 경고표지를 만들까요?</strong><p>왼쪽에서 물질 이름을 누르면 표지를 확인할 수 있습니다.<br>인쇄할 물질은 체크박스로 선택해주세요.</p></div>';
     return;
   }
-  const labels = ids
-    .map((id) => msdsRecords.find((r) => r.id === id))
-    .filter(Boolean);
-  const szCfg = WARN_SIZES[warnLabelSize];
-  const totalLabels = ids.length * warnCopies;
-  const copyTxt =
-    warnCopies > 1 ? ` × ${warnCopies}매 = 표지 ${totalLabels}매` : '';
-  prev.innerHTML =
-    `<div style="font-size:12px;color:var(--text3);margin-bottom:12px;"><strong style="color:var(--text)">${ids.length}개</strong> 선택됨${copyTxt} · ${szCfg.name} — A4 한 장에 ${szCfg.perPage}매 (총 A4 ${Math.ceil(totalLabels / szCfg.perPage)}장)</div>` +
-    labels
-      .map(
-        (r) =>
-          `<div style="margin-bottom:20px;transform:scale(0.85);transform-origin:top left;width:calc(100% / 0.85);">${buildWarnLabel(r, site)}</div>`,
-      )
-      .join('');
+  warnPreviewSingle = record.id;
+  const safetyInfo = labelSafetySections(record, decodePCodes(record.p_codes));
+  const dataNote = document.getElementById('warnPreviewDataNote');
+  if (dataNote) {
+    dataNote.textContent = safetyInfo.missing.length ? `미등록 정보: ${safetyInfo.missing.join(' · ')}` : '등록된 MSDS의 취급·응급조치·보호구 정보를 표시합니다.';
+    dataNote.classList.toggle('has-missing', Boolean(safetyInfo.missing.length));
+  }
+  if (header) header.textContent = record.product_name;
+  if (state) {
+    state.textContent = warnSelected.has(record.id) ? '✓ 인쇄 선택됨' : '미선택 · 인쇄에 포함되지 않음';
+    state.className = warnSelected.has(record.id) ? 'is-selected' : '';
+  }
+  const site = document.getElementById('warningSite')?.value || currentWS?.name || '현장명';
+  prev.innerHTML = `<div class="wb-sheet-stage"><div class="wb-canvas-sheet" style="width:${warnLabelSize === 'a6' || warnLabelSize === 'mini' ? 350 : 714}px">${buildWarnLabel(record, site)}</div></div>`;
+  requestAnimationFrame(() => { fitWarningLabels(prev); layoutWarnPreview(); });
 };
 
 window.warnPreviewOne = function (id) {
@@ -5190,33 +5213,7 @@ window.printSingleWarning = function (id) {
 // ── 선택된 물질 패널 (필터와 무관하게 전체 선택 상태 표시) ──
 let warnSelPanelOpen = true;
 
-function renderWarnSelPanel() {
-  const wrap = document.getElementById('warnSelWrap');
-  const chips = document.getElementById('warnSelChips');
-  const title = document.getElementById('warnSelTitle');
-  if (!wrap || !chips) return;
-  if (!warnSelected.size) {
-    wrap.style.display = 'none';
-    return;
-  }
-  wrap.style.display = 'block';
-  title.textContent = `✅ 선택된 물질 ${warnSelected.size}건 (필터와 무관하게 전부 인쇄됨)`;
-  chips.style.display = warnSelPanelOpen ? 'flex' : 'none';
-  document.getElementById('warnSelToggleIcon').textContent = warnSelPanelOpen
-    ? '▾ 접기'
-    : '▸ 펼치기';
-  document
-    .querySelector('.warn-selection-toggle')
-    ?.setAttribute('aria-expanded', String(warnSelPanelOpen));
-  if (!warnSelPanelOpen) return;
-  chips.innerHTML = [...warnSelected]
-    .map((id) => {
-      const r = msdsRecords.find((x) => x.id === id);
-      if (!r) return '';
-      return `<span class="tag warn-selected-tag"><button type="button" class="tag-preview" onclick="warnPreviewOne('${id}')" title="미리보기">${escapeHtml(r.product_name)} <span style="color:var(--text3);font-size:10px;">${escapeHtml(r.contractor)}</span></button><button type="button" class="tag-remove" aria-label="${escapeHtml(r.product_name)} 선택 해제" onclick="warnRemoveSel('${id}')">✕</button></span>`;
-    })
-    .join('');
-}
+function renderWarnSelPanel() { updateWarnWorkbench(); }
 
 window.toggleWarnSelPanel = function () {
   warnSelPanelOpen = !warnSelPanelOpen;
@@ -5276,7 +5273,6 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
   const supplierContact = r.supplier_contact
     ? ` (${escapeHtml(r.supplier_contact)})`
     : '';
-  const safeSite = escapeHtml(site);
 
   // ── 소분용기 간이표지 (고시 제6조②: 100g/100㎖ 이하 → 명칭·그림문자·신호어·공급자정보만) ──
   if (size === 'mini') {
@@ -5290,7 +5286,7 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
       <div class="wl-spacer"></div>
       <div class="wl-foot">
         <div><b>공급</b>${supplier}${supplierContact}</div>
-        <div style="font-weight:700;">■ 자세한 내용은 MSDS 참조 (100㎖ 이하 소분용기용 간이표지)</div>
+        <div style="font-weight:700;">■ 100g·100㎖ 이하 소분용기용 간이표지</div>
       </div>
     </div></div>`;
   }
@@ -5301,8 +5297,8 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
   // 예방조치문구는 예방·대응·저장·폐기 범주가 빠지지 않도록 condensePCodes가 먼저 선별한다.
   const hShown = hList; // Preserve safety text; fit to the selected label size after layout.
   const hCondensed = hShown.length < hList.length;
-  const pList = pRaw;
-  const pCondensed = false;
+  const { list: pList, condensed: pCondensed } = condensePCodes(pRaw);
+  const safety = labelSafetySections(r, pRaw);
   const autoFit = hCondensed || pCondensed;
   const hHtml =
     (hShown.length
@@ -5316,18 +5312,9 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
     (hCondensed
       ? `<li class="wl-condensed-note" data-kind="hazard">그 밖의 유해·위험 문구 ${hList.length - hShown.length}건은 MSDS 참조</li>`
       : '');
-  const pHtml =
-    (pList.length
-      ? pList
-          .map(
-            (p) =>
-              `<li><span style="color:#888;font-size:0.85em;">[${escapeHtml(p.code)}]</span> ${escapeHtml(p.text)}</li>`,
-          )
-          .join('')
-      : '<li>해당 정보 없음</li>') +
-    (pCondensed
-      ? `<li class="wl-condensed-note" data-kind="precaution">그 밖의 예방조치 문구 ${pRaw.length - pList.length}건은 MSDS 참조</li>`
-      : '');
+  const pHtml = pList.length
+    ? pList.map(p => `<li><span style="color:#888;font-size:0.85em;">[${escapeHtml(p.code)}]</span> ${escapeHtml(p.text)}</li>`).join('')
+    : '<li>예방조치문구 정보 미등록</li>';
 
   return `<div class="wlabel wlabel--${size}${autoFit ? ' wl-auto-fit' : ''}" data-warning-autofit="true"><div class="wl-fit-content">
     ${getDevPreviewPage() ? '<div style="text-align:center;color:#888;font-size:10px;margin-bottom:5px;">미리보기 샘플 · 실제 작업에는 원본 MSDS를 확인하세요</div>' : ''}
@@ -5336,17 +5323,16 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
     <div class="wl-picto-row">${pictoHtml}</div>
     <div class="wl-signal-bar ${isDanger ? 'danger' : 'warning'}">신호어 : ${signalWord}</div>
     <div class="wl-block"><div class="wl-block-head">유해·위험 문구</div><ul class="wl-list">${hHtml}</ul></div>
-    <div class="wl-block"><div class="wl-block-head">예방조치 문구</div><ul class="wl-list">${pHtml}</ul></div>
-    <div class="wl-block"><div class="wl-block-head">취급상의 주의사항</div><div class="wl-safety-text">${escapeHtml(r.handling_precautions || '원본 MSDS 7항의 취급·저장 지침을 확인하세요.')}</div></div>
-    <div class="wl-block"><div class="wl-block-head">적절한 보호구</div><div class="wl-safety-text">${escapeHtml(r.protective_equipment || '원본 MSDS 8항의 보호구 지침을 확인하세요.')}</div></div>
-    <div class="wl-block"><div class="wl-block-head">응급조치 요령 및 사고 시 대처방법</div><div class="wl-safety-text"><b>응급조치</b> ${escapeHtml(r.first_aid || '원본 MSDS 4항을 확인하세요.')}<br><b>사고 대처</b> ${escapeHtml(r.emergency_response || '원본 MSDS 5·6항을 확인하세요.')}</div></div>
+    <div class="wl-block"><div class="wl-block-head">예방조치문구</div><ul class="wl-list wl-precautions">${pHtml}</ul></div>
+    <div class="wl-block"><div class="wl-block-head">취급상의 주의사항</div><div class="wl-safety-text">${escapeHtml(safety.handling)}</div></div>
+    <div class="wl-block"><div class="wl-block-head">착용할 보호구</div>${renderPpe(r.protective_equipment)}</div>
+    <div class="wl-block"><div class="wl-block-head">응급조치 요령 및 사고 시 대처방법</div><div class="wl-safety-text"><b>응급조치</b> ${escapeHtml(safety.firstAid)}<br><b>화재·누출 대응</b> ${escapeHtml(safety.emergency)}</div></div>
     ${r.legal_special === 'Y' ? `<div class="wl-special">⚠️ 특별관리물질 — 취급 시 관리감독자 확인 및 특별안전보건교육 필수</div>` : ''}
     <div class="wl-spacer"></div>
     <div class="wl-foot-row">
       <div class="wl-foot">
         <div><b>공급업체</b>${supplier}${supplierContact}</div>
-        <div><b>현장</b>${safeSite} · <b>발행</b>${today()}</div>
-        <div style="margin-top:4px;font-weight:700;">■ 기타 자세한 내용은 물질안전보건자료(MSDS) 참조</div>
+        <div style="margin-top:4px;font-weight:700;">■ 등록된 MSDS의 안전정보를 바탕으로 작성</div>
       </div>
       ${qrBox}
     </div></div>
@@ -5356,6 +5342,7 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
 // ═══ 라벨 공통 인쇄 CSS — 크기별 폰트 스케일 + A4 분할 시트 그리드 ═══
 function warnLabelCss() {
   return `
+    ${warningLabelStyles}
     .wl-safety-text{padding:6px 10px;font-size:inherit;line-height:1.55;}
     .wl-fit-content{display:flex;flex-direction:column;}
     .sheet{display:grid;page-break-after:always;width:100%;min-height:283mm;max-height:283mm;overflow:hidden;}

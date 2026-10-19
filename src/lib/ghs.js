@@ -109,23 +109,31 @@ export function applyPictogramRules(codes) {
   return { codes: c.slice(0, 4), truncated };
 }
 
-// 예방조치문구 7개 이상 → 예방(P2)·대응(P3)·저장(P4)·폐기(P5) 각 1개 이상 포함 6개만 기재 가능
-// 이 경우 "표시하지 않은 예방조치 문구는 MSDS 참조" 안내 필요 (호출측에서 표기)
+// Keep at most six recorded precautions, retaining prevention, response, storage,
+// and disposal where available. Prefer concrete actions over introductory P201/P202.
 export function condensePCodes(list) {
   if (!list || list.length <= 6) return { list: list || [], condensed: false };
-  const cat = p => ({ '2': 0, '3': 1, '4': 2, '5': 3 })[(p.code.match(/^P(\d)/) || [])[1]] ?? 4;
+  const category = item => (item.code.match(/^P([2345])/) || [])[1] || 'other';
+  const priority = item => {
+    const code = item.code;
+    if (/^P210$|^P301\+P310$|^P403\+P235$|^P501$/.test(code)) return 0;
+    if (/^P280$|^P305\+|^P403$/.test(code)) return 1;
+    if (/^P26[01]$|^P304\+|^P405$/.test(code)) return 2;
+    if (/^P20[12]$/.test(code)) return 20;
+    return 4;
+  };
+  const ranked = list.map((item, index) => ({ item, index }))
+    .sort((a, b) => priority(a.item) - priority(b.item) || a.index - b.index);
   const picked = new Set();
-  [0, 1, 2, 3].forEach(c => {
-    const f = list.find(p => cat(p) === c && !picked.has(p));
-    if (f) picked.add(f);
-  });
-  for (const p of list) {
-    if (picked.size >= 6) break;
-    picked.add(p);
+  for (const group of ['2', '3', '4', '5']) {
+    const first = ranked.find(({item}) => category(item) === group);
+    if (first) picked.add(first.item);
   }
-  const order = new Map(list.map((p, i) => [p, i]));
-  const out = [...picked].sort((a, b) => order.get(a) - order.get(b)).slice(0, 6);
-  return { list: out, condensed: true };
+  for (const {item} of ranked) {
+    if (picked.size === 6) break;
+    picked.add(item);
+  }
+  return { list: list.filter(item => picked.has(item)).slice(0, 6), condensed: true };
 }
 
 export function decodeHCodes(str) {

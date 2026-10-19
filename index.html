@@ -13,7 +13,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script defer="" src="https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <link href="/src/gs-design.css" rel="stylesheet"/>
-<link href="/src/msds.css" rel="stylesheet"/></head>
+<link href="/src/msds.css" rel="stylesheet"/>
+<link href="/src/warning-workbench.css" rel="stylesheet"/>
+<link href="/src/warning-label.css" rel="stylesheet"/></head>
 <body>
 <!-- 로딩 -->
 <div id="loadingScreen">
@@ -475,158 +477,32 @@
 </div>
 <!-- ═══ 경고표지 ═══ -->
 <div class="page" id="page-warning">
-<div class="page-header">
-<div>
-<div class="page-title">경고표지 생성</div>
-<div class="page-subtitle">
-                  물질 선택 → 미리보기 확인 → A4 인쇄
-                </div>
-</div>
-</div>
-<div class="content-scroll">
-<div class="warn-layout">
-<div class="warn-left">
-<div class="card" style="margin-bottom: 12px">
-<div class="form-field" style="margin-bottom: 10px">
-<label class="form-label">
-                        검색 (물질명 · CAS No. · 협력사명 · 공급업체)
-                      </label>
-<input class="form-input" id="warnSearchInput" oninput="renderWarnPickList()" placeholder="예) 벤젠, 71-43-2, 또는 협력사명"/>
-</div>
-<div class="form-field" style="margin-bottom: 10px">
-<label class="form-label">협력사 선택</label>
-<div class="contractor-search-row">
-<input class="form-input" id="warnFilterContractorSearch" oninput="
-                            searchContractorSelect('warnFilterContractor')
-                          " placeholder="협력사명 검색"/>
-</div>
-<select class="form-input" id="warnFilterContractor" onchange="renderWarnPickList()">
-<option value="">전체 협력사</option>
-</select>
-</div>
-<div style="display: flex; gap: 8px">
-<button class="btn btn-secondary btn-sm" onclick="selectAllWarn(true)">
-                        전체 선택
-                      </button>
-<button class="btn btn-secondary btn-sm" onclick="selectAllWarn(false)">
-                        전체 해제
-                      </button>
-<div style="flex: 1"></div>
-<button class="btn btn-primary btn-sm" onclick="printWarnings()">
-                        🖨️ 선택 인쇄
-                      </button>
-</div>
-<div id="warnSelWrap" style="
-                        display: none;
-                        margin-top: 10px;
-                        border: 1.5px solid var(--border);
-                        border-radius: var(--radius-sm);
-                        background: var(--surface2);
-                      ">
-<div style="
-                          display: flex;
-                          align-items: center;
-                          padding: 4px 6px 4px 10px;
-                          gap: 8px;
-                          user-select: none;
-                        ">
-<button aria-controls="warnSelChips" aria-expanded="true" class="warn-selection-toggle" onclick="toggleWarnSelPanel()" type="button">
-<span id="warnSelTitle" style="font-size: 12px; font-weight: 700">
-                            ✅ 선택된 물질 0건
-                          </span>
-<span id="warnSelToggleIcon" style="
-                              margin-left: auto;
-                              font-size: 11px;
-                              color: var(--text3);
-                            ">
-                            ▾ 접기
-                          </span>
-</button>
-<button class="btn btn-secondary btn-sm" onclick="
-                            event.stopPropagation();
-                            clearAllWarnSelected();
-                          " style="padding: 2px 8px; font-size: 11px">
-                          전체 해제
-                        </button>
-</div>
-<div id="warnSelChips" style="
-                          display: flex;
-                          flex-wrap: wrap;
-                          gap: 6px;
-                          padding: 0 10px 10px;
-                        "></div>
-</div>
-</div>
-<div id="warnPickCountLabel" style="
-                      font-size: 12px;
-                      font-weight: 700;
-                      color: var(--text3);
-                      margin-bottom: 8px;
-                      letter-spacing: 0.5px;
-                    ">
-                    물질 선택
-                  </div>
-<div class="warn-pick-list" id="warnPickList">
-<div style="
-                        padding: 20px;
-                        text-align: center;
-                        color: var(--text3);
-                        font-size: 13px;
-                      ">
-                      등록된 물질이 없습니다
-                    </div>
-</div>
-<details class="card" style="margin-top: 12px; padding: 12px 14px">
-<summary style="
-                        font-size: 12.5px;
-                        font-weight: 700;
-                        color: var(--text2);
-                        cursor: pointer;
-                        user-select: none;
-                      ">
-                      ⚙️ 인쇄 설정 (현장명 · 라벨 크기 · QR · 규격 안내)
-                    </summary>
-<div style="margin-top: 12px">
-<div class="form-field" style="margin-bottom: 12px">
-<label class="form-label">현장명</label>
-<input class="form-input" id="warningSite" oninput="updateWarningPreview()" placeholder="예) 성동자이리버뷰 신축공사"/>
-</div>
-<div class="form-field" style="margin-bottom: 8px">
-<label class="form-label">
-                          라벨 크기 (A4 용지 분할)
-                        </label>
-<select class="form-input" id="warnSizeSel" onchange="setWarnLabelSize(this.value)">
-<option value="a4">
-                            A4 전면 · 1매/장 (드럼·게시용)
-                          </option>
-<option value="a5">
-                            A4 2분할 · 2매/장 (200~500ℓ)
-                          </option>
-<option value="a6">A4 4분할 · 4매/장 (5~50ℓ)</option>
-<option value="mini">
-                            A4 8분할 · 8매/장 (100㎖↓ 간이표지)
-                          </option>
-</select>
-</div>
-<div class="form-field" style="margin-bottom: 8px">
-<label class="form-label">표지당 인쇄 매수</label>
-<div style="display: flex; gap: 6px; align-items: center">
-<input class="form-input" id="warnCopiesInput" max="20" min="1" onchange="setWarnCopies(this.value)" style="width: 80px; text-align: center" type="number" value="1"/>
-<button class="btn btn-secondary btn-sm" onclick="warnFillPage()" title="선택한 분할 수만큼 매수를 맞춰 A4 한 장을 같은 표지로 채웁니다">
-                            한 장 채우기
-                          </button>
-</div>
-<div class="form-hint">
-                          예) 4분할 + 4매 → 물질 1개로 A4 한 장을 꽉 채워 인쇄
-                          (빈칸·종이낭비 없음)
-                        </div>
-</div>
-<label class="legal-check" style="margin-bottom: 6px">
-<input checked="" id="warnQrChk" onchange="toggleWarnQr(this.checked)" type="checkbox"/>
-                        📱 QR코드 삽입 — 스캔 시 MSDS 원본 PDF 즉시 열람 (원본
-                        등록 물질만 표시)
-                      </label>
-<details style="margin-bottom: 2px">
+  <div class="page-header">
+    <div><div class="page-title">경고표지 생성</div><div class="page-subtitle">인쇄할 물질을 고르고, 표지 크기를 확인하세요.</div></div>
+    <div class="wb-flow" aria-label="작업 순서"><span><b>1</b> 물질 선택</span><i>›</i><span><b>2</b> 인쇄 설정</span><i>›</i><span><b>3</b> 확인 후 인쇄</span></div>
+  </div>
+  <div class="content-scroll">
+    <div class="warn-layout">
+      <section class="warn-left wb-panel" aria-labelledby="wbMaterialHeading">
+        <div class="wb-pick-heading"><div class="wb-eyebrow">SELECT MATERIALS</div><h2 id="wbMaterialHeading">물질 선택</h2><p>체크박스로 인쇄할 물질을 선택하세요.</p></div>
+        <div class="wb-filters">
+          <label class="wb-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input class="form-input" id="warnSearchInput" oninput="renderWarnPickList()" placeholder="물질명, CAS 번호, 공급업체 검색" aria-label="물질 검색" type="search"/></label>
+          <div class="form-field"><label class="form-label" for="warnFilterContractorSearch">협력사</label><div class="contractor-search-row"><input class="form-input" id="warnFilterContractorSearch" placeholder="전체 협력사 · 검색해서 선택"/></div><select class="form-input" id="warnFilterContractor" onchange="renderWarnPickList()"><option value="">전체 협력사</option></select></div>
+        </div>
+        <div class="wb-list-tabs" role="group" aria-label="물질 목록 범위"><button type="button" id="warnTabAll" class="active" onclick="setWarnPickView('all')" aria-pressed="true">전체 물질 <span id="warnAllCount">0</span></button><button type="button" id="warnTabSelected" onclick="setWarnPickView('selected')" aria-pressed="false">인쇄 선택 <span id="warnSelectedCount">0</span></button></div>
+        <div class="wb-bulk"><label><input type="checkbox" id="warnCheckVisible" onchange="selectAllWarn(this.checked)"/>검색 결과 모두 선택</label><button type="button" onclick="selectAllWarn(false)">선택 해제</button></div>
+        <div id="warnPickCountLabel" class="wb-result-count" role="status">물질 목록</div>
+        <div class="warn-pick-list" id="warnPickList"></div>
+        <div class="wb-pick-help"><span class="wb-info-icon">i</span><span>물질 이름을 누르면 미리보기만 바뀝니다.</span></div>
+      </section>
+      <div class="warn-right">
+        <section class="wb-settings wb-panel" aria-labelledby="wbSettingsHeading">
+          <div class="wb-section-heading"><h2 id="wbSettingsHeading"><span>02</span> 인쇄 설정</h2><span class="wb-paper-tag">A4 용지 기준</span></div>
+          <div class="wb-setting-grid">
+            <div class="form-field"><label class="form-label" for="warnSizeSel">한 장에 넣을 표지 수</label><select class="form-input" id="warnSizeSel" onchange="setWarnLabelSize(this.value)"><option value="a4">1매 · A4 전체</option><option value="a5">2매 · A4 2분할</option><option value="a6">4매 · A4 4분할</option><option value="mini">8매 · 소분용기 간이표지</option></select></div>
+            <div class="form-field"><label class="form-label" for="warnCopiesInput">물질별 인쇄 매수</label><div class="wb-copies"><input class="form-input" id="warnCopiesInput" type="number" value="1" min="1" max="20" onchange="setWarnCopies(this.value)"/><span>매씩</span><button type="button" onclick="warnFillPage()" title="같은 물질의 표지로 A4 한 장을 채웁니다">한 장 채우기</button></div></div>
+          </div>
+          <details class="wb-advanced"><summary>QR코드 · 용기별 규격 안내 <span>⌄</span></summary><div class="wb-advanced-body"><input type="hidden" id="warningSite"/><label class="wb-qr"><input type="checkbox" id="warnQrChk" checked onchange="toggleWarnQr(this.checked)"/>MSDS 원본을 여는 QR코드 포함 <small>원본 파일이 있는 물질에 표시</small></label><details style="margin-bottom: 2px">
 <summary style="
                             font-size: 11.5px;
                             color: var(--text3);
@@ -664,29 +540,17 @@
                           ※ 50~200ℓ 용기(180㎠↑)에는 4분할(155㎠)이 미달이므로
                           2분할 이상을 사용하세요.
                         </div>
-</details>
-</div>
-</details>
-</div>
-<div class="warn-right">
-<div id="warnPreviewHeader" style="
-                      font-size: 12px;
-                      font-weight: 700;
-                      color: var(--text3);
-                      margin-bottom: 8px;
-                      letter-spacing: 0.5px;
-                    ">
-                    미리보기 (인쇄 결과와 동일)
-                  </div>
-<div class="warn-autofit-note">선택한 규격에 맞춰 글자 크기를 자동 조정합니다. 원문에 없는 안전정보는 원본 확인 안내로 표시합니다.</div>
-<div class="warn-preview-wrap">
-<div class="warn-preview-scroll" id="warningPreview">
-<div class="warn-empty">왼쪽에서 물질을 선택하세요</div>
-</div>
-</div>
-</div>
-</div>
-</div>
+</details></div></details>
+        </section>
+        <section class="wb-preview-panel wb-panel" aria-labelledby="wbPreviewHeading">
+          <div class="wb-preview-toolbar"><div><h2 id="wbPreviewHeading"><span>03</span> 경고표지 미리보기</h2><div class="wb-preview-material"><strong id="warnPreviewHeader">물질을 선택하세요</strong><span id="warnPreviewState"></span></div></div><div class="wb-zoom" role="group" aria-label="미리보기 배율"><button type="button" id="warnZoomFit" class="active" onclick="setWarnPreviewZoom('fit')" aria-pressed="true">전체 보기</button><button type="button" id="warnZoomRead" onclick="setWarnPreviewZoom('read')" aria-pressed="false">확대 보기</button></div></div>
+          <div class="warn-preview-scroll" id="warningPreview"><div class="warn-empty">왼쪽 목록에서 물질 이름을 눌러보세요.</div></div>
+          <div class="wb-preview-note"><span id="warnPreviewDataNote">표지 내용은 등록된 MSDS를 기준으로 표시합니다.</span><span>세부 문구는 확대해서 확인하세요.</span></div>
+        </section>
+        <div class="wb-print-bar"><div><div class="wb-print-totals" id="warnPrintSummary" role="status">인쇄할 물질을 선택하세요</div><div class="wb-print-scope" id="warnPrintScope">미리보기와 인쇄 선택은 별개입니다.</div></div><button type="button" class="btn btn-primary" id="warnPrintSelectedBtn" onclick="printWarnings()" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 9V3h12v6M6 17H3V9h18v8h-3M6 14h12v7H6z"/><path d="M17 11h1"/></svg><span id="warnPrintButtonLabel">선택한 물질 인쇄</span></button></div>
+      </div>
+    </div>
+  </div>
 </div>
 <!-- ═══ 협력사 링크 ═══ -->
 <div class="page" id="page-upload-link">
