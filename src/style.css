@@ -5291,7 +5291,6 @@ button.stat-card {
   .content-scroll { padding-inline: 12px; }
   .page-header { padding-inline: 12px; }
   .stats-row { grid-template-columns: 1fr; }
-  #moreSheet .modal-body > div { grid-template-columns: repeat(2, 1fr) !important; }
 }
 
 /* 동적으로 생성되는 조작 요소도 키보드와 보조기기에서 동일하게 동작한다. */

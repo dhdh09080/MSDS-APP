@@ -18,3 +18,55 @@ body{background:var(--bg);font-family:var(--font);letter-spacing:-.18px}button,i
 .team-invite-result { margin-top: 16px; padding: 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; }
 .team-invite-result input { margin: 6px 0 10px; font-size: 12px; }
 [hidden] { display: none !important; }
+
+/* Mobile navigation follows the workspace's neutral surfaces and line icons. */
+.mobile-tab-icon svg { display: block; width: 23px; height: 23px; }
+.mobile-tab-icon { display: grid; place-items: center; }
+#moreSheet .more-sheet {
+  display: flex;
+  flex-direction: column;
+  max-width: 460px;
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow: hidden;
+}
+#moreSheet .modal-header { flex-shrink: 0; gap: 16px; padding: 22px 20px 18px; }
+#moreSheet .modal-title { margin: 0; font-size: 20px; font-weight: 650; line-height: 1.4; }
+.more-sheet-description { margin: 5px 0 0; color: var(--text3); font-size: 12px; line-height: 1.5; }
+#moreSheet .modal-close { flex-shrink: 0; width: 44px; height: 44px; color: var(--text2); border-radius: 12px; }
+#moreSheet .modal-close svg { width: 20px; height: 20px; }
+#moreSheet .modal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 16px 24px; }
+.more-menu-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+#moreSheet .more-item {
+  justify-content: flex-start;
+  gap: 9px;
+  min-height: 100px;
+  padding: 14px 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text2);
+  background: var(--surface);
+  -webkit-tap-highlight-color: transparent;
+}
+#moreSheet .more-item-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--surface2);
+  color: #626279;
+}
+.more-item-icon svg { display: block; width: 22px; height: 22px; }
+#moreSheet .more-item-label { font-size: 12px; font-weight: 550; line-height: 1.5; letter-spacing: -.3px; overflow-wrap: anywhere; }
+@media (hover: hover) {
+  #moreSheet .more-item:hover { background: #fafafd; border-color: #c6c6d5; }
+}
+#moreSheet .more-item:active { background: var(--primary-light); border-color: #c6c6d5; }
+body:has(#moreSheet.open) { overflow: hidden; }
+@media (max-width: 768px) {
+  #moreSheet { padding: 0; align-items: flex-end; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  #moreSheet .more-sheet { position: relative; inset: auto; max-width: 460px; margin: 0 auto; border-radius: 22px 22px 0 0; border-bottom: 0; }
+  #moreSheet .modal-body { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
+}
