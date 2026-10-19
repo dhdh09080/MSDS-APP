@@ -4,7 +4,9 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { transformSync } from 'esbuild';
 import { PDFDocument } from 'pdf-lib';
-import { analyzeMeasurePdf, mergeMeasureResults } from '../src/lib/measure-analysis.js';
+import { analyzeMeasurePdf as analyzeImplementation, mergeMeasureResults, planMeasureBatches } from '../src/lib/measure-analysis.js';
+
+const analyzeMeasurePdf = (base64, invoke, progress, options = {}) => analyzeImplementation(base64, invoke, progress, { extractPages: false, ...options });
 
 const empty = () => ({ dust: [], noise: [], workTypes: [], measurements: [], resultRows: [], improvements: [] });
 async function pdf(count) {
@@ -104,5 +106,85 @@ test('providers report token truncation and PDF limits without disabling API key
     const mapped = vm.runInContext("mapProviderError('claude', { status: 400, detail: 'PDF has 129 pages, maximum 100 pages' })", context);
     assert.equal(mapped.code, 'AI_DOCUMENT_LIMIT');
     assert.equal(mapped.disableCredential, false);
+  }
+});
+
+test('text batches cover every page and never exceed the server input limit', () => {
+  const pages = Array.from({ length: 129 }, (_, index) => ({ index, text: 'table '.repeat(230) }));
+  const batches = planMeasureBatches(pages);
+  assert.ok(batches.length < Math.ceil(129 / 8));
+  assert.deepEqual(batches.flatMap(batch => batch.pages.map(page => page.index)), pages.map(page => page.index));
+  for (const batch of batches) {
+    const body = batch.pages.map(page => `[원본 ${page.index + 1}쪽]\n${page.text}`).join('\n\n');
+    assert.ok(body.length <= 24000);
+  }
+  assert.equal(planMeasureBatches([{ index: 0, text: 'a'.repeat(23990) }])[0].kind, 'pdf');
+});
+
+test('text analysis uses two requests at most and merges in page order after out-of-order replies', async () => {
+  let active = 0, peak = 0, calls = 0;
+  const count = 9;
+  const result = await analyzeMeasurePdf(await pdf(count), async (_, body) => {
+    assert.equal(body.fileBase64, undefined);
+    assert.equal(body.mode, 'measure');
+    const index = Number(body.documentText.match(/원본 (\d+)쪽/)[1]);
+    calls++; peak = Math.max(peak, ++active);
+    await new Promise(resolve => setTimeout(resolve, index === 1 ? 30 : 2));
+    active--;
+    return { result: { ...empty(), dust: [{ process: String(index) }] } };
+  }, undefined, { extractPages: async () => Array.from({ length: count }, (_, index) => ({ index, text: 'x'.repeat(13000) })) });
+  assert.equal(calls, count);
+  assert.equal(peak, 2);
+  assert.equal(active, 0);
+  assert.deepEqual(result.dust.map(row => row.process), Array.from({ length: count }, (_, i) => String(i + 1)));
+});
+
+test('mixed text and scanned pages use the correct transport without dropping scans', async () => {
+  const seen = [];
+  const result = await analyzeMeasurePdf(await pdf(3), async (_, body) => {
+    const isText = typeof body.documentText === 'string';
+    seen.push(isText ? 'text' : 'pdf');
+    if (!isText) {
+      const doc = await PDFDocument.load(body.fileBase64);
+      assert.equal(doc.getPageCount(), 1);
+      assert.equal(doc.getPage(0).getWidth(), 201);
+    }
+    return { result: { ...empty(), dust: [{ process: isText ? body.documentText : 'scan' }] } };
+  }, undefined, { extractPages: async () => [{ index: 0, text: 'first' }, { index: 1, text: null }, { index: 2, text: 'last' }] });
+  assert.equal(seen.filter(kind => kind === 'text').length, 2);
+  assert.equal(seen.filter(kind => kind === 'pdf').length, 1);
+  assert.equal(result.dust[1].process, 'scan');
+});
+
+test('text-layer failure falls back to the complete PDF and parallel failure stops queued work', async () => {
+  let calls = 0, active = 0;
+  await assert.rejects(analyzeMeasurePdf(await pdf(33), async (_, body) => {
+    assert.ok(body.fileBase64);
+    const index = ++calls; active++;
+    await new Promise(resolve => setTimeout(resolve, index === 1 ? 2 : 20));
+    active--;
+    if (index === 1) throw Object.assign(new Error('quota'), { code: 'AI_MONTHLY_LIMIT' });
+    return { result: empty() };
+  }, undefined, { extractPages: async () => { throw new Error('font/worker failed'); } }), error => error.code === 'AI_MONTHLY_LIMIT');
+  assert.equal(calls, 2);
+  assert.equal(active, 0);
+});
+
+test('all providers send extracted report text as text and server rejects oversized input', async () => {
+  const source = fs.readFileSync(new URL('../supabase/functions/parse-msds/index.ts', import.meta.url), 'utf8');
+  const executable = transformSync(source.replace(/^import .*;\n/gm, ''), { loader: 'ts', format: 'cjs' }).code;
+  for (const provider of ['Claude', 'OpenAI', 'Gemini']) {
+    let request;
+    const context = vm.createContext({ serve() {}, AbortController, TextEncoder, setTimeout, clearTimeout, fetch: async (_, init) => {
+      request = JSON.parse(init.body);
+      return { ok: true, json: async () => ({ content: [{ text: '{}' }], output_text: '{}', candidates: [{ content: { parts: [{ text: '{}' }] } }] }) };
+    } });
+    vm.runInContext(executable, context);
+    await vm.runInContext(`call${provider}('test', '[원본 1쪽] 측정치 0.9504 mg/m³', 'text/plain', 'extract', 16000, 1000)`, context);
+    const serialized = JSON.stringify(request);
+    assert.ok(serialized.includes('0.9504 mg/m³'));
+    assert.ok(!serialized.includes('inline_data') && !serialized.includes('input_file') && !serialized.includes('base64'));
+    assert.equal(vm.runInContext("validateMeasureText('a'.repeat(24001)).code", context), 'DOCUMENT_TEXT_INVALID');
+    assert.equal(vm.runInContext("validateMeasureText('측정치').mediaType", context), 'text/plain');
   }
 });

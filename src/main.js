@@ -6406,8 +6406,8 @@ window.analyzeMeasure = async function () {
   btn.disabled = true;
   btn.textContent = '🤖 AI 분석 중...';
   try {
-    const result = await analyzeMeasurePdf(sourceBase64, invokeEdgeJson, ({ completed, total, from, to }) => {
-      btn.textContent = completed === total ? '🤖 분석 완료' : `🤖 ${from}~${to} / ${total}쪽 분석 중...`;
+    const result = await analyzeMeasurePdf(sourceBase64, invokeEdgeJson, ({ phase, completed, total }) => {
+      btn.textContent = phase === 'extract' ? `📄 문서 읽는 중 ${completed}/${total}쪽` : phase === 'complete' ? '🤖 분석 완료' : `🤖 AI 분석 중 ${completed}/${total}쪽 완료`;
     });
     currentMeasureData = {
       round,

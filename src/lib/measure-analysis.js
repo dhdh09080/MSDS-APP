@@ -1,5 +1,6 @@
 // Keep PDF requests small enough for page, context and output limits.
 export const MEASURE_BATCH_PAGES = 8;
+export const MEASURE_TEXT_CHARS = 24000;
 const SPLITTABLE_ERRORS = new Set(['AI_RESPONSE_TRUNCATED', 'AI_RESPONSE_INVALID', 'AI_DOCUMENT_LIMIT', 'AI_PROVIDER_TIMEOUT', 'AI_DEADLINE_EXCEEDED']);
 
 export function mergeMeasureResults(parts) {
@@ -46,7 +47,22 @@ export function mergeMeasureResults(parts) {
   return result;
 }
 
-export async function analyzeMeasurePdf(base64, invoke, onProgress = () => {}) {
+export function planMeasureBatches(pages) {
+  const batches = [];
+  for (const page of pages) {
+    const kind = page.text && page.text.length + 40 <= MEASURE_TEXT_CHARS ? 'text' : 'pdf';
+    const previous = batches.at(-1);
+    if (previous?.kind === kind && (kind === 'text'
+      ? previous.chars + page.text.length + 40 <= MEASURE_TEXT_CHARS
+      : previous.pages.length < MEASURE_BATCH_PAGES)) {
+      previous.pages.push(page);
+      previous.chars += (page.text?.length || 0) + 40;
+    } else batches.push({ kind, pages: [page], chars: (page.text?.length || 0) + 40 });
+  }
+  return batches;
+}
+
+export async function analyzeMeasurePdf(base64, invoke, onProgress = () => {}, options = {}) {
   if (base64.length * 0.75 > 20 * 1024 * 1024) throw new Error('파일은 20MB 이하여야 합니다.');
   const { PDFDocument } = await import('pdf-lib');
   let document;
@@ -54,36 +70,62 @@ export async function analyzeMeasurePdf(base64, invoke, onProgress = () => {}) {
   catch { throw new Error('PDF를 읽을 수 없습니다. 암호를 해제하거나 정상적인 PDF 파일을 선택해주세요.'); }
   const pageCount = document.getPageCount();
   if (!pageCount) throw new Error('PDF에 분석할 페이지가 없습니다.');
-  const parts = [];
-  async function analyzeRange(start, end) {
-    onProgress({ completed: start, total: pageCount, from: start + 1, to: end });
-    const batch = await PDFDocument.create();
-    const pages = await batch.copyPages(document, Array.from({ length: end - start }, (_, i) => start + i));
-    pages.forEach(page => batch.addPage(page));
+  let pages = Array.from({ length: pageCount }, (_, index) => ({ index, text: null }));
+  if (options.extractPages !== false) {
+    onProgress({ phase: 'extract', completed: 0, total: pageCount });
     try {
-      const response = await invoke('parse-msds', {
-        fileBase64: await batch.saveAsBase64(), mediaType: 'application/pdf', mode: 'measure',
-      });
+      const extract = options.extractPages || (await import('./measure-pdf-text.js')).extractMeasurePages;
+      const extracted = await extract(base64, onProgress);
+      if (extracted.length === pageCount && extracted.every((page, i) => page.index === i)) pages = extracted;
+    } catch { /* Keep the original PDF route when the text layer/worker is unavailable. */ }
+  }
+  const batches = planMeasureBatches(pages);
+  let completed = 0, next = 0, failure = null;
+  async function analyzeBatch(batch) {
+    if (failure) throw failure;
+    const from = batch.pages[0].index + 1, to = batch.pages.at(-1).index + 1;
+    onProgress({ phase: 'analyze', completed, total: pageCount, from, to });
+    let payload;
+    if (batch.kind === 'text') {
+      payload = { documentText: batch.pages.map(page => `[원본 ${page.index + 1}쪽]\n${page.text}`).join('\n\n'), mode: 'measure' };
+    } else {
+      const pdf = await PDFDocument.create();
+      const copied = await pdf.copyPages(document, batch.pages.map(page => page.index));
+      copied.forEach(page => pdf.addPage(page));
+      // Deterministic metadata keeps successful batch caches reusable on retries.
+      pdf.setCreationDate(new Date(0)); pdf.setModificationDate(new Date(0));
+      payload = { fileBase64: await pdf.saveAsBase64(), mediaType: 'application/pdf', mode: 'measure' };
+    }
+    try {
+      const response = await invoke('parse-msds', payload);
       // Validate before adding: a failed part must never become a complete report.
       mergeMeasureResults([response?.result]);
-      parts.push(response.result);
+      completed += batch.pages.length;
+      onProgress({ phase: 'analyze', completed, total: pageCount, from, to });
+      return [{ index: from, result: response.result }];
     } catch (error) {
-      if (end - start > 1 && SPLITTABLE_ERRORS.has(error.code)) {
-        const middle = Math.floor((start + end) / 2);
-        await analyzeRange(start, middle);
-        await analyzeRange(middle, end);
-        return;
+      if (batch.pages.length > 1 && SPLITTABLE_ERRORS.has(error.code)) {
+        const middle = Math.floor(batch.pages.length / 2);
+        const left = await analyzeBatch({ ...batch, pages: batch.pages.slice(0, middle) });
+        const right = await analyzeBatch({ ...batch, pages: batch.pages.slice(middle) });
+        return [...left, ...right];
       }
-      const failure = new Error(`${start + 1}~${end}쪽 분석 실패: ${error.message}`);
+      failure = new Error(`${from}~${to}쪽 분석 실패: ${error.message}`);
       failure.code = error.code;
       throw failure;
     }
   }
-  for (let start = 0; start < pageCount; start += MEASURE_BATCH_PAGES) {
-    await analyzeRange(start, Math.min(start + MEASURE_BATCH_PAGES, pageCount));
+  async function worker() {
+    const results = [];
+    while (!failure && next < batches.length) results.push(...await analyzeBatch(batches[next++]));
+    return results;
   }
-  onProgress({ completed: pageCount, total: pageCount });
-  const result = mergeMeasureResults(parts);
+  const settled = await Promise.allSettled(Array.from({ length: Math.min(options.concurrency || 2, 2, batches.length) }, worker));
+  const rejected = settled.find(item => item.status === 'rejected');
+  if (rejected) throw failure || rejected.reason;
+  const parts = settled.flatMap(item => item.value).sort((a, b) => a.index - b.index);
+  onProgress({ phase: 'complete', completed: pageCount, total: pageCount });
+  const result = mergeMeasureResults(parts.map(part => part.result));
   if (!result.dust.length && !result.noise.length && !result.measurements.length) {
     throw new Error('PDF에서 실제 측정결과를 찾지 못했습니다. 측정결과표가 포함된 보고서인지 확인해주세요.');
   }
