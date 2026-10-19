@@ -1,3 +1,7 @@
+import { PDFDocument } from 'pdf-lib';
+
+// Required PDF operations load with the page, so an open tab can still analyze
+// after a new deployment removes the previous deployment's lazy chunks.
 // Keep PDF requests small enough for page, context and output limits.
 export const MEASURE_BATCH_PAGES = 8;
 export const MEASURE_TEXT_CHARS = 24000;
@@ -64,7 +68,6 @@ export function planMeasureBatches(pages) {
 
 export async function analyzeMeasurePdf(base64, invoke, onProgress = () => {}, options = {}) {
   if (base64.length * 0.75 > 20 * 1024 * 1024) throw new Error('파일은 20MB 이하여야 합니다.');
-  const { PDFDocument } = await import('pdf-lib');
   let document;
   try { document = await PDFDocument.load(base64); }
   catch { throw new Error('PDF를 읽을 수 없습니다. 암호를 해제하거나 정상적인 PDF 파일을 선택해주세요.'); }
