@@ -46,6 +46,7 @@ import {
   PHOTO_FOLDER_PRESETS,
 } from './data/constants.js';
 import qrcode from 'qrcode-generator';
+import { analyzeMeasurePdf } from './lib/measure-analysis.js';
 
 // ═══════════════════════════════════════════════
 // State
@@ -6340,7 +6341,10 @@ window.handleMeasureFile = function (e) {
 };
 
 function loadMeasureFile(file) {
+  if (file.type !== 'application/pdf') { toast('PDF 파일만 가능합니다', 'error'); return; }
+  if (file.size > 20 * 1024 * 1024) { toast('파일은 20MB 이하여야 합니다', 'error'); return; }
   const reader = new FileReader();
+  reader.onerror = () => toast('파일을 읽지 못했습니다. 다시 선택해주세요.', 'error');
   reader.onload = (ev) => {
     measureFileB64 = ev.target.result.split(',')[1];
     measureFileName_val = file.name;
@@ -6383,13 +6387,14 @@ window.analyzeMeasure = async function () {
     return;
   }
   const btn = document.getElementById('measureAnalyzeBtn');
+  if (btn.disabled) return;
+  const sourceBase64 = measureFileB64;
+  const sourceFileName = measureFileName_val;
   btn.disabled = true;
   btn.textContent = '🤖 AI 분석 중...';
   try {
-    const data = await invokeEdgeJson('parse-msds', {
-      fileBase64: measureFileB64,
-      mediaType: 'application/pdf',
-      mode: 'measure',
+    const result = await analyzeMeasurePdf(sourceBase64, invokeEdgeJson, ({ phase, completed, total }) => {
+      btn.textContent = phase === 'extract' ? `📄 문서 읽는 중 ${completed}/${total}쪽` : phase === 'complete' ? '🤖 분석 완료' : `🤖 AI 분석 중 ${completed}/${total}쪽 완료`;
     });
     currentMeasureData = {
       round,
@@ -6398,7 +6403,7 @@ window.analyzeMeasure = async function () {
       defaultAssignee,
       siteName: currentWS.name,
       createdDate: today(),
-      ...data.result,
+      ...result,
     };
     closeModal('measureUploadModal');
     showMeasureResult(currentMeasureData);
@@ -6408,11 +6413,11 @@ window.analyzeMeasure = async function () {
     try {
       const recId = await saveMeasureResult(
         currentMeasureData,
-        measureFileName_val,
+        sourceFileName,
       );
-      await uploadMeasurePdf(recId, measureFileName_val, measureFileB64);
+      await uploadMeasurePdf(recId, sourceFileName, sourceBase64);
       currentMeasureData.id = recId;
-      currentMeasureData.file_name = measureFileName_val;
+      currentMeasureData.file_name = sourceFileName;
       await loadMeasureResults();
     } catch (saveErr) {
       console.error('측정결과 저장 실패:', saveErr);

@@ -908,7 +908,7 @@ JSON만 응답:
   "noiseExceeded": false,
   "mixedExceeded": false
 }
-해당 항목이 없으면 배열은 빈 배열, 문자열은 빈 문자열로 반환하세요. JSON만 반환.`;
+이 PDF는 전체 보고서의 일부일 수 있습니다. 제공된 페이지에 있는 정보만 추출하고 다른 페이지의 내용을 추측하지 마세요. 측정위치 또는 시료번호가 있으면 measurements, dust, noise의 sampleId에 함께 기록하세요. 예비조사·측정계획·특수검진 안내를 실제 측정결과로 취급하지 마세요. 개선대책이 없는 부분에서는 improvements를 빈 배열로 반환하세요. 해당 항목이 없으면 배열은 빈 배열, 문자열은 빈 문자열로 반환하세요. JSON만 반환.`;
 
 const HEALTH_PROMPT = `이 건강진단 결과 문서에서 근로자별 정보를 추출하세요. JSON 배열만 응답:
 [{
@@ -1117,6 +1117,12 @@ function mapProviderError(
   const explicitCode = String(failure?.code || '');
   const detail = String(failure?.detail || failure?.message || '');
   const lower = detail.toLowerCase();
+  if (explicitCode === 'AI_RESPONSE_TRUNCATED') {
+    return { code: explicitCode, message: `${label} 분석 결과가 출력 한도를 초과했습니다. PDF를 더 작은 단위로 나누어 분석해주세요.`, kind: 'response', httpStatus: 502, disableCredential: false };
+  }
+  if ((status === 400 || status === 413) && /page|pdf|document|context|token|too large|too long/.test(lower)) {
+    return { code: 'AI_DOCUMENT_LIMIT', message: `${label}의 PDF 페이지 수 또는 문서 처리 한도를 초과했습니다. PDF를 나누어 분석해주세요.`, kind: 'response', httpStatus: 422, disableCredential: false };
+  }
   if (explicitCode === 'AI_PROVIDER_TIMEOUT') {
     return {
       code: explicitCode,
@@ -1379,6 +1385,13 @@ function extractJsonValue(text: string) {
   };
 }
 
+function validateMeasureText(rawText: unknown) {
+  if (typeof rawText !== 'string' || !rawText.trim() || rawText.length > 24000) {
+    return { error: '추출한 문서 텍스트가 비어 있거나 처리 한도를 초과했습니다.', code: 'DOCUMENT_TEXT_INVALID', status: 400 } as const;
+  }
+  return { fileBase64: rawText, mediaType: 'text/plain', inputBytes: new TextEncoder().encode(rawText).length };
+}
+
 function validateResultShape(mode: AnalysisMode, parsed: any) {
   if (mode === 'health') {
     if (
@@ -1615,8 +1628,9 @@ async function callClaude(
   maxTokens: number,
   timeoutMs: number,
 ) {
-  const sourceBlock =
-    mediaType === 'application/pdf'
+  const sourceBlock = mediaType === 'text/plain'
+    ? { type: 'text', text: fileBase64 }
+    : mediaType === 'application/pdf'
       ? {
           type: 'document',
           source: {
@@ -1660,6 +1674,7 @@ async function callClaude(
       detail: await response.text(),
     };
   const data = await response.json();
+  if (data.stop_reason === 'max_tokens') throw { code: 'AI_RESPONSE_TRUNCATED', status: 502 };
   return data.content?.map((item: any) => item.text || '').join('') || '';
 }
 
@@ -1671,8 +1686,9 @@ async function callOpenAI(
   maxTokens: number,
   timeoutMs: number,
 ) {
-  const filePart =
-    mediaType === 'application/pdf'
+  const filePart = mediaType === 'text/plain'
+    ? { type: 'input_text', text: fileBase64 }
+    : mediaType === 'application/pdf'
       ? {
           type: 'input_file',
           filename: 'document.pdf',
@@ -1714,6 +1730,7 @@ async function callOpenAI(
       detail: await response.text(),
     };
   const data = await response.json();
+  if (data.status === 'incomplete') throw { code: 'AI_RESPONSE_TRUNCATED', status: 502 };
   return (
     data.output_text ||
     data.output
@@ -1747,7 +1764,7 @@ async function callGemini(
           {
             role: 'user',
             parts: [
-              { inline_data: { mime_type: mediaType, data: fileBase64 } },
+              mediaType === 'text/plain' ? { text: fileBase64 } : { inline_data: { mime_type: mediaType, data: fileBase64 } },
               { text: prompt },
             ],
           },
@@ -1767,6 +1784,7 @@ async function callGemini(
       detail: await response.text(),
     };
   const data = await response.json();
+  if (data.candidates?.[0]?.finishReason === 'MAX_TOKENS') throw { code: 'AI_RESPONSE_TRUNCATED', status: 502 };
   return (
     data.candidates?.[0]?.content?.parts
       ?.map((part: any) => part.text || '')
@@ -1826,7 +1844,9 @@ serve(async (req) => {
     }
     const normalizedMode = rawMode as AnalysisMode;
     const forceReanalysis = body.forceReanalysis === true;
-    const validatedFile = validateFilePayload(body.fileBase64, body.mediaType);
+    const validatedFile = normalizedMode === 'measure' && body.documentText !== undefined
+      ? validateMeasureText(body.documentText)
+      : validateFilePayload(body.fileBase64, body.mediaType);
     if ('error' in validatedFile) {
       return json(
         { error: validatedFile.error, code: validatedFile.code },
@@ -1948,7 +1968,7 @@ serve(async (req) => {
 
     const promptVersion =
       normalizedMode === 'measure'
-        ? '2026-08-measure-aftercare-v2-units'
+        ? '2026-10-measure-text-v4'
         : normalizedMode === 'health'
           ? '2026-08-health-v1-failover'
           : '2026-10-gs-msds-v4-safety';
@@ -2014,7 +2034,7 @@ serve(async (req) => {
         ? 5000
         : normalizedMode === 'health'
           ? 4000
-          : 3500;
+          : 16000;
     const attempts: AttemptMeta[] = [];
     const failures: MappedProviderError[] = [];
     let selectedProvider: Provider | null = null;
@@ -2168,6 +2188,8 @@ serve(async (req) => {
           status: 'error',
           input_bytes: inputBytes,
         });
+        // Shrink the input immediately instead of paying for the same oversized output on every provider.
+        if (normalizedMode === 'measure' && mapped.code === 'AI_RESPONSE_TRUNCATED') break;
       }
     }
 
