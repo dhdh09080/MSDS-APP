@@ -80,10 +80,10 @@ test('invalid PDF and empty/malformed analysis cannot become successful reports'
   await assert.rejects(analyzeMeasurePdf(await pdf(1), async () => ({ result: {} })), /결과 형식/);
 });
 
-test('print autofit callback executes without relying on a global function', () => {
+test('print document includes its autofit function and executes without reference errors', () => {
   const source = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
-  const fn = source.slice(source.indexOf('function warningAutoFitPrintScript()'), source.indexOf('// 라벨 목록 →'));
-  const markup = vm.runInNewContext(`${fn}; warningAutoFitPrintScript()`);
+  const fn = source.slice(source.indexOf('function fitWarningLabels(root'), source.indexOf('// 라벨 목록 →'));
+  const markup = vm.runInNewContext(`const warnLabelSize = 'a4'; ${fn}; warningAutoFitPrintScript()`);
   const script = markup.replace(/^<script>/, '').replace(/<\/script>$/, '');
   let ran = false;
   vm.runInNewContext(script, {
