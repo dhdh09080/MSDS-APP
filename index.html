@@ -312,20 +312,27 @@
       <div class="page-subtitle" id="msdsSubtitle">총 0건</div>
     </div>
     <div class="header-actions">
-      <button class="btn btn-secondary" onclick="printMsdsList()">🖨️ 인쇄</button>
-      <button class="btn btn-secondary" onclick="openMsdsFullPrintModal()">📄 전문 인쇄</button>
-      <button class="btn btn-secondary" onclick="exportMsdsExcel()">📊 엑셀</button>
+      <button class="btn btn-secondary msds-print-btn" onclick="printMsdsList()">관리대장 인쇄</button>
+      <button class="btn btn-secondary" id="msdsDownloadBtn" onclick="downloadAllMsds()">전체 MSDS 다운로드</button>
+      <button class="btn btn-secondary" onclick="openMsdsFullPrintModal()">MSDS 원본 인쇄</button>
+      <button class="btn btn-secondary" onclick="exportMsdsExcel()">엑셀 다운로드</button>
       <button class="btn btn-secondary" onclick="openKoshaSearch()">🔍 물질 검색</button>
-      <button class="btn btn-secondary" onclick="openPackageModal()">📦 패키지</button>
+      <button class="btn btn-secondary" onclick="openPackageModal()">협력사 자료 묶음</button>
       <button class="btn btn-primary" id="msdsRegisterBtn" onclick="openMsdsRegister()">+ 등록</button>
     </div>
   </div>
-  <div style="display:flex;flex:1;overflow:hidden;">
+  <div class="msds-layout">
 
     <!-- 왼쪽 협력사 사이드바 -->
     <div class="msds-sidebar">
-      <div class="msds-sidebar-title">협력사</div>
-      <div id="contractorSidebar"></div>
+      <div class="msds-sidebar-header">
+        <label class="msds-sidebar-title" for="msdsContractorSearch">협력사 찾기</label>
+        <div class="msds-con-search">
+          <input type="search" id="msdsContractorSearch" placeholder="협력사명 검색" oninput="renderContractorSidebar()" autocomplete="off" aria-controls="contractorSidebar">
+        </div>
+        <div class="msds-sidebar-meta" id="msdsContractorCount" role="status"></div>
+      </div>
+      <nav id="contractorSidebar" aria-label="협력사별 MSDS 목록"></nav>
     </div>
 
     <!-- 오른쪽 목록 -->
@@ -340,7 +347,10 @@
         <select class="filter-select" id="filterReceipt" onchange="renderMsdsTable()"><option value="">전체 수령</option><option value="received">수령완료</option><option value="pending">미수령</option></select>
         <select class="filter-select" id="filterSpecial" onchange="renderMsdsTable()"><option value="">전체</option><option value="Y">특별관리만</option></select>
       </div>
-      <div class="hint">💡 협력사 선택 → '패키지' 버튼으로 목록+PDF+경고표지 한번에 출력</div>
+      <div class="msds-list-summary">
+        <div id="msdsResultSummary" role="status"></div>
+        <p>관리대장 인쇄·엑셀은 현재 조회 목록 기준입니다.</p>
+      </div>
       <div class="table-wrap">
         <div class="table-wrap-scroll">
           <table>
@@ -1323,6 +1333,20 @@
 </div>
 
 <!-- MSDS 등록 모달 -->
+<div class="modal-backdrop" id="msdsWarningModal">
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="msdsWarningTitle">
+    <div class="modal-header">
+      <div class="modal-title" id="msdsWarningTitle">경고표지</div>
+      <button type="button" class="modal-close" id="msdsWarningCloseBtn" onclick="closeMsdsWarning()" aria-label="경고표지 닫기">✕</button>
+    </div>
+    <div class="modal-body" id="msdsWarningPreview"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" id="msdsWarningPageBtn">경고표지 화면으로</button>
+      <button type="button" class="btn btn-primary" id="msdsWarningPrintBtn">이 경고표지 인쇄</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="msdsRegisterModal">
   <div class="modal wide">
     <div class="modal-header">
@@ -1346,8 +1370,8 @@
             <select class="form-input" id="batchWorkType"><option value="">선택 (선택사항)</option></select>
           </div>
         </div>
-        <div class="form-note" style="margin-bottom:10px;">📂 PDF 또는 JPG 파일만 가능. 여러 파일 동시 업로드 지원. 폴더 드래그 시 협력사·공종 자동 인식.</div>
-        <div id="msdsUploadZone" class="upload-zone"
+        <div class="form-note" style="margin-bottom:10px;">PDF · JPG · PNG 파일을 여러 개 올릴 수 있습니다. 폴더 업로드 시 협력사·공종을 자동으로 인식합니다.</div>
+        <div id="msdsUploadZone" class="upload-zone" role="button" tabindex="0" aria-label="MSDS 파일 선택" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('pdfInput').click();}"
           onclick="document.getElementById('pdfInput').click()"
           ondragover="dragOver(event,'msdsUploadZone')"
           ondrop="dropMsdsFiles(event)"

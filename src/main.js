@@ -111,7 +111,7 @@ function showDevFeaturePreview(page) {
   document.getElementById('wsNameEdit').value = currentWS.name;
   hydrateWorkspaceLocationInputs();
   populateContractorSelects();
-  const target = ['contractors', 'weather', 'warning', 'settings'].includes(page) ? page : 'contractors';
+  const target = ['msds', 'contractors', 'weather', 'warning', 'settings'].includes(page) ? page : 'contractors';
   if (target === 'warning') {
     warnSelected = new Set(['msds-1']);
     warnPreviewSingle = 'msds-1';
@@ -643,6 +643,7 @@ window.showPage = function(id) {
   MOBILE_TABS.forEach(t => {
     document.getElementById('mtab-'+t)?.classList.toggle('active', t === id);
   });
+  if (id === 'msds') { renderContractorSidebar(); renderMsdsTable(); }
   if (id === 'warning') { renderWarnPickList(); updateWarningPreview(); }
   if (id === 'upload-link') { renderTokenList(); renderPublicLinkUI(); }
   if (id === 'health') switchHealthSub(activeHealthSub);
@@ -1407,8 +1408,15 @@ function getFilteredMsds() {
 window.renderMsdsTable = function() {
   const filtered = getFilteredMsds();
   const tbody = document.getElementById('msdsTableBody');
+  const summary = document.getElementById('msdsResultSummary');
+  if (summary) {
+    summary.innerHTML = `<strong>${escapeHtml(window.selectedContractor || '전체 협력사')}</strong><span>조회 ${filtered.length}건</span>${window.selectedContractor ? '<button type="button" class="msds-reset" onclick="selectContractorSidebar(&quot;&quot;)">전체 보기</button>' : ''}`;
+  }
+  document.getElementById('msdsSubtitle').textContent = `전체 등록 ${msdsRecords.length}건 · 조회 ${filtered.length}건`;
+  const checkAll = document.getElementById('checkAll');
+  if (checkAll) { checkAll.checked = false; checkAll.indeterminate = false; }
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="11">등록된 MSDS가 없습니다</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="11">검색 조건에 맞는 MSDS가 없습니다. 협력사나 검색·필터 조건을 확인해주세요.</td></tr>';
     return;
   }
   tbody.innerHTML = filtered.map(r => {
@@ -1419,10 +1427,10 @@ window.renderMsdsTable = function() {
     const rc = (r.receipt_status||'received') === 'received'
       ? `<span class="badge badge-ok status-toggle" onclick="openReceipt('${r.id}')">✓ 수령</span>`
       : `<span class="badge badge-danger status-toggle" onclick="openReceipt('${r.id}')">! 미수령</span>`;
-    const file = r.has_pdf ? `<span class="pdf-link" onclick="viewFile('${r.id}')">📄</span>` : '-';
+    const file = r.has_pdf ? `<button type="button" class="btn btn-secondary btn-sm" onclick="viewFile('${r.id}')">원본 보기</button>` : '<span class="msds-no-file">미등록</span>';
     return `<tr>
       <td><input type="checkbox" class="row-check" value="${r.id}" onchange="updateCheckAll()"></td>
-      <td><div class="td-name">${r.product_name}</div><div class="td-sub">v${r.version||1}${r.submission_no_valid === 'N' ? ' · <span style="color:var(--danger);font-weight:700;">⚠ 제출번호 확인필요</span>' : ''}${r.reupload_requested ? ' · <span style="color:var(--warn);font-weight:700;">🔁 재업로드 요청중</span>' : ''}</div></td>
+      <td><button type="button" class="msds-product-link" data-msds-id="${r.id}" onclick="openMsdsWarning('${r.id}', this)" aria-label="${escapeHtml(r.product_name)} 경고표지 보기">${escapeHtml(r.product_name)}</button><div class="td-sub">v${r.version||1}${r.submission_no_valid === 'N' ? ' · <span style="color:var(--danger);font-weight:700;">⚠ 제출번호 확인필요</span>' : ''}${r.reupload_requested ? ' · <span style="color:var(--warn);font-weight:700;">🔁 재업로드 요청중</span>' : ''}</div></td>
       <td>${r.contractor}</td>
       <td>${r.work_type||'-'}</td>
       <td>${r.supplier||'-'}</td>
@@ -1432,11 +1440,11 @@ window.renderMsdsTable = function() {
       <td>${rc}</td>
       <td>${file}</td>
       <td>
-        <div style="display:flex;gap:4px;">
-          <button class="btn btn-secondary btn-sm btn-icon" onclick="showMsdsDetail('${r.id}')" title="상세">👁</button>
-          <button class="btn btn-secondary btn-sm btn-icon" onclick="startMsdsEdit('${r.id}')" title="수정">✏️</button>
-          <button class="btn ${r.reupload_requested?'btn-warn':'btn-secondary'} btn-sm btn-icon" onclick="${r.reupload_requested?`cancelReupload('${r.id}')`:`requestReupload('${r.id}')`}" title="${r.reupload_requested?'재업로드 요청 취소':'협력사에 재업로드 요청'}">🔁</button>
-          <button class="btn btn-danger btn-sm btn-icon" onclick="deleteMsdsRecord('${r.id}')" title="삭제">🗑</button>
+        <div class="msds-row-actions">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="showMsdsDetail('${r.id}')">상세보기</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="startMsdsEdit('${r.id}')">수정</button>
+          <button type="button" class="btn ${r.reupload_requested?'btn-warn':'btn-secondary'} btn-sm" onclick="${r.reupload_requested?`cancelReupload('${r.id}')`:`requestReupload('${r.id}')`}">${r.reupload_requested?'요청 취소':'재업로드 요청'}</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="deleteMsdsRecord('${r.id}')">삭제</button>
         </div>
       </td>
     </tr>`;
@@ -1752,6 +1760,37 @@ window.showMsdsDetail = function(id) {
 window.editMsdsRecord = function() { closeModal('msdsDetailModal'); startMsdsEdit(currentDetailId); };
 
 // ─── MSDS 대장 상세 → 경고표지 탭으로 이동, 해당 물질 선택 상태로 진입 ───
+let msdsWarningTrigger = null;
+
+window.openMsdsWarning = function(id, trigger) {
+  const record = msdsRecords.find(r => r.id === id);
+  if (!record) return;
+  msdsWarningTrigger = trigger || null;
+  document.getElementById('msdsWarningTitle').textContent = `${record.product_name} · 경고표지`;
+  document.getElementById('msdsWarningPreview').innerHTML = buildWarnLabel(record, currentWS?.name || '현장명', 'a4');
+  document.getElementById('msdsWarningPrintBtn').onclick = () => {
+    const previousSize = warnLabelSize;
+    try {
+      warnLabelSize = 'a4';
+      printSingleWarning(id);
+    } finally {
+      warnLabelSize = previousSize;
+    }
+  };
+  document.getElementById('msdsWarningPageBtn').onclick = () => {
+    closeModal('msdsWarningModal');
+    warnPreviewSingle = id;
+    showPage('warning');
+  };
+  openModal('msdsWarningModal');
+  document.getElementById('msdsWarningCloseBtn').focus();
+};
+
+window.closeMsdsWarning = function() {
+  closeModal('msdsWarningModal');
+  msdsWarningTrigger?.focus();
+};
+
 window.printWarningFromDetail = function() {
   if (!currentDetailId) return;
   warnSelected.add(currentDetailId);
@@ -2454,6 +2493,49 @@ window.exportMsdsExcel = function() {
 // ═══════════════════════════════════════════════
 // Print List
 // ═══════════════════════════════════════════════
+// Download every available original in this workspace, independently of list filters.
+window.downloadAllMsds = async function() {
+  const btn = document.getElementById('msdsDownloadBtn');
+  if (btn.disabled) return;
+  const targets = msdsRecords.filter(r => r.has_pdf && r.pdf_path);
+  if (!targets.length) { toast('다운로드할 MSDS 원본이 없습니다', 'error'); return; }
+  const label = btn.textContent;
+  btn.disabled = true;
+  const safePart = value => String(value || '미지정').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/^\.+$/, '_');
+  try {
+    const zip = new JSZip();
+    const failed = [];
+    let count = 0;
+    for (const [index, record] of targets.entries()) {
+      btn.textContent = `원본 준비 중 ${index + 1}/${targets.length}`;
+      try {
+        const { data, error } = await supabase.storage.from('msds-pdfs').download(record.pdf_path);
+        if (error || !data) throw error || new Error('원본 없음');
+        const folder = zip.folder(safePart(record.contractor));
+        const filename = safePart(record.pdf_name || `${record.product_name}.pdf`);
+        let unique = filename;
+        let suffix = 1;
+        while (folder.file(unique)) unique = `${suffix++}_${filename}`;
+        folder.file(unique, data);
+        count++;
+      } catch {
+        failed.push(`${record.contractor} · ${record.product_name}`);
+      }
+    }
+    if (!count) { toast('원본을 다운로드하지 못했습니다. 접근 권한과 네트워크를 확인해주세요.', 'error'); return; }
+    if (failed.length) zip.file('다운로드_실패_목록.txt', failed.join('\n'));
+    btn.textContent = 'ZIP 압축 중…';
+    const content = await zip.generateAsync({ type: 'blob' });
+    downloadBlob(content, `전체_MSDS_${safePart(currentWS.name)}_${today()}.zip`);
+    toast(`MSDS 원본 ${count}건 다운로드${failed.length ? ` · 실패 ${failed.length}건 (ZIP 내 목록 확인)` : ' 완료'}`, failed.length ? 'error' : 'success');
+  } catch {
+    toast('MSDS 다운로드에 실패했습니다. 다시 시도해주세요.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+};
+
 window.printMsdsList = function() {
   const filtered = getFilteredMsds()
     .sort((a,b) => {
@@ -2505,7 +2587,7 @@ window.printMsdsList = function() {
   <div class="legend"><b>범례</b> ● = 해당 · 측정=작업환경측정 · 특수검진=특수건강진단(주기) · 관리=관리대상 · 허가=허가대상 · 특별=특별관리물질(CMR) · 위험=위험물</div>
   <table>
     <thead><tr><th>No</th><th>협력사</th><th>공종</th><th>제품명</th><th>공급업체</th><th>연락처</th><th>개정일</th><th>CAS No.</th><th>구성성분명</th><th>측정</th><th>특수검진</th><th>관리</th><th>허가</th><th>특별</th><th>위험</th><th>보호구</th></tr></thead>
-    <tbody>${rows}</tbody>
+    <tbody>${rows.join('')}</tbody>
   </table>
   </body></html>`);
 };
@@ -2782,6 +2864,7 @@ window.selectContractorSidebar = function(name) {
   // 사이드바 활성화 표시
   document.querySelectorAll('.sidebar-con-item').forEach(el => {
     el.classList.toggle('active', el.dataset.name === name);
+    el.setAttribute('aria-pressed', String(el.dataset.name === name));
   });
   // 공종 필터 업데이트
   const con = contractors.find(c => c.name === name);
@@ -2796,24 +2879,53 @@ window.selectContractorSidebar = function(name) {
   renderMsdsTable();
 };
 
-function renderContractorSidebar() {
+window.renderContractorSidebar = function() {
   const el = document.getElementById('contractorSidebar');
   if (!el) return;
-  // 협력사별 물질 수 계산
-  const counts = {};
-  msdsRecords.forEach(r => { counts[r.contractor] = (counts[r.contractor]||0) + 1; });
-  const sortedContractors = [...contractors].sort((a,b) => a.name.localeCompare(b.name, 'ko'));
-  el.innerHTML = `
-    <div class="sidebar-con-item ${!window.selectedContractor?'active':''}" data-name="" onclick="selectContractorSidebar('')">
-      <span class="sidebar-con-name">전체 보기</span>
-      <span class="sidebar-con-count">${msdsRecords.length}</span>
-    </div>
-    ${sortedContractors.map(c => `
-      <div class="sidebar-con-item ${window.selectedContractor===c.name?'active':''}" data-name="${c.name}" onclick="selectContractorSidebar('${c.name}')">
-        <span class="sidebar-con-name">${c.name}</span>
-        <span class="sidebar-con-count">${counts[c.name]||0}</span>
-      </div>`).join('')}`;
-}
+  const counts = new Map();
+  msdsRecords.forEach(r => counts.set(r.contractor, (counts.get(r.contractor) || 0) + 1));
+  const query = normalizeContractorName(document.getElementById('msdsContractorSearch')?.value);
+  // Keep record-linked companies visible even if their contractor entry was removed.
+  const names = [...new Set([...contractors.map(c => c.name), ...counts.keys()])].filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, 'ko'));
+  const matches = names.filter(name => normalizeContractorName(name).includes(query));
+  document.getElementById('msdsContractorCount').textContent = query
+    ? `검색 결과 ${matches.length}개사 / 전체 ${names.length}개사` : `전체 ${names.length}개사 · 숫자는 등록 MSDS 수`;
+  el.replaceChildren();
+  const addItem = (name, label, count) => {
+    const button = document.createElement('button');
+    const active = (window.selectedContractor || '') === name;
+    button.type = 'button';
+    button.className = `sidebar-con-item${active ? ' active' : ''}`;
+    button.dataset.name = name;
+    button.setAttribute('aria-pressed', String(active));
+    button.setAttribute('aria-label', `${label}, MSDS ${count}건`);
+    button.innerHTML = `<span class="sidebar-con-name">${escapeHtml(label)}</span><span class="sidebar-con-count">${count}</span>`;
+    button.onclick = () => selectContractorSidebar(name);
+    el.append(button);
+  };
+  addItem('', '전체 보기', msdsRecords.length);
+  matches.forEach(name => addItem(name, name, counts.get(name) || 0));
+  if (!matches.length) {
+    const empty = document.createElement('div');
+    empty.className = 'msds-con-empty';
+    empty.textContent = query ? '검색된 협력사가 없습니다.' : '등록된 협력사가 없습니다.';
+    if (query) {
+      const reset = document.createElement('button');
+      reset.type = 'button';
+      reset.className = 'msds-reset';
+      reset.textContent = '검색 초기화';
+      reset.onclick = () => {
+        const input = document.getElementById('msdsContractorSearch');
+        input.value = '';
+        renderContractorSidebar();
+        input.focus();
+      };
+      empty.append(reset);
+    }
+    el.append(empty);
+  }
+};
 // ═══════════════════════════════════════════════
 // 작업환경측정
 // ═══════════════════════════════════════════════
@@ -3344,7 +3456,23 @@ window.closeModal = closeModal;
 window.toast = toast;
 
 // ESC로 모달 닫기
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.querySelectorAll('.modal-backdrop.open').forEach(m => m.classList.remove('open')); } });
+document.addEventListener('keydown', e => {
+  const warningModal = document.getElementById('msdsWarningModal');
+  if (e.key === 'Tab' && warningModal?.classList.contains('open')) {
+    const buttons = warningModal.querySelectorAll('button:not([disabled])');
+    const first = buttons[0], last = buttons[buttons.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last?.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first?.focus();
+    }
+  }
+  if (e.key !== 'Escape') return;
+  if (warningModal?.classList.contains('open')) closeMsdsWarning();
+  document.querySelectorAll('.modal-backdrop.open').forEach(m => m.classList.remove('open'));
+});
 
 // ═══════════════════════════════════════════════
 // Init
