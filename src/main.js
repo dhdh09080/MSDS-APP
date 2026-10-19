@@ -47,6 +47,8 @@ import {
 } from './data/constants.js';
 import qrcode from 'qrcode-generator';
 import { analyzeMeasurePdf } from './lib/measure-analysis.js';
+import { extractMeasurePages } from './lib/measure-pdf-text.js';
+import { parseLocalMeasureReport } from './lib/measure-local.js';
 
 // ═══════════════════════════════════════════════
 // State
@@ -6303,9 +6305,26 @@ window.renderContractorSidebar = function() {
 // 작업환경측정
 // ═══════════════════════════════════════════════
 let measureFileB64 = null;
+let measurePreparation = null;
+
+function prepareMeasureReport(base64) {
+  if (measurePreparation?.base64 === base64) return measurePreparation.promise;
+  const promise = extractMeasurePages(base64, ({ completed, total }) => {
+    if (measureFileB64 === base64) document.getElementById('measureFileStatus').textContent = `문서 읽는 중 ${completed}/${total}쪽`;
+  }).then(pages => parseLocalMeasureReport(pages));
+  measurePreparation = { base64, promise };
+  // Preprocessing begins on selection, before the user starts analysis.
+  promise.then(() => {
+    if (measureFileB64 === base64) document.getElementById('measureFileStatus').textContent = '빠른 분석 준비 완료';
+  }, () => {
+    if (measureFileB64 === base64) document.getElementById('measureFileStatus').textContent = '빠른 분석으로 확인되지 않는 양식입니다. AI 정밀 분석을 선택해주세요.';
+  });
+  return promise;
+}
 
 window.openMeasureUpload = function () {
   measureFileB64 = null;
+  measurePreparation = null;
   measureFileName_val = null;
   document.getElementById('measureFileInfo').style.display = 'none';
   document.getElementById('measureUploadZone').style.display = 'block';
@@ -6352,18 +6371,21 @@ function loadMeasureFile(file) {
     const info = document.getElementById('measureFileInfo');
     info.style.display = 'flex';
     info.querySelector('.fi-name').textContent = file.name;
+    document.getElementById('measureFileStatus').textContent = '빠른 분석 준비 중...';
+    prepareMeasureReport(measureFileB64);
   };
   reader.readAsDataURL(file);
 }
 
 window.clearMeasureFile = function () {
   measureFileB64 = null;
+  measurePreparation = null;
   measureFileName_val = null;
   document.getElementById('measureFileInfo').style.display = 'none';
   document.getElementById('measureUploadZone').style.display = 'block';
 };
 
-window.analyzeMeasure = async function () {
+window.analyzeMeasure = async function ({ useAi = false } = {}) {
   const year = document.getElementById('measureYear').value;
   const half = document.getElementById('measureHalf').value;
   const dateFrom = document.getElementById('measureDateFrom').value;
@@ -6386,16 +6408,18 @@ window.analyzeMeasure = async function () {
     toast('파일을 먼저 업로드하세요', 'error');
     return;
   }
-  const btn = document.getElementById('measureAnalyzeBtn');
-  if (btn.disabled) return;
+  const quickBtn = document.getElementById('measureAnalyzeBtn');
+  const aiBtn = document.getElementById('measureAiAnalyzeBtn');
+  const btn = useAi ? aiBtn : quickBtn;
+  if (quickBtn.disabled || aiBtn.disabled) return;
   const sourceBase64 = measureFileB64;
   const sourceFileName = measureFileName_val;
-  btn.disabled = true;
-  btn.textContent = '🤖 AI 분석 중...';
+  quickBtn.disabled = aiBtn.disabled = true;
+  btn.textContent = useAi ? '🤖 AI 분석 중...' : '📄 보고서 확인 중...';
   try {
-    const result = await analyzeMeasurePdf(sourceBase64, invokeEdgeJson, ({ phase, completed, total }) => {
+    const result = useAi ? await analyzeMeasurePdf(sourceBase64, invokeEdgeJson, ({ phase, completed, total }) => {
       btn.textContent = phase === 'extract' ? `📄 문서 읽는 중 ${completed}/${total}쪽` : phase === 'complete' ? '🤖 분석 완료' : `🤖 AI 분석 중 ${completed}/${total}쪽 완료`;
-    });
+    }) : await prepareMeasureReport(sourceBase64);
     currentMeasureData = {
       round,
       period,
@@ -6419,8 +6443,12 @@ window.analyzeMeasure = async function () {
       currentMeasureData.id = recId;
       currentMeasureData.file_name = sourceFileName;
       await loadMeasureResults();
+      const saveStatus = document.getElementById('measureSaveStatus');
+      if (saveStatus) saveStatus.textContent = '결과와 원본 PDF 저장 완료';
     } catch (saveErr) {
       console.error('측정결과 저장 실패:', saveErr);
+      const saveStatus = document.getElementById('measureSaveStatus');
+      if (saveStatus) saveStatus.textContent = '저장 실패 · 다운로드로 결과를 보관해주세요.';
       toast(
         '분석은 완료됐지만 저장에 실패했습니다. 다운로드로 결과를 보관해주세요.',
         'warn',
@@ -6429,8 +6457,9 @@ window.analyzeMeasure = async function () {
   } catch (err) {
     handleAiError(err);
   } finally {
-    btn.disabled = false;
-    btn.textContent = '🤖 AI 분석 시작';
+    quickBtn.disabled = aiBtn.disabled = false;
+    quickBtn.textContent = '📄 빠른 분석';
+    aiBtn.textContent = '🤖 AI 정밀 분석';
   }
 };
 
@@ -6543,10 +6572,11 @@ function showMeasureResult(d) {
     .join('');
 
   body.innerHTML = `
+    <div class="form-note" id="measureSaveStatus" role="status" style="margin-bottom:8px;">${d.id ? '저장된 결과' : '결과와 원본 PDF 저장 중...'}</div>
     <div style="background:var(--ok-light);border:1.5px solid #86EFAC;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--ok);">
-      ✅ AI 분석 완료 — 단위와 초과 판정, 개선대책을 원본 보고서와 대조한 뒤 Word 파일을 내려받으세요.
+      ${d.aftercare?.analysisMethod === 'local' ? '✅ 빠른 분석 완료 — 보고서에 기재된 결과와 개선대책을 직접 추출했습니다. 노출기준은 보고서 요약표 기준이며, 최고측정치만 있는 항목은 적용사유에 표시했습니다.' : '✅ AI 분석 완료 — 단위와 초과 판정, 개선대책을 원본 보고서와 대조한 뒤 Word 파일을 내려받으세요.'}
     </div>
-    <h4 style="margin-bottom:8px;font-size:14px;">📋 분진 측정결과 (${dust.length}건)</h4>
+    <h4 style="margin-bottom:8px;font-size:14px;">📋 분진·화학물질 측정결과 (${dust.length}건)</h4>
     <div style="overflow-x:auto;margin-bottom:20px;">
       <table class="result-table">
         <thead><tr><th>No.</th><th>공정명</th><th>유해인자</th><th>측정치</th><th>노출기준</th><th>적용사유</th></tr></thead>
