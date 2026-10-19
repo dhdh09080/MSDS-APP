@@ -1,3 +1,5 @@
+import { siteObservations } from './observations.ts';
+import { detailedForecast } from './detailed.ts';
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 
 const corsHeaders = {
@@ -123,7 +125,7 @@ serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'POST 요청만 지원합니다.' }, 405);
   try {
     const body = await req.json();
-    const action = body?.action === 'geocode' ? 'geocode' : 'forecast';
+    const action = ['geocode', 'detailed', 'observations'].includes(body?.action) ? body.action : 'forecast';
     const address = String(body?.address || '').trim();
     let latitude = validCoordinate(body?.latitude, -90, 90);
     let longitude = validCoordinate(body?.longitude, -180, 180);
@@ -143,7 +145,7 @@ serve(async (req) => {
       return json({ result: { address: matchedAddress, latitude, longitude, geocoder } });
     }
 
-    const weather = await forecast(latitude, longitude);
+    const weather = action === 'observations' ? await siteObservations(latitude, longitude) : action === 'detailed' ? await detailedForecast(latitude, longitude) : await forecast(latitude, longitude);
     return json({
       result: {
         ...weather,
@@ -151,7 +153,7 @@ serve(async (req) => {
         latitude,
         longitude,
         geocoder,
-        source: 'Open-Meteo',
+        ...(action === 'forecast' ? { source: 'Open-Meteo' } : {}),
       },
     });
   } catch (error) {

@@ -22,7 +22,7 @@ export const PAGES = [
   'admin',
   'settings',
 ];
-export const MOBILE_TABS = ['home', 'msds', 'contractors', 'health'];
+export const MOBILE_TABS = ['home', 'msds', 'contractors', 'health', 'weather'];
 
 // 경고표지 라벨 크기 프리셋 (A4 용지 분할 기준, 고시 제2023-9호 별표 규격 대응)
 export const WARN_SIZES = {

@@ -1,3 +1,4 @@
+import { loadWeatherDetail, loadWeatherObservations } from './lib/weather-detail.js';
 import { renderPpe, labelSafetySections } from './lib/warning-label.js';
 import warningLabelStyles from './warning-label.css?inline';
 import * as XLSX from 'xlsx';
@@ -10123,10 +10124,14 @@ async function loadDashWeather() {
 }
 
 window.loadWeatherPage = async function (force) {
+  const options = { workspace: currentWS, invoke: invokeEdgeJson, preview: !!getDevPreviewPage(), weatherIcon: gsWeatherIcon, weatherLabel: gsWeatherLabel };
+  loadWeatherDetail(options);
+  loadWeatherObservations(options);
   if (force) {
     wxForecast = null;
     wxPosterCache = {};
   }
+  const weatherWorkspaceId = currentWS?.id;
   const ready = renderWxSiteSummary();
   const latest = document.getElementById('wxLatestPoster');
   const el = document.getElementById('wxTodayBody');
@@ -10139,7 +10144,9 @@ window.loadWeatherPage = async function (force) {
     downloadBtn.style.display = 'none';
   } else {
     try {
-      if (!wxForecast) wxForecast = await fetchWxForecast();
+      const forecast = wxForecast || await fetchWxForecast();
+      if (currentWS?.id !== weatherWorkspaceId) return;
+      wxForecast = forecast;
       renderWxSitePoster(wxForecast);
       document.getElementById('wxHourlyCard').style.display = 'block';
       el.innerHTML = wxHourlyHtml(wxForecast);
@@ -11363,16 +11370,18 @@ window.renderMsdsRequests = function () {
 };
 
 function gsWeatherIcon(code) {
+  if (code === null || code === undefined) return '—';
   if (code >= 95) return '⛈';
-  if (code >= 71 && code <= 86) return '❄';
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return '❄';
   if (code >= 51 && code <= 82) return '☂';
   if (code >= 45 && code <= 48) return '≋';
   if (code >= 2) return '☁';
   return '☀';
 }
 function gsWeatherLabel(code) {
+  if (code === null || code === undefined) return '미제공';
   if (code >= 95) return '뇌우';
-  if (code >= 71 && code <= 86) return '눈';
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return '눈';
   if (code >= 51 && code <= 82) return '비';
   if (code >= 45 && code <= 48) return '안개';
   if (code >= 2) return '흐림';
