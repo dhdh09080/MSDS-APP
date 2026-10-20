@@ -1,4 +1,4 @@
-import { A4_POSTER, buildHealthPosterSvg, hourlyWeatherHtml, posterModel, kstDate, metric as weatherMetric } from './lib/weather-poster.js';
+import { weatherAlertsHtml, A4_POSTER, buildHealthPosterSvg, hourlyWeatherHtml, posterModel, kstDate, riskMetric } from './lib/weather-poster.js';
 import { loadWeatherDetail, loadWeatherObservations } from './lib/weather-detail.js';
 import { renderPpe, labelSafetySections } from './lib/warning-label.js';
 import warningLabelStyles from './warning-label.css?inline';
@@ -9924,7 +9924,7 @@ function renderWxSitePoster(fc) {
   );
   const model = posterModel(fc, wxSeasonMode);
   document.getElementById('wxLatestPoster').innerHTML =
-    `<div class="wx-mobile-health"><h3>${model.title}</h3><p>${model.action}</p><div class="wx-mobile-health-metrics"><div><small>06–19시 최고 / 최저 기온</small><b>${weatherMetric(model.high,'°')} / ${weatherMetric(model.low,'°')}</b></div><div><small>06–19시 최고 체감온도</small><b>${weatherMetric(model.maxFeel,'°C')}</b></div><div><small>06–19시 최대 풍속</small><b>${weatherMetric(model.maxWind,' m/s')}</b></div></div><ol>${model.tips.map(tip => `<li>${escapeHtml(tip)}</li>`).join('')}</ol></div><a class="wx-poster-original" href="${wxPosterObjectUrl}" target="_blank" rel="noopener" aria-label="건강관리 포스터 원본 크게 보기"><img class="wx-site-poster" src="${wxPosterObjectUrl}" alt="${escapeHtml(currentWS?.name || '현장')} ${model.title} · 시간별 기온, 체감온도, 풍속 그래프"></a><p class="wx-detail-note"><a class="wx-poster-open-link" href="${wxPosterObjectUrl}" target="_blank" rel="noopener">포스터 원본 크게 보기 ↗</a> · PNG로 저장해 현장에 게시하거나 공유하세요.</p>`;
+    `<div class="wx-mobile-health"><h3>${model.title}</h3><p>${model.action}</p>${weatherAlertsHtml(model.alerts)}<div class="wx-mobile-health-metrics"><div><small>06–19시 최고 / 최저 기온</small><b>${riskMetric('temp',model.high,'°')} / ${riskMetric('temp',model.low,'°')}</b></div><div><small>06–19시 최고 체감온도</small><b>${riskMetric('feel',model.maxFeel,'°C')}</b></div><div><small>06–19시 최대 풍속</small><b>${riskMetric('wind',model.maxWind,' m/s')}</b></div></div><ol>${model.tips.map(tip => `<li>${escapeHtml(tip)}</li>`).join('')}</ol></div><a class="wx-poster-original" href="${wxPosterObjectUrl}" target="_blank" rel="noopener" aria-label="건강관리 포스터 원본 크게 보기"><img class="wx-site-poster" src="${wxPosterObjectUrl}" alt="${escapeHtml(currentWS?.name || '현장')} ${model.title} · 시간별 기온, 체감온도, 풍속 그래프"></a><p class="wx-detail-note"><a class="wx-poster-open-link" href="${wxPosterObjectUrl}" target="_blank" rel="noopener">포스터 원본 크게 보기 ↗</a> · PNG로 저장해 현장에 게시하거나 공유하세요.</p>`;
   document.getElementById('wxDownloadPosterBtn').style.display = 'inline-flex';
 }
 

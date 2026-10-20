@@ -32,6 +32,90 @@ const TIPS = {
   ],
 };
 
+// User-defined site thresholds; these are not official weather warnings.
+export function metricAlert(key, value) {
+  if (!finite(value)) return null;
+  if (key === 'wind' && value >= 10) return {kind:'wind',level:1,label:'강풍 주의',threshold:'10m/s 이상',color:'#a64b08',background:'#fff3e6'};
+  if (key === 'feel') {
+    if (value >= 35) return {kind:'heat',level:3,label:'더위 위험',threshold:'35°C 이상',color:'#b42318',background:'#fff0ed'};
+    if (value >= 33) return {kind:'heat',level:2,label:'더위 경계',threshold:'33°C 이상',color:'#bd4612',background:'#fff1e6'};
+    if (value >= 31) return {kind:'heat',level:1,label:'더위 주의',threshold:'31°C 이상',color:'#936000',background:'#fff6d9'};
+  }
+  if (key === 'temp') {
+    if (value <= -15) return {kind:'cold',level:2,label:'추위 경고',threshold:'−15°C 이하',color:'#214ea0',background:'#eaf0ff'};
+    if (value <= -12) return {kind:'cold',level:1,label:'추위 주의',threshold:'−12°C 이하',color:'#286382',background:'#edf6fb'};
+  }
+  return null;
+}
+
+// A rounded value must not appear to cross a threshold that the actual value did not reach.
+export function riskMetric(key, value, unit='') {
+  if (!finite(value)) return '—';
+  const rounded=metric(value);
+  const display=(metricAlert(key,value)?.level||0)!==(metricAlert(key,Number(rounded))?.level||0) ? String(value) : rounded;
+  return display+unit;
+}
+
+const WEATHER_TIPS = {
+  wind: [
+    '풍속 10m/s 이상 시간대의 고소·양중 작업계획을 관리자와 확인하세요.',
+    '강풍 시간대를 확인하고 날릴 수 있는 자재와 가설물을 고정하세요.',
+    '바람이 강해지는 시간의 작업동선과 낙하물 방지 상태를 확인하세요.',
+  ],
+  heat1: [
+    '체감온도 31°C 이상에 대비해 시원한 물과 그늘을 준비하세요.',
+    '체감온도가 31°C 이상인 시간대를 확인하고 휴식 계획을 세우세요.',
+    '더위 주의 시간에 쉴 수 있도록 물과 시원한 휴게공간을 확인하세요.',
+  ],
+  heat2: [
+    '체감온도 33°C 이상 시간대에는 작업 강도와 휴식 계획을 점검하세요.',
+    '더위가 심한 시간의 작업을 조정하고 동료의 몸 상태를 살피세요.',
+    '체감온도 33°C 이상에 대비해 시원한 곳에서 충분히 쉬도록 준비하세요.',
+  ],
+  heat3: [
+    '체감온도 35°C 이상 시간대의 작업 일정을 관리자와 조정하세요.',
+    '매우 더운 시간의 야외작업 계획과 시원한 대피·휴게공간을 확인하세요.',
+    '체감온도 35°C 이상 예보를 공유하고 작업 강도와 휴식을 재점검하세요.',
+  ],
+  cold1: [
+    '기온 −12°C 이하 시간에 대비해 방한복과 따뜻한 휴게공간을 준비하세요.',
+    '추위 주의 시간대를 확인하고 방풍복·장갑·보온 신발을 점검하세요.',
+    '기온 −12°C 이하 예보를 공유하고 추위를 피할 휴식 계획을 확인하세요.',
+  ],
+  cold2: [
+    '기온 −15°C 이하 시간대의 야외작업 일정을 관리자와 조정하세요.',
+    '심한 추위에 대비해 따뜻한 휴식과 동료 상태 확인 계획을 세우세요.',
+    '기온 −15°C 이하 예보를 공유하고 방한 장비와 휴게공간을 재점검하세요.',
+  ],
+};
+
+function dailyWeatherTips(model, day) {
+  const index=((day%7)+7)%7;
+  const tips=model.alerts.map(alert=>{
+    const pool=WEATHER_TIPS[alert.kind === 'wind'?'wind':alert.kind+alert.level];
+    return pool[((day%pool.length)+pool.length)%pool.length];
+  });
+  // Add one extra weather-specific action when several simultaneous alerts do not fill the list.
+  if (tips.length < 2 && model.alerts.some(a=>a.kind==='heat')) tips.push('물과 시원한 휴게공간을 확보하고 동료의 몸 상태를 서로 확인하세요.');
+  if (tips.length < 2 && model.alerts.some(a=>a.kind==='cold')) tips.push('바람을 피할 수 있는 따뜻한 휴게공간과 여벌 장갑을 준비하세요.');
+  if (tips.length < 2 && model.alerts.some(a=>a.kind==='wind')) tips.push('가설물과 자재의 고정 상태를 확인하고 위험 구역 접근을 관리하세요.');
+  if (tips.length < 2 && finite(model.high) && finite(model.low) && model.high-model.low >= 10) tips.push('일교차가 10°C 이상입니다. 겉옷과 여벌 옷을 준비하세요.');
+  if (tips.length < 2 && model.hours.some(h=>finite(h.humidity) && h.humidity>=80 && finite(h.feel) && h.feel>=28)) tips.push('덥고 습한 시간에 대비해 통풍과 시원한 휴게공간을 확인하세요.');
+  for(const tip of TIPS[model.season][index]) if(!tips.includes(tip)) tips.push(tip);
+  return tips.slice(0,3);
+}
+
+export function weatherAlertsHtml(alerts) {
+  if (!alerts.length) return '';
+  return `<div class="wx-weather-alerts" aria-label="현장 설정 기준 경고">${alerts.map(a=>`<span class="wx-weather-alert" style="--alert-color:${a.color};--alert-background:${a.background}"><b>! ${a.label}</b><span>${a.threshold} · ${a.hours.map(h=>h+'시').join(', ')}</span></span>`).join('')}</div>`;
+}
+
+function metricHtml(key, value) {
+  const alert=metricAlert(key,value);
+  return alert ? `<strong class="wx-alert-value" style="--alert-color:${alert.color};--alert-background:${alert.background}" aria-label="${riskMetric(key,value)} · ${alert.label} · ${alert.threshold}">${riskMetric(key,value)} <small>!</small></strong>` : riskMetric(key,value);
+}
+
+
 export function posterModel(fc, mode = 'auto') {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(fc.date) ? fc.date : kstDate();
   const hours = (fc.hours || []).filter(h => Number.isInteger(h.hour) && h.hour >= 6 && h.hour <= 19).sort((a,b) => a.hour-b.hour);
@@ -50,9 +134,15 @@ export function posterModel(fc, mode = 'auto') {
     winter: { title:'동절기 건강관리', accent:'#245a91', pale:'#eaf2fb', note:'추위와 바람에 대비하는, 보온 · 따뜻한 휴식', action:'체감온도와 결빙 여부를 확인하고 따뜻하게 작업하세요.' },
   };
   const day = Math.floor(Date.parse(date+'T00:00:00Z') / 86400000);
-  return {date,hours,season,...themes[season], tips:TIPS[season][((day%7)+7)%7],
+  const model = {date,hours,season,...themes[season],
     high:temps.length?Math.max(...temps):null, low:temps.length?Math.min(...temps):null,
     maxFeel:feels.length?Math.max(...feels):null, maxWind:winds.length?Math.max(...winds):null};
+  model.alerts = [['feel',model.maxFeel],['temp',model.low],['wind',model.maxWind]].flatMap(([key,value])=>{
+    const alert=metricAlert(key,value);
+    return alert ? [{...alert,value,hours:hours.filter(h=>(metricAlert(key,h[key])?.level||0)>=alert.level).map(h=>h.hour)}] : [];
+  });
+  model.tips = dailyWeatherTips(model,day);
+  return model;
 }
 
 // Separate temperature and wind scales. Missing values break the line instead of becoming zero.
@@ -80,29 +170,30 @@ export function weatherChartSvg(hours, {width=1328,height=300,left=100,right=24,
     let segment=[];
     const flush=()=>{if(segment.length)content+=`<polyline points="${segment.join(' ')}" fill="none" stroke="${color}" stroke-width="3.5" ${dash?`stroke-dasharray="${dash}"`:''} stroke-linejoin="round" stroke-linecap="round"/>`;segment=[];};
     hours.forEach((h,i)=>{if(finite(h[key]))segment.push(`${x(i)},${y(h[key])}`);else flush();});flush();
-    hours.forEach((h,i)=>{if(finite(h[key]))content+=`<circle cx="${x(i)}" cy="${y(h[key])}" r="3.8" fill="${color}"/>`;});
+    hours.forEach((h,i)=>{if(finite(h[key])) {
+      const alert=metricAlert(key,h[key]);
+      content+=`<circle cx="${x(i)}" cy="${y(h[key])}" r="${alert?6:3.8}" fill="${alert?.color||color}"${alert?' stroke="white" stroke-width="2"':''}><title>${h.hour}시 ${metric(h[key])}°C${alert?' · '+alert.label+' · '+alert.threshold:''}</title></circle>`;
+    }});
   }
   hours.forEach((h,i)=>{
     if(finite(h.wind)) {
       const barHeight=h.wind/maxWind*windHeight;
-      content+=`<rect x="${x(i)-12}" y="${windBottom-barHeight}" width="24" height="${Math.max(1,barHeight)}" rx="1" fill="${colors[2]}"/><text x="${x(i)}" y="${windBottom-barHeight-6}" text-anchor="middle" fill="#626970" font-size="14">${metric(h.wind)}</text>`;
+      const alert=metricAlert('wind',h.wind);
+      content+=`<rect x="${x(i)-12}" y="${windBottom-barHeight}" width="24" height="${Math.max(1,barHeight)}" rx="1" fill="${alert?.color||colors[2]}"><title>${h.hour}시 ${riskMetric('wind',h.wind)}m/s${alert?' · '+alert.label:''}</title></rect><text x="${x(i)}" y="${windBottom-barHeight-6}" text-anchor="middle" fill="${alert?.color||'#626970'}" font-weight="${alert?700:400}" font-size="14">${riskMetric('wind',h.wind)}${alert?'!':''}</text>`;
     }
     content+=`<text x="${x(i)}" y="${height-13}" text-anchor="middle" fill="#364552" font-size="16">${h.hour}시</text>`;
   });
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="시간별 기온·체감온도 선 그래프와 풍속 막대 그래프"><title>기온과 체감온도는 °C, 풍속은 별도 막대 축의 m/s입니다. 정확한 값은 시간별 표에서 확인하세요.</title>${content}</svg>`.replace(/font-size="(\d+)"/g, (_,n)=>`font-size="${Number(n)*fontScale}"`);
 }
 
-function wrap(text, length) {
-  const chars=Array.from(text);const rows=[];
-  for(let i=0;i<chars.length;i+=length)rows.push(chars.slice(i,i+length).join(''));
-  return rows;
-}
 export const A4_POSTER = Object.freeze({width:1260,height:1782,exportWidth:2520,exportHeight:3564});
 
 export function buildHealthPosterSvg(fc, site = {}, mode='auto') {
   const m=posterModel(fc,mode);
   const accent=m.season==='winter'?'#285caa':m.season==='summer'?'#d94b25':'#ce512a';
   const dateLabel=new Date(m.date+'T12:00:00+09:00').toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'long',day:'numeric',weekday:'long'});
+  const coldAlert=metricAlert('temp',m.low), heatAlert=metricAlert('feel',m.maxFeel), windAlert=metricAlert('wind',m.maxWind);
+  const banner=m.alerts.map((a,i)=>`<rect x="${72+i*378}" y="337" width="360" height="32" fill="${a.background}"/><text x="${84+i*378}" y="360" fill="${a.color}" font-size="19" font-weight="650">! ${a.label} · ${a.threshold}</text>`).join('');
   const chart=weatherChartSvg(m.hours,{width:1116,height:276,left:60,right:24,colors:['#242628',accent,'#a4adb3'],fontScale:1.25}).replace('<svg ', '<svg x="72" y="724" ');
   const table=(hours,y)=>{
     const left=72,labelWidth=160,colWidth=956/7;
@@ -111,7 +202,10 @@ export function buildHealthPosterSvg(fc, site = {}, mode='auto') {
       <text x="72" y="${y+30}" fill="#747a7e" font-size="21">시간</text>
       ${hours.map((h,i)=>`<text x="${left+labelWidth+(i+.5)*colWidth}" y="${y+30}" text-anchor="middle" fill="#242628" font-size="23" font-weight="600">${h.hour}시</text>`).join('')}
       <line x1="72" x2="1188" y1="${y+45}" y2="${y+45}" stroke="#dce0e2"/>
-      ${rows.map(([name,key,color],r)=>`<text x="72" y="${y+75+r*38}" fill="${color}" font-size="22">${name}</text>${hours.map((h,i)=>`<text x="${left+labelWidth+(i+.5)*colWidth}" y="${y+75+r*38}" text-anchor="middle" fill="${color}" font-size="26" font-weight="500">${metric(h[key])}</text>`).join('')}`).join('')}`;
+      ${rows.map(([name,key,color],r)=>`<text x="72" y="${y+75+r*38}" fill="${color}" font-size="22">${name}</text>${hours.map((h,i)=>{
+        const alert=metricAlert(key,h[key]),x=left+labelWidth+(i+.5)*colWidth,yy=y+75+r*38;
+        return `${alert?`<rect x="${x-50}" y="${yy-26}" width="100" height="34" fill="${alert.background}"/>`:''}<text x="${x}" y="${yy}" text-anchor="middle" fill="${alert?.color||color}" font-size="26" font-weight="${alert?750:500}">${riskMetric(key,h[key])}${alert?' !':''}</text>`;
+      }).join('')}`).join('')}`;
   };
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="1782" viewBox="0 0 1260 1782" font-family="'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif">
   <title>${esc(m.title)} · ${esc(dateLabel)} · A4 세로</title>
@@ -123,12 +217,13 @@ export function buildHealthPosterSvg(fc, site = {}, mode='auto') {
   <text x="104" y="224" fill="#202224" font-size="82" font-weight="750" letter-spacing="-4">${m.title}</text>
   <text x="72" y="284" fill="#242628" font-size="30" font-weight="550">${esc(String(site.name||'현장').slice(0,32))}</text>
   <text x="72" y="320" fill="#747a7e" font-size="21">${esc(String(site.address||fc.address||'').slice(0,52))}</text>
-  <text x="72" y="387" fill="#626970" font-size="23">최고 기온</text>
-  <text x="660" y="387" fill="#626970" font-size="23">최저 기온</text>
-  <text x="72" y="544" fill="#202224" font-size="160" font-weight="600" letter-spacing="-8">${metric(m.high,'°')}</text>
-  <text x="660" y="544" fill="#747a7e" font-size="160" font-weight="500" letter-spacing="-8">${metric(m.low,'°')}</text>
-  <text x="72" y="597" fill="#626970" font-size="23">최고 체감온도 <tspan fill="${accent}" font-size="31" font-weight="600" dx="18">${metric(m.maxFeel,'°C')}</tspan></text>
-  <text x="660" y="597" fill="#626970" font-size="23">최대 풍속 <tspan fill="#242628" font-size="31" font-weight="600" dx="18">${metric(m.maxWind,' m/s')}</tspan></text>
+  ${banner}
+  <text x="72" y="400" fill="#626970" font-size="23">최고 기온</text>
+  <text x="660" y="400" fill="#626970" font-size="23">최저 기온</text>
+  <text x="72" y="544" fill="#202224" font-size="160" font-weight="600" letter-spacing="-8">${riskMetric('temp',m.high,'°')}</text>
+  <text x="660" y="544" fill="${coldAlert?.color||'#747a7e'}" font-size="160" font-weight="500" letter-spacing="-8">${riskMetric('temp',m.low,'°')}</text>
+  <text x="72" y="597" fill="#626970" font-size="23">최고 체감온도 <tspan fill="${heatAlert?.color||accent}" font-size="31" font-weight="600" dx="18">${riskMetric('feel',m.maxFeel,'°C')}</tspan></text>
+  <text x="660" y="597" fill="#626970" font-size="23">최대 풍속 <tspan fill="${windAlert?.color||'#242628'}" font-size="31" font-weight="600" dx="18">${riskMetric('wind',m.maxWind,' m/s')}</tspan></text>
   <line x1="72" x2="1188" y1="636" y2="636" stroke="#dce0e2"/>
   <text x="72" y="684" fill="#242628" font-size="29" font-weight="650">시간별 예보</text>
   <text x="72" y="714" fill="#747a7e" font-size="18">모든 기온·체감온도·풍속은 06–19시 예보 기준</text>
@@ -143,14 +238,14 @@ export function buildHealthPosterSvg(fc, site = {}, mode='auto') {
   ${m.tips.map((tip,i)=>`<text x="72" y="${1520+i*52}" fill="${accent}" font-size="23" font-weight="650">0${i+1}</text><text x="132" y="${1520+i*52}" fill="#242628" font-size="26" font-weight="500">${esc(tip)}</text>`).join('')}
   <line x1="72" x2="1188" y1="1663" y2="1663" stroke="#242628" stroke-width="1.5"/>
   <text x="72" y="1700" fill="#747a7e" font-size="18">${fc.source==='preview'?'미리보기 예시 · 실제 날씨가 아닙니다.':'출처 Open-Meteo · 현장 저장 좌표 기준 · 실제 관측값과 다를 수 있습니다.'}</text>
-  <text x="72" y="1730" fill="#747a7e" font-size="18">온도는 선, 풍속은 별도 축의 막대로 표시합니다. — 표시는 미제공입니다.</text>
+  <text x="72" y="1730" fill="#747a7e" font-size="18">경고는 현장 설정 기준이며 기상청 특보와 다릅니다. — 미제공</text>
   <text x="1188" y="1730" text-anchor="end" fill="#747a7e" font-size="18">A4 · 210 × 297 mm</text>
   </svg>`;
 }
 
 export function hourlyWeatherHtml(fc, mode='auto') {
   const m=posterModel(fc,mode);
-  return `<div class="wx-chart-intro"><div><h3>시간별 기온과 바람</h3><p>기온·체감온도는 선으로, 풍속은 아래 막대로 비교하세요.</p></div><div class="wx-chart-legend"><span class="temp">기온 °C</span><span class="feel">체감온도 °C</span><span class="wind">풍속 m/s</span></div></div>
+  return `${weatherAlertsHtml(m.alerts)}<div class="wx-chart-intro"><div><h3>시간별 기온과 바람</h3><p>기온·체감온도는 선으로, 풍속은 아래 막대로 비교하세요.</p></div><div class="wx-chart-legend"><span class="temp">기온 °C</span><span class="feel">체감온도 °C</span><span class="wind">풍속 m/s</span></div></div>
   <div class="wx-chart-scroll" tabindex="0" role="region" aria-label="시간별 그래프, 좌우로 스크롤">${weatherChartSvg(m.hours,{width:1120,height:340})}</div>
-  <div class="wx-hourly-table" tabindex="0" role="region" aria-label="시간별 수치, 좌우로 스크롤"><table><caption>오늘 06–19시 예보 · — 표시는 미제공</caption><thead><tr><th scope="col">항목</th>${m.hours.map(h=>`<th scope="col">${h.hour}시</th>`).join('')}</tr></thead><tbody>${[['기온 (°C)','temp'],['체감온도 (°C)','feel'],['풍속 (m/s)','wind'],['습도 (%)','humidity']].map(([name,key])=>`<tr><th scope="row">${name}</th>${m.hours.map(h=>`<td>${metric(h[key])}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="wx-detail-note">현장 저장 좌표 기준 예보 · 출처 ${fc.source==='preview'?'미리보기 예시':'Open-Meteo'} · 풍속은 바람의 속도입니다.</p>`;
+  <div class="wx-hourly-table" tabindex="0" role="region" aria-label="시간별 수치, 좌우로 스크롤"><table><caption>오늘 06–19시 예보 · — 표시는 미제공</caption><thead><tr><th scope="col">항목</th>${m.hours.map(h=>`<th scope="col">${h.hour}시</th>`).join('')}</tr></thead><tbody>${[['기온 (°C)','temp'],['체감온도 (°C)','feel'],['풍속 (m/s)','wind'],['습도 (%)','humidity']].map(([name,key])=>`<tr><th scope="row">${name}</th>${m.hours.map(h=>`<td>${metricHtml(key,h[key])}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="wx-detail-note">현장 저장 좌표 기준 예보 · 출처 ${fc.source==='preview'?'미리보기 예시':'Open-Meteo'} · 풍속은 바람의 속도입니다.</p>`;
 }

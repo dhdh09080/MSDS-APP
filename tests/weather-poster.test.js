@@ -75,3 +75,58 @@ test('download scales the complete A4 SVG to the print canvas and print action s
  assert.match(printed,/@page\{size:A4 portrait;margin:0\}/);
  assert.match(printed,/width:210mm;height:297mm/);
 });
+
+test('wind, heat and cold alert thresholds are inclusive, graduated, and missing-safe',async()=>{
+ const {metricAlert}=await import('../src/lib/weather-poster.js');
+ for(const [key,value,level] of [
+  ['wind',9.99,0],['wind',10,1],['wind',14,1],
+  ['feel',30.99,0],['feel',31,1],['feel',32.99,1],['feel',33,2],['feel',34.99,2],['feel',35,3],
+  ['temp',-11.99,0],['temp',-12,1],['temp',-14.99,1],['temp',-15,2],['temp',-20,2],
+  ['temp',null,0],['feel',NaN,0],['wind',undefined,0],['temp',35,0],['feel',-15,0],
+ ]) assert.equal(metricAlert(key,value)?.level||0,level,`${key} ${value}`);
+});
+test('simultaneous alerts survive seasonal overrides and badge hours match the stated severity',()=>{
+ const forecast={...fc,hours:[{hour:6,temp:-15,feel:-20,wind:10},{hour:12,temp:30,feel:31,wind:3},{hour:15,temp:33,feel:35,wind:12}]};
+ const model=posterModel(forecast,'transition');
+ assert.deepEqual(model.alerts.map(a=>a.kind),['heat','cold','wind']);
+ assert.deepEqual(model.alerts[0].hours,[15]);
+ assert.deepEqual(model.alerts[1].hours,[6]);
+ assert.deepEqual(model.alerts[2].hours,[6,15]);
+ const svg=buildHealthPosterSvg(forecast,{},'transition');
+ for(const label of ['더위 위험','추위 경고','강풍 주의'])assert.match(svg,new RegExp(label));
+ assert.match(svg,/현장 설정 기준/);
+ const doc=new DOMParser().parseFromString(svg,'image/svg+xml');
+ assert.equal(doc.getElementsByTagName('parsererror').length,0);
+ assert.equal(doc.documentElement.getAttribute('height'),'1782');
+ const hourly=hourlyWeatherHtml(forecast);
+ assert.match(hourly,/wx-alert-value/);
+ assert.match(hourly,/35°C 이상 · 15시/);
+});
+test('guidance reacts to actual weather, keeps all simultaneous risks and rotates every date',()=>{
+ const windy={...fc,hours:hours.map(h=>({...h,wind:11}))};
+ const cold={...fc,hours:hours.map(h=>({...h,temp:-15,feel:-20}))};
+ const hot={...fc,hours:hours.map(h=>({...h,temp:34,feel:35}))};
+ assert.match(posterModel(windy).tips.join(' '),/강풍|바람|10m\/s/);
+ assert.match(posterModel(cold).tips.join(' '),/추위|−15°C/);
+ assert.match(posterModel(hot).tips.join(' '),/35°C|매우 더운/);
+ assert.notDeepEqual(posterModel(windy).tips,posterModel(fc).tips);
+ const mixed={...fc,hours:[{hour:6,temp:-15,feel:-18,wind:12},{hour:15,temp:34,feel:36,wind:11}]};
+ for(let day=1;day<29;day++){
+  const a=posterModel({...mixed,date:`2026-10-${String(day).padStart(2,'0')}`});
+  const b=posterModel({...mixed,date:`2026-10-${String(day+1).padStart(2,'0')}`});
+  assert.notDeepEqual(a.tips,b.tips);
+  assert.equal(a.tips.length,3);
+ }
+ const diurnal=posterModel({...fc,hours:[{hour:6,temp:5,feel:4},{hour:15,temp:20,feel:19}]});
+ assert.match(diurnal.tips.join(),/일교차가 10°C 이상/);
+});
+
+test('rounding cannot falsely suggest a threshold was crossed',async()=>{
+ const {riskMetric}=await import('../src/lib/weather-poster.js');
+ assert.equal(riskMetric('wind',9.99,' m/s'),'9.99 m/s');
+ assert.equal(riskMetric('feel',30.99,'°C'),'30.99°C');
+ assert.equal(riskMetric('feel',32.99,'°C'),'32.99°C');
+ assert.equal(riskMetric('temp',-11.99,'°C'),'-11.99°C');
+ assert.equal(riskMetric('temp',-14.99,'°C'),'-14.99°C');
+ assert.equal(riskMetric('wind',10.04,' m/s'),'10 m/s');
+});

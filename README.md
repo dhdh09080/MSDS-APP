@@ -101,3 +101,17 @@ seasonal accent, and separate morning/afternoon tables. The A4 print action open
 a 210×297 mm sheet with zero CSS page margins; PNG export explicitly scales the
 SVG to 2520×3564 pixels so the poster is not cropped by the canvas. Printer
 hardware margins may still require the printer's fit-to-page option.
+
+### Site threshold alerts
+
+The health poster, hourly chart/table, and mobile health summary flag forecast
+wind speed ≥10 m/s, apparent temperature ≥31/33/35°C (주의/경계/위험), and actual
+temperature ≤−12/−15°C (주의/경고). Thresholds are inclusive and evaluated against
+unrounded values. Missing metrics never trigger an alert. Each hourly value has
+its own severity; the summary shows the highest reached severity for each hazard
+with its matching hours. Seasonal overrides do not suppress weather alerts.
+These are user-requested site thresholds, not official KMA advisories.
+
+Daily guidance prioritizes all detected hazards, then temperature swing (≥10°C),
+hot/humid conditions, and seasonal advice. Risk-specific wording also rotates by
+Korean date, including when the same weather conditions persist across weeks.
