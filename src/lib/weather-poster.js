@@ -56,24 +56,27 @@ export function posterModel(fc, mode = 'auto') {
 }
 
 // Separate temperature and wind scales. Missing values break the line instead of becoming zero.
-export function weatherChartSvg(hours, {width=1328,height=300,left=100,right=24} = {}) {
+export function weatherChartSvg(hours, {width=1328,height=300,left=100,right=24,colors=['#3265b4','#c46132','#79a89d'],fontScale=1} = {}) {
   const top=22,bottom=42,windHeight=62,gap=36;
   const tempBottom=height-bottom-windHeight-gap;
   const values=hours.flatMap(h=>[h.temp,h.feel]).filter(finite);
-  const lo=values.length?Math.floor(Math.min(...values)/5)*5-2:0;
-  const hi=values.length?Math.ceil(Math.max(...values)/5)*5+2:10;
+  const range=values.length?Math.max(...values)-Math.min(...values):10;
+  const step=range<=6?2:range<=15?5:range<=30?10:20;
+  const lo=values.length?Math.floor(Math.min(...values)/step)*step:0;
+  const hi=Math.max(lo+step,values.length?Math.ceil(Math.max(...values)/step)*step:10);
+  const tickCount=Math.round((hi-lo)/step);
   const maxWind=Math.max(5,...hours.map(h=>h.wind).filter(finite));
   const plotWidth=width-left-right;
   const x=i=>left+(hours.length===1?plotWidth/2:i*plotWidth/Math.max(1,hours.length-1));
   const y=v=>tempBottom-(v-lo)/(hi-lo)*(tempBottom-top);
   const windBottom=height-bottom;
   let content='';
-  for(let i=0;i<=3;i++) {
-    const v=lo+(hi-lo)*i/3,yy=y(v);
+  for(let i=0;i<=tickCount;i++) {
+    const v=lo+step*i,yy=y(v);
     content+=`<line x1="${left}" x2="${width-right}" y1="${yy}" y2="${yy}" stroke="#dfe5e9"/><text x="${left-12}" y="${yy+5}" text-anchor="end" fill="#677582" font-size="16">${Math.round(v)}°</text>`;
   }
-  content+=`<text x="${left-12}" y="${windBottom-30}" text-anchor="end" fill="#677582" font-size="14">풍속</text><text x="${left-12}" y="${windBottom-10}" text-anchor="end" fill="#677582" font-size="13">m/s</text>`;
-  for(const [key,color,dash] of [['temp','#3265b4',''],['feel','#c46132','8 5']]) {
+  content+=`<text x="${left-30}" y="${windBottom-30}" text-anchor="end" fill="#677582" font-size="14">풍속</text><text x="${left-30}" y="${windBottom-10}" text-anchor="end" fill="#677582" font-size="13">m/s</text>`;
+  for(const [key,color,dash] of [['temp',colors[0],''],['feel',colors[1],'8 5']]) {
     let segment=[];
     const flush=()=>{if(segment.length)content+=`<polyline points="${segment.join(' ')}" fill="none" stroke="${color}" stroke-width="3.5" ${dash?`stroke-dasharray="${dash}"`:''} stroke-linejoin="round" stroke-linecap="round"/>`;segment=[];};
     hours.forEach((h,i)=>{if(finite(h[key]))segment.push(`${x(i)},${y(h[key])}`);else flush();});flush();
@@ -82,11 +85,11 @@ export function weatherChartSvg(hours, {width=1328,height=300,left=100,right=24}
   hours.forEach((h,i)=>{
     if(finite(h.wind)) {
       const barHeight=h.wind/maxWind*windHeight;
-      content+=`<rect x="${x(i)-12}" y="${windBottom-barHeight}" width="24" height="${Math.max(1,barHeight)}" rx="4" fill="#79a89d"/><text x="${x(i)}" y="${windBottom-barHeight-6}" text-anchor="middle" fill="#326457" font-size="14">${metric(h.wind)}</text>`;
+      content+=`<rect x="${x(i)-12}" y="${windBottom-barHeight}" width="24" height="${Math.max(1,barHeight)}" rx="1" fill="${colors[2]}"/><text x="${x(i)}" y="${windBottom-barHeight-6}" text-anchor="middle" fill="#626970" font-size="14">${metric(h.wind)}</text>`;
     }
     content+=`<text x="${x(i)}" y="${height-13}" text-anchor="middle" fill="#364552" font-size="16">${h.hour}시</text>`;
   });
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="시간별 기온·체감온도 선 그래프와 풍속 막대 그래프"><title>기온과 체감온도는 °C, 풍속은 별도 막대 축의 m/s입니다. 정확한 값은 시간별 표에서 확인하세요.</title>${content}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="시간별 기온·체감온도 선 그래프와 풍속 막대 그래프"><title>기온과 체감온도는 °C, 풍속은 별도 막대 축의 m/s입니다. 정확한 값은 시간별 표에서 확인하세요.</title>${content}</svg>`.replace(/font-size="(\d+)"/g, (_,n)=>`font-size="${Number(n)*fontScale}"`);
 }
 
 function wrap(text, length) {
@@ -94,38 +97,54 @@ function wrap(text, length) {
   for(let i=0;i<chars.length;i+=length)rows.push(chars.slice(i,i+length).join(''));
   return rows;
 }
+export const A4_POSTER = Object.freeze({width:1260,height:1782,exportWidth:2520,exportHeight:3564});
+
 export function buildHealthPosterSvg(fc, site = {}, mode='auto') {
   const m=posterModel(fc,mode);
-  const dateLabel=new Date(m.date+'T12:00:00+09:00').toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'long',day:'numeric',weekday:'short'});
-  const stats=[['06–19시 최고 / 최저 기온',`${metric(m.high,'°')} / ${metric(m.low,'°')}`],['06–19시 최고 체감온도',metric(m.maxFeel,'°C')],['06–19시 최대 풍속',metric(m.maxWind,' m/s')]];
-  const columns=m.hours.length;
-  const gridLeft=180,gridWidth=1204,col=gridWidth/Math.max(1,columns);
-  const tableRows=[['시간',null,'#526171'],['기온 °C','temp','#3265b4'],['체감 °C','feel','#c46132'],['풍속 m/s','wind','#236559']];
-  const chart=weatherChartSvg(m.hours,{width:1328,height:294,left:gridLeft-56+col/2,right:col/2}).replace('<svg ', '<svg x="56" y="360" ');
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1120" viewBox="0 0 1440 1120" font-family="'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif">
-  <rect width="1440" height="1120" fill="#f6f8f7"/>
-  <rect x="24" y="24" width="1392" height="1072" rx="24" fill="#fff" stroke="#dbe3e2"/>
-  <path d="M48 24H1392Q1416 24 1416 48V198H24V48Q24 24 48 24" fill="#172e35"/>
-  <text x="56" y="62" fill="#a8c8c0" font-size="15" letter-spacing="3">DAILY SITE HEALTH · 오늘의 현장 건강</text>
-  <text x="56" y="119" fill="white" font-size="43" font-weight="750">${m.title}</text>
-  <text x="56" y="159" fill="#d2e3df" font-size="21">${esc(m.note)}</text>
-  <text x="1384" y="61" text-anchor="end" fill="#d2e3df" font-size="18">${esc(dateLabel)}</text>
-  ${wrap(String(site.name||'현장'),19).slice(0,2).map((s,i)=>`<text x="1384" y="${105+i*32}" text-anchor="end" fill="white" font-size="26" font-weight="650">${esc(s)}</text>`).join('')}
-  <text x="56" y="229" fill="#60717a" font-size="17">${esc(String(site.address||fc.address||'').slice(0,72))}</text>
-  ${stats.map(([k,v],i)=>`<rect x="${56+i*449}" y="250" width="430" height="88" rx="12" fill="${m.pale}"/><text x="${76+i*449}" y="278" fill="${m.accent}" font-size="17">${k}</text><text x="${76+i*449}" y="318" fill="#19343b" font-size="34" font-weight="750">${v}</text>`).join('')}
-  <text x="56" y="359" fill="#263e47" font-size="18" font-weight="650">오늘 시간별 예보 · 06–19시</text>
-  <line x1="946" x2="980" y1="352" y2="352" stroke="#3265b4" stroke-width="4"/><text x="992" y="359" fill="#364552" font-size="17">기온</text>
-  <line x1="1064" x2="1098" y1="352" y2="352" stroke="#c46132" stroke-width="4" stroke-dasharray="7 4"/><text x="1110" y="359" fill="#364552" font-size="17">체감온도</text>
-  <rect x="1248" y="343" width="16" height="17" rx="3" fill="#79a89d"/><text x="1274" y="359" fill="#364552" font-size="17">풍속</text>
+  const accent=m.season==='winter'?'#285caa':m.season==='summer'?'#d94b25':'#ce512a';
+  const dateLabel=new Date(m.date+'T12:00:00+09:00').toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'long',day:'numeric',weekday:'long'});
+  const chart=weatherChartSvg(m.hours,{width:1116,height:276,left:60,right:24,colors:['#242628',accent,'#a4adb3'],fontScale:1.25}).replace('<svg ', '<svg x="72" y="724" ');
+  const table=(hours,y)=>{
+    const left=72,labelWidth=160,colWidth=956/7;
+    const rows=[['기온 °C','temp','#242628'],['체감 °C','feel',accent],['풍속 m/s','wind','#626970']];
+    return `<line x1="72" x2="1188" y1="${y}" y2="${y}" stroke="#242628" stroke-width="2"/>
+      <text x="72" y="${y+30}" fill="#747a7e" font-size="21">시간</text>
+      ${hours.map((h,i)=>`<text x="${left+labelWidth+(i+.5)*colWidth}" y="${y+30}" text-anchor="middle" fill="#242628" font-size="23" font-weight="600">${h.hour}시</text>`).join('')}
+      <line x1="72" x2="1188" y1="${y+45}" y2="${y+45}" stroke="#dce0e2"/>
+      ${rows.map(([name,key,color],r)=>`<text x="72" y="${y+75+r*38}" fill="${color}" font-size="22">${name}</text>${hours.map((h,i)=>`<text x="${left+labelWidth+(i+.5)*colWidth}" y="${y+75+r*38}" text-anchor="middle" fill="${color}" font-size="26" font-weight="500">${metric(h[key])}</text>`).join('')}`).join('')}`;
+  };
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="1782" viewBox="0 0 1260 1782" font-family="'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif">
+  <title>${esc(m.title)} · ${esc(dateLabel)} · A4 세로</title>
+  <rect width="1260" height="1782" fill="#ffffff"/>
+  <text x="72" y="79" fill="#242628" font-size="22" font-weight="600">현장 기상 · 건강 안내</text>
+  <text x="1188" y="79" text-anchor="end" fill="#626970" font-size="22">${esc(dateLabel)}</text>
+  <line x1="72" x2="1188" y1="105" y2="105" stroke="#242628" stroke-width="2"/>
+  <rect x="72" y="157" width="8" height="78" fill="${accent}"/>
+  <text x="104" y="224" fill="#202224" font-size="82" font-weight="750" letter-spacing="-4">${m.title}</text>
+  <text x="72" y="284" fill="#242628" font-size="30" font-weight="550">${esc(String(site.name||'현장').slice(0,32))}</text>
+  <text x="72" y="320" fill="#747a7e" font-size="21">${esc(String(site.address||fc.address||'').slice(0,52))}</text>
+  <text x="72" y="387" fill="#626970" font-size="23">최고 기온</text>
+  <text x="660" y="387" fill="#626970" font-size="23">최저 기온</text>
+  <text x="72" y="544" fill="#202224" font-size="160" font-weight="600" letter-spacing="-8">${metric(m.high,'°')}</text>
+  <text x="660" y="544" fill="#747a7e" font-size="160" font-weight="500" letter-spacing="-8">${metric(m.low,'°')}</text>
+  <text x="72" y="597" fill="#626970" font-size="23">최고 체감온도 <tspan fill="${accent}" font-size="31" font-weight="600" dx="18">${metric(m.maxFeel,'°C')}</tspan></text>
+  <text x="660" y="597" fill="#626970" font-size="23">최대 풍속 <tspan fill="#242628" font-size="31" font-weight="600" dx="18">${metric(m.maxWind,' m/s')}</tspan></text>
+  <line x1="72" x2="1188" y1="636" y2="636" stroke="#dce0e2"/>
+  <text x="72" y="684" fill="#242628" font-size="29" font-weight="650">시간별 예보</text>
+  <text x="72" y="714" fill="#747a7e" font-size="18">모든 기온·체감온도·풍속은 06–19시 예보 기준</text>
+  <line x1="770" x2="800" y1="678" y2="678" stroke="#242628" stroke-width="4"/><text x="811" y="685" fill="#626970" font-size="20">기온</text>
+  <line x1="887" x2="917" y1="678" y2="678" stroke="${accent}" stroke-width="4" stroke-dasharray="8 5"/><text x="928" y="685" fill="#626970" font-size="20">체감</text>
+  <rect x="1015" y="667" width="15" height="19" fill="#a4adb3"/><text x="1042" y="685" fill="#626970" font-size="20">풍속</text>
   ${chart}
-  <rect x="56" y="667" width="1328" height="150" rx="10" fill="#f4f7f8"/>
-  ${tableRows.map(([name,key,color],r)=>`<text x="72" y="${693+r*35}" fill="${color}" font-size="18" font-weight="650">${name}</text>${m.hours.map((h,i)=>`<text x="${gridLeft+(i+.5)*col}" y="${693+r*35}" text-anchor="middle" fill="${color}" font-size="${r===0?17:20}" font-weight="${r===0?500:650}">${key?metric(h[key]):h.hour+'시'}</text>`).join('')}`).join('')}
-  <rect x="56" y="838" width="1328" height="182" rx="14" fill="${m.pale}"/>
-  <text x="80" y="872" fill="${m.accent}" font-size="23" font-weight="750">오늘의 건강 실천</text>
-  <text x="1360" y="871" text-anchor="end" fill="#52655f" font-size="16">날짜마다 바뀌는 계절별 안내</text>
-  ${m.tips.map((tip,i)=>`<circle cx="91" cy="${905+i*36}" r="12" fill="${m.accent}"/><text x="91" y="${911+i*36}" text-anchor="middle" fill="white" font-size="16" font-weight="700">${i+1}</text><text x="116" y="${912+i*36}" fill="#203f38" font-size="23" font-weight="550">${esc(tip)}</text>`).join('')}
-  <text x="56" y="1050" fill="#65757e" font-size="15">${fc.source==='preview'?'미리보기 예시 · 실제 날씨가 아닙니다.':'출처 Open-Meteo · 현장 저장 좌표 기준 예보 · 실제 관측값과 다를 수 있습니다.'} · — 미제공</text>
-  <text x="56" y="1075" fill="#65757e" font-size="15">온도 선 그래프와 풍속 막대는 별도 축입니다. 건강 안내는 작업 전 참고용이며 현장 관리계획을 함께 확인하세요.</text>
+  ${table(m.hours.filter(h=>h.hour<=12),1036)}
+  ${table(m.hours.filter(h=>h.hour>=13),1220)}
+  <line x1="72" x2="1188" y1="1412" y2="1412" stroke="#dce0e2"/>
+  <text x="72" y="1465" fill="#242628" font-size="29" font-weight="650">작업 전 확인</text>
+  ${m.tips.map((tip,i)=>`<text x="72" y="${1520+i*52}" fill="${accent}" font-size="23" font-weight="650">0${i+1}</text><text x="132" y="${1520+i*52}" fill="#242628" font-size="26" font-weight="500">${esc(tip)}</text>`).join('')}
+  <line x1="72" x2="1188" y1="1663" y2="1663" stroke="#242628" stroke-width="1.5"/>
+  <text x="72" y="1700" fill="#747a7e" font-size="18">${fc.source==='preview'?'미리보기 예시 · 실제 날씨가 아닙니다.':'출처 Open-Meteo · 현장 저장 좌표 기준 · 실제 관측값과 다를 수 있습니다.'}</text>
+  <text x="72" y="1730" fill="#747a7e" font-size="18">온도는 선, 풍속은 별도 축의 막대로 표시합니다. — 표시는 미제공입니다.</text>
+  <text x="1188" y="1730" text-anchor="end" fill="#747a7e" font-size="18">A4 · 210 × 297 mm</text>
   </svg>`;
 }
 

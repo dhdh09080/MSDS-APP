@@ -80,7 +80,7 @@ forecast (7 days by default), observations, and archive. Tabs request data when
 selected; poster and hourly chart share their forecast. Keyboard arrows/Home/End
 navigate the tab list. Hidden panels do not contribute to page height.
 
-The 1440×1120 SVG/PNG health poster shows every forecast hour from 06–19 with
+The A4 portrait (1260×1782 SVG / 2520×3564 PNG) health poster shows every forecast hour from 06–19 with
 actual temperature and apparent-temperature lines, a separately scaled wind-speed
 bar chart (m/s), and an exact hourly table. Mobile uses a readable health summary
 and an original-size poster link; the chart and table scroll horizontally.
@@ -94,3 +94,10 @@ calendar date. The same date keeps the same advice; the next date rotates it.
 An open weather page checks for Korean-date rollover every minute and when the
 page becomes visible, refreshing the forecast and daily guidance. This creates
 on-demand posters, not a scheduled background archive or message delivery.
+
+
+The A4 poster uses a white editorial layout, large temperature figures, one
+seasonal accent, and separate morning/afternoon tables. The A4 print action opens
+a 210×297 mm sheet with zero CSS page margins; PNG export explicitly scales the
+SVG to 2520×3564 pixels so the poster is not cropped by the canvas. Printer
+hardware margins may still require the printer's fit-to-page option.

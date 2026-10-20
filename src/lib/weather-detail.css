@@ -30,8 +30,8 @@
 .wx-view-tabs [aria-selected=true] { color:white; background:#244c43; font-weight:650; box-shadow:0 2px 5px #193d3420; }
 .wx-view-tabs [role=tab]:focus-visible { outline:2px solid #236559; outline-offset:2px; }
 #page-weather .wx-site-card {padding:14px 20px}#page-weather .wx-site-name {font-size:16px}#page-weather .wx-site-address {font-size:11px}
-#page-weather .wx-site-poster {width:100%;max-width:1040px;border:0;border-radius:12px;box-shadow:none;}
-.wx-poster-original {display:block;max-width:1040px;margin:auto;cursor:zoom-in;}
+#page-weather .wx-site-poster {width:100%;max-width:740px;border:0;border-radius:0;box-shadow:0 2px 18px #18222b12;}
+.wx-poster-original {display:block;max-width:740px;margin:auto;cursor:zoom-in;}
 .wx-season-control {display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0 18px;}
 .wx-season-control label {font-size:12px;font-weight:600;color:#40564f}.wx-season-control select {width:auto;max-width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;background:#fafcfb;font:inherit;font-size:12px}.wx-season-control span {font-size:11px;color:var(--text3)}
 .wx-chart-intro {display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;margin:12px 0 18px}.wx-chart-intro h3 {font-size:17px;color:#263e47}.wx-chart-intro p {font-size:12px;color:#62716f;margin-top:7px}

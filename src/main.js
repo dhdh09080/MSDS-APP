@@ -1,4 +1,4 @@
-import { buildHealthPosterSvg, hourlyWeatherHtml, posterModel, kstDate, metric as weatherMetric } from './lib/weather-poster.js';
+import { A4_POSTER, buildHealthPosterSvg, hourlyWeatherHtml, posterModel, kstDate, metric as weatherMetric } from './lib/weather-poster.js';
 import { loadWeatherDetail, loadWeatherObservations } from './lib/weather-detail.js';
 import { renderPpe, labelSafetySections } from './lib/warning-label.js';
 import warningLabelStyles from './warning-label.css?inline';
@@ -9928,6 +9928,11 @@ function renderWxSitePoster(fc) {
   document.getElementById('wxDownloadPosterBtn').style.display = 'inline-flex';
 }
 
+window.printWxSitePoster = function () {
+  if (!wxPosterSvg) { toast('포스터를 먼저 생성해주세요', 'error'); return; }
+  openPrintWindow(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>현장 건강관리 · A4</title><style>@page{size:A4 portrait;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}svg{display:block;width:210mm;height:297mm}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>${wxPosterSvg}</body></html>`);
+};
+
 window.downloadWxSitePoster = function () {
   if (!wxPosterSvg) {
     toast('포스터를 먼저 생성해주세요', 'error');
@@ -9939,9 +9944,9 @@ window.downloadWxSitePoster = function () {
   const img = new Image();
   img.onload = () => {
     const canvas = document.createElement('canvas');
-    canvas.width = 1440;
-    canvas.height = 1120;
-    canvas.getContext('2d').drawImage(img, 0, 0);
+    canvas.width = A4_POSTER.exportWidth;
+    canvas.height = A4_POSTER.exportHeight;
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
     URL.revokeObjectURL(url);
     canvas.toBlob(
       (blob) =>
