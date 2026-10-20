@@ -6,3 +6,6 @@ dist
 .vercel
 
 /supabase/.temp/
+
+/artifacts/
+__pycache__/
