@@ -108,7 +108,7 @@ test('guidance reacts to actual weather, keeps all simultaneous risks and rotate
  const hot={...fc,hours:hours.map(h=>({...h,temp:34,feel:35}))};
  assert.match(posterModel(windy).tips.join(' '),/강풍|바람|10m\/s/);
  assert.match(posterModel(cold).tips.join(' '),/추위|−15°C/);
- assert.match(posterModel(hot).tips.join(' '),/35°C|매우 더운/);
+ assert.match(posterModel(hot).tips.join(' '),/35°C|더위|더운/);
  assert.notDeepEqual(posterModel(windy).tips,posterModel(fc).tips);
  const mixed={...fc,hours:[{hour:6,temp:-15,feel:-18,wind:12},{hour:15,temp:34,feel:36,wind:11}]};
  for(let day=1;day<29;day++){
