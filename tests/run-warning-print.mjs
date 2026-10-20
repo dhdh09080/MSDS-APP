@@ -4,7 +4,10 @@ import { once } from 'node:events';
 import { createServer } from 'vite';
 const server = await createServer({
   server: { host: '127.0.0.1', port: 0 },
-  define: { __VITE_SUPABASE_URL__: JSON.stringify(''), __VITE_SUPABASE_ANON_KEY__: JSON.stringify('') },
+  define: {
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://print-fixture.invalid'),
+    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('offline-print-fixture'),
+  },
 });
 let child;
 try {

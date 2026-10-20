@@ -43,7 +43,10 @@ async def case(browser, context, size, per, copies, lengthy):
     stem = f'{size}-' + ('long' if lengthy else 'normal') + f'-{copies}'
     result = {'case': stem, 'status': 'failed'}
     RESULTS.append(result)
+    print(f'RUN {stem}', flush=True)
     page = await context.new_page()
+    page.set_default_timeout(15000)
+    page.on('pageerror', lambda e: print(f'Browser error: {e}', flush=True))
     paper = None
     try:
         # Override before iframe creation, avoiding the timer race with native print/cleanup.
@@ -60,7 +63,8 @@ async def case(browser, context, size, per, copies, lengthy):
         await frame.wait_for_selector('.wlabel')
         assert await iframe.evaluate('(f) => Math.abs(f.clientWidth - 210*96/25.4) < 2'), 'iframe must be A4 width'
         html = await frame.content()
-        paper = await context.new_page(viewport={'width': 530, 'height': 1000})
+        paper = await context.new_page()
+        await paper.set_viewport_size({'width': 530, 'height': 1000})
         await paper.goto(URL)
         await paper.set_content(html, wait_until='load')
         await paper.evaluate('''async () => {
@@ -89,7 +93,6 @@ async def case(browser, context, size, per, copies, lengthy):
         # Save evidence before asserting so failed cases remain inspectable.
         counts = []
         texts = []
-        expected_qr = await paper.locator('.wl-qr-img svg').first.get_attribute('aria-label')
         with fitz.open(OUT / f'{stem}.pdf') as pdf:
             result['pages'] = len(pdf)
             for i, sheet in enumerate(pdf):
