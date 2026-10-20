@@ -107,12 +107,12 @@ function dailyWeatherTips(model, day) {
 
 export function weatherAlertsHtml(alerts) {
   if (!alerts.length) return '';
-  return `<div class="wx-weather-alerts" aria-label="현장 설정 기준 경고">${alerts.map(a=>`<span class="wx-weather-alert" style="--alert-color:${a.color};--alert-background:${a.background}"><b>! ${a.label}</b><span>${a.threshold} · ${a.hours.map(h=>h+'시').join(', ')}</span></span>`).join('')}</div>`;
+  return `<div class="wx-weather-alerts" aria-label="현장 설정 기준 경고">${alerts.map(a=>`<span class="wx-weather-alert" style="--alert-color:${a.color};--alert-background:${a.background}"><b>${a.label}</b><span>${a.threshold} · ${a.hours.map(h=>h+'시').join(', ')}</span></span>`).join('')}</div>`;
 }
 
 function metricHtml(key, value) {
   const alert=metricAlert(key,value);
-  return alert ? `<strong class="wx-alert-value" style="--alert-color:${alert.color};--alert-background:${alert.background}" aria-label="${riskMetric(key,value)} · ${alert.label} · ${alert.threshold}">${riskMetric(key,value)} <small>!</small></strong>` : riskMetric(key,value);
+  return alert ? `<strong class="wx-alert-value" style="--alert-color:${alert.color};--alert-background:${alert.background}" aria-label="${riskMetric(key,value)} · ${alert.label} · ${alert.threshold}">${riskMetric(key,value)}</strong>` : riskMetric(key,value);
 }
 
 
@@ -179,7 +179,7 @@ export function weatherChartSvg(hours, {width=1328,height=300,left=100,right=24,
     if(finite(h.wind)) {
       const barHeight=h.wind/maxWind*windHeight;
       const alert=metricAlert('wind',h.wind);
-      content+=`<rect x="${x(i)-12}" y="${windBottom-barHeight}" width="24" height="${Math.max(1,barHeight)}" rx="1" fill="${alert?.color||colors[2]}"><title>${h.hour}시 ${riskMetric('wind',h.wind)}m/s${alert?' · '+alert.label:''}</title></rect><text x="${x(i)}" y="${windBottom-barHeight-6}" text-anchor="middle" fill="${alert?.color||'#626970'}" font-weight="${alert?700:400}" font-size="14">${riskMetric('wind',h.wind)}${alert?'!':''}</text>`;
+      content+=`<rect x="${x(i)-12}" y="${windBottom-barHeight}" width="24" height="${Math.max(1,barHeight)}" rx="1" fill="${alert?.color||colors[2]}"><title>${h.hour}시 ${riskMetric('wind',h.wind)}m/s${alert?' · '+alert.label:''}</title></rect><text x="${x(i)}" y="${windBottom-barHeight-6}" text-anchor="middle" fill="${alert?.color||'#626970'}" font-weight="${alert?700:400}" font-size="14">${riskMetric('wind',h.wind)}</text>`;
     }
     content+=`<text x="${x(i)}" y="${height-13}" text-anchor="middle" fill="#364552" font-size="16">${h.hour}시</text>`;
   });
@@ -193,7 +193,7 @@ export function buildHealthPosterSvg(fc, site = {}, mode='auto') {
   const accent=m.season==='winter'?'#285caa':m.season==='summer'?'#d94b25':'#ce512a';
   const dateLabel=new Date(m.date+'T12:00:00+09:00').toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'long',day:'numeric',weekday:'long'});
   const coldAlert=metricAlert('temp',m.low), heatAlert=metricAlert('feel',m.maxFeel), windAlert=metricAlert('wind',m.maxWind);
-  const banner=m.alerts.map((a,i)=>`<rect x="${72+i*378}" y="337" width="360" height="32" fill="${a.background}"/><text x="${84+i*378}" y="360" fill="${a.color}" font-size="19" font-weight="650">! ${a.label} · ${a.threshold}</text>`).join('');
+  const banner=m.alerts.map((a,i)=>`<rect x="${72+i*378}" y="337" width="360" height="32" fill="${a.background}"/><rect x="${72+i*378}" y="337" width="4" height="32" fill="${a.color}"/><text x="${84+i*378}" y="360" fill="${a.color}" font-size="19" font-weight="650">${a.label} · ${a.threshold}</text>`).join('');
   const chart=weatherChartSvg(m.hours,{width:1116,height:276,left:60,right:24,colors:['#242628',accent,'#a4adb3'],fontScale:1.25}).replace('<svg ', '<svg x="72" y="724" ');
   const table=(hours,y)=>{
     const left=72,labelWidth=160,colWidth=956/7;
@@ -204,7 +204,7 @@ export function buildHealthPosterSvg(fc, site = {}, mode='auto') {
       <line x1="72" x2="1188" y1="${y+45}" y2="${y+45}" stroke="#dce0e2"/>
       ${rows.map(([name,key,color],r)=>`<text x="72" y="${y+75+r*38}" fill="${color}" font-size="22">${name}</text>${hours.map((h,i)=>{
         const alert=metricAlert(key,h[key]),x=left+labelWidth+(i+.5)*colWidth,yy=y+75+r*38;
-        return `${alert?`<rect x="${x-50}" y="${yy-26}" width="100" height="34" fill="${alert.background}"/>`:''}<text x="${x}" y="${yy}" text-anchor="middle" fill="${alert?.color||color}" font-size="26" font-weight="${alert?750:500}">${riskMetric(key,h[key])}${alert?' !':''}</text>`;
+        return `${alert?`<rect x="${x-50}" y="${yy-26}" width="100" height="34" fill="${alert.background}"/><line x1="${x-50}" x2="${x+50}" y1="${yy+8}" y2="${yy+8}" stroke="${alert.color}" stroke-width="${alert.level+1}"/>`:''}<text x="${x}" y="${yy}" text-anchor="middle" fill="${alert?.color||color}" font-size="26" font-weight="${alert?750:500}">${riskMetric(key,h[key])}${alert?`<title>${alert.label} · ${alert.threshold}</title>`:''}</text>`;
       }).join('')}`).join('')}`;
   };
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="1782" viewBox="0 0 1260 1782" font-family="'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif">
