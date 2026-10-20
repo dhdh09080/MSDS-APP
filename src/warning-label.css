@@ -20,3 +20,9 @@
 #page-warning #warnPreviewDataNote.has-missing { color: #9c6d27; }
 
 .wlabel .wl-ppe-text-only { align-self: center; padding: 8px 0; }
+
+/* Keep the QR/footer outside the scaled body so neither can be clipped by long text. */
+.wlabel[data-warning-autofit="true"] { display: flex; flex-direction: column; box-sizing: border-box; min-width: 0; min-height: 0; }
+.wlabel .wl-body-viewport { flex: 1 1 auto; min-height: 0; min-width: 0; overflow: hidden; }
+.wlabel .wl-body-viewport > .wl-fit-content { flex: none; transform-origin: top left; }
+.wlabel > .wl-foot-row, .wlabel > .wl-foot { flex: 0 0 auto; break-inside: avoid; }

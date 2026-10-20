@@ -52,6 +52,14 @@ export function openPrintWindow(html) {
   document.body.appendChild(iframe);
   const doc = iframe.contentWindow.document;
   doc.open(); doc.write(html); doc.close();
+  // Lay warning labels out at their real paper width before fonts/images are measured.
+  // Other print documents keep their existing sizing.
+  if (doc.querySelector('[data-warning-autofit="true"]')) {
+    iframe.style.width = '210mm';
+    iframe.style.height = '297mm';
+    iframe.style.left = '-10000px';
+    iframe.style.right = 'auto';
+  }
   const cleanup = () => { try { iframe.remove(); } catch {} };
   try { iframe.contentWindow.onafterprint = cleanup; } catch {}
   setTimeout(async () => {

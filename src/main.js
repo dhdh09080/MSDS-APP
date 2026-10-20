@@ -5282,19 +5282,19 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
 
   // ── 소분용기 간이표지 (고시 제6조②: 100g/100㎖ 이하 → 명칭·그림문자·신호어·공급자정보만) ──
   if (size === 'mini') {
-    return `<div class="wlabel wlabel--mini" data-warning-autofit="true"><div class="wl-fit-content">
+    return `<div class="wlabel wlabel--mini" data-warning-autofit="true"><div class="wl-body-viewport"><div class="wl-fit-content">
       <div class="wl-name-box">${productName}</div>
       <div class="wl-mini-row">
         <div class="wl-picto-row">${pictoHtml}</div>
         ${qrBox}
       </div>
       <div class="wl-signal-bar ${isDanger ? 'danger' : 'warning'}">${signalWord}</div>
-      <div class="wl-spacer"></div>
+    </div></div>
       <div class="wl-foot">
         <div><b>공급</b>${supplier}${supplierContact}</div>
         <div style="font-weight:700;">■ 100g·100㎖ 이하 소분용기용 간이표지</div>
       </div>
-    </div></div>`;
+    </div>`;
   }
 
   const hList = decodeHCodes(r.h_codes);
@@ -5322,7 +5322,7 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
     ? pList.map(p => `<li><span style="color:#888;font-size:0.85em;">[${escapeHtml(p.code)}]</span> ${escapeHtml(p.text)}</li>`).join('')
     : '<li>예방조치문구 정보 미등록</li>';
 
-  return `<div class="wlabel wlabel--${size}${autoFit ? ' wl-auto-fit' : ''}" data-warning-autofit="true"><div class="wl-fit-content">
+  return `<div class="wlabel wlabel--${size}${autoFit ? ' wl-auto-fit' : ''}" data-warning-autofit="true"><div class="wl-body-viewport"><div class="wl-fit-content">
     ${getDevPreviewPage() ? '<div style="text-align:center;color:#888;font-size:10px;margin-bottom:5px;">미리보기 샘플 · 실제 작업에는 원본 MSDS를 확인하세요</div>' : ''}
     <div class="wl-top">(산업안전보건법 제115조 규정에 의한 경고표지)</div>
     <div class="wl-name-box">${productName}</div>
@@ -5334,14 +5334,14 @@ function buildWarnLabel(r, site, size = warnLabelSize) {
     <div class="wl-block"><div class="wl-block-head">착용할 보호구</div>${renderPpe(r.protective_equipment)}</div>
     <div class="wl-block"><div class="wl-block-head">응급조치 요령 및 사고 시 대처방법</div><div class="wl-safety-text"><b>응급조치</b> ${escapeHtml(safety.firstAid)}<br><b>화재·누출 대응</b> ${escapeHtml(safety.emergency)}</div></div>
     ${r.legal_special === 'Y' ? `<div class="wl-special">⚠️ 특별관리물질 — 취급 시 관리감독자 확인 및 특별안전보건교육 필수</div>` : ''}
-    <div class="wl-spacer"></div>
+    </div></div>
     <div class="wl-foot-row">
       <div class="wl-foot">
         <div><b>공급업체</b>${supplier}${supplierContact}</div>
         <div style="margin-top:4px;font-weight:700;">■ 등록된 MSDS의 안전정보를 바탕으로 작성</div>
       </div>
       ${qrBox}
-    </div></div>
+    </div>
   </div>`;
 }
 
@@ -5351,18 +5351,16 @@ function warnLabelCss() {
     ${warningLabelStyles}
     .wl-safety-text{padding:6px 10px;font-size:inherit;line-height:1.55;}
     .wl-fit-content{display:flex;flex-direction:column;}
-    .sheet{display:grid;page-break-after:always;width:100%;min-height:283mm;max-height:283mm;overflow:hidden;}
+    .sheet{display:grid;page-break-after:always;width:210mm;height:283mm;min-height:0;max-height:283mm;overflow:hidden;box-sizing:border-box;}
     .sheet:last-child{page-break-after:auto;}
-    .sheet-1{grid-template-columns:1fr;grid-template-rows:1fr;}
-    .sheet-2{grid-template-columns:1fr;grid-template-rows:1fr 1fr;}
-    .sheet-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
-    .sheet-8{grid-template-columns:1fr 1fr;grid-template-rows:repeat(4,1fr);}
-    .cell{padding:3mm;display:flex;align-items:stretch;justify-content:center;overflow:hidden;border:0.2mm dashed #bbb;}
+    .sheet-1{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);}
+    .sheet-2{grid-template-columns:minmax(0,1fr);grid-template-rows:repeat(2,minmax(0,1fr));}
+    .sheet-4{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));}
+    .sheet-8{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr));}
+    .cell{min-width:0;min-height:0;box-sizing:border-box;padding:3mm;display:flex;align-items:stretch;justify-content:center;overflow:hidden;border:0.2mm dashed #bbb;}
     .sheet-1 .cell{border:none;padding:0;}
     .sheet-1 .wlabel{border-radius:0;}
     .wlabel{box-sizing:border-box;display:flex;flex-direction:column;height:100%;border:3px solid #111;border-radius:6px;padding:16px;width:100%;font-family:'Malgun Gothic',sans-serif;color:#111;background:#fff;font-size:11.5px;word-break:keep-all;overflow-wrap:break-word;}
-    .wl-spacer{flex:1 1 auto;min-height:6px;}
-    .wlabel > *:not(.wl-spacer){flex-shrink:0;}
     .wlabel--a5{padding:11px;font-size:10px;border-width:2px;}
     .wlabel--a6{padding:8px;font-size:8.5px;border-width:1.5px;}
     .wlabel--mini{padding:7px;font-size:8.5px;border-width:1.5px;}
@@ -5418,29 +5416,46 @@ function warnLabelCss() {
 function fitWarningLabels(root = document) {
   root?.querySelectorAll('[data-warning-autofit="true"]').forEach((label) => {
     const host = label.closest('.cell');
+    const hostStyle = host ? getComputedStyle(host) : null;
     const maxHeight = host
-      ? host.clientHeight - 24
-      : { a4: 1010, a5: 490, a6: 480 }[warnLabelSize] || 1010;
-    label.style.height = maxHeight + 'px';
+      ? host.clientHeight - parseFloat(hostStyle.paddingTop) - parseFloat(hostStyle.paddingBottom)
+      : { a4: 1010, a5: 490, a6: 480, mini: 240 }[warnLabelSize] || 1010;
+    label.style.height = `${Math.max(0, maxHeight)}px`;
     label.style.zoom = '1';
+    const viewport = label.querySelector('.wl-body-viewport');
     const content = label.querySelector('.wl-fit-content');
-    if (!content) return;
-    content.style.transform = '';
-    content.style.width = '';
-    const available = maxHeight - 34;
-    let scale = Math.min(1, available / content.scrollHeight);
-    for (let i = 0; i < 4; i++) {
-      content.style.width = 100 / scale + '%';
-      scale = Math.min(1, available / content.scrollHeight);
+    if (!viewport || !content || viewport.clientWidth <= 0 || viewport.clientHeight <= 0) return;
+    const width = viewport.clientWidth;
+    const height = Math.max(0, viewport.clientHeight - 2); // Allow for fractional font/layout rounding.
+    // Widening the text changes wrapping, so every candidate must be measured again.
+    const fits = scale => {
+      content.style.width = `${width / scale}px`;
+      // CSS zoom participates in print layout; transforms can paint over the footer.
+      content.style.transform = 'none';
+      content.style.zoom = String(scale);
+      return content.getBoundingClientRect().height <= height;
+    };
+    let scale = 1;
+    if (!fits(1)) {
+      let low = 0, high = 1;
+      for (let i = 0; i < 20; i++) {
+        const candidate = (low + high) / 2;
+        if (fits(candidate)) low = candidate;
+        else high = candidate;
+      }
+      scale = Math.max(0.000001, Math.floor(low * 1000000) / 1000000);
+      fits(scale);
     }
-    content.style.width = 100 / scale + '%';
-    content.style.transform = `scale(${scale})`;
-    content.style.transformOrigin = 'top left';
-    label.dataset.fitScale = scale.toFixed(3);
+    label.dataset.fitScale = String(scale);
   });
 }
 function warningAutoFitPrintScript() {
-  return `<script>const warnLabelSize=${JSON.stringify(warnLabelSize)};${fitWarningLabels.toString()};window.addEventListener('load',()=>requestAnimationFrame(()=>fitWarningLabels()));<\/script>`;
+  return `<script>const warnLabelSize=${JSON.stringify(warnLabelSize)};${fitWarningLabels.toString()};
+    const refitWarningLabels = () => fitWarningLabels();
+    window.addEventListener('load', () => requestAnimationFrame(refitWarningLabels));
+    window.addEventListener('beforeprint', refitWarningLabels);
+    window.matchMedia?.('print').addEventListener('change', event => { if (event.matches) refitWarningLabels(); });
+  <\/script>`;
 }
 
 // 라벨 목록 → A4 분할 시트 HTML로 묶기
