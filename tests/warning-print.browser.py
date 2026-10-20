@@ -30,6 +30,10 @@ GEOMETRY = r'''() => [...document.querySelectorAll('.wlabel')].map(l => {
         const container=c.contains(node) ? v : r;
         for (const fragment of range.getClientRects()) {
             if (!inside(fragment,container)) textFits=false;
+            for (let ancestor=node.parentElement; ancestor && ancestor!==l; ancestor=ancestor.parentElement) {
+                const style=getComputedStyle(ancestor);
+                if ([style.overflowX, style.overflowY].some(x => ['hidden','clip'].includes(x)) && !inside(fragment,rect(ancestor))) textFits=false;
+            }
         }
     }
     return {qrInside:inside(q,r), footerInside:inside(foot,r), bodyFits:inside(rect(c),v), textFits,
@@ -100,7 +104,7 @@ async def case(browser, context, size, per, copies, lengthy):
                 img = Image.frombytes('RGB', [pix.width, pix.height], pix.samples)
                 img.save(OUT / f'{stem}-page-{i+1}.png')
                 codes = zxingcpp.read_barcodes(img)
-                assert all('/functions/v1/msds-view?id=msds-1' in c.text for c in codes), [c.text for c in codes]
+                assert all(c.text == 'https://print-fixture.invalid/functions/v1/msds-view?id=msds-1' for c in codes), [c.text for c in codes]
                 counts.append(len(codes))
                 texts.append(sheet.get_text())
             result['qr_per_page'] = counts
@@ -108,6 +112,9 @@ async def case(browser, context, size, per, copies, lengthy):
         assert counts == expected, ('QR/page count', counts, expected)
         assert result['pages'] == len(expected), result
         assert len(bounds) == copies and all(all(v for k,v in b.items() if k != 'scale') for b in bounds), bounds
+        normalized = ''.join(''.join(texts).split())
+        assert normalized.count('에폭시프라이머') == copies, 'product name missing from PDF'
+        assert normalized.count('02-1234-5678') >= copies, 'supplier contact missing from PDF'
         if lengthy:
             assert sum(t.count('SUPPLIER_END') for t in texts) == copies, 'supplier text clipped in PDF'
             if size != 'mini':
@@ -156,4 +163,11 @@ async def main():
     assert RESULTS and all(r['status']=='passed' for r in RESULTS), 'Print regression failed; inspect artifacts/warning-print'
 
 
-asyncio.run(main())
+try:
+    asyncio.run(main())
+except Exception:
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / 'failure.txt').write_text(traceback.format_exc())
+    if not RESULTS:
+        (OUT / 'summary.md').write_text('# Warning print regression failed before cases ran\n\nSee failure.txt for environment/startup details.\n')
+    raise
