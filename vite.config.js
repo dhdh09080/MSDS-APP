@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
         input: {
           main: resolve(__dirname, 'index.html'),
           upload: resolve(__dirname, 'upload.html'),
+          contractors: resolve(__dirname, 'contractors.html'),
         }
       }
     },

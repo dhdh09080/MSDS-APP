@@ -1717,6 +1717,8 @@
 </div>
 </div>
 <div class="content-scroll">
+<div class="card site-directory-card" id="siteDirectoryCard"><div class="card-title">현장 전체 협력사 리스트 링크</div><p class="form-note">협력사 목록·서류 제출 현황·관리자 연락처를 공유하고, 협력사가 직접 등록·수정할 수 있습니다. 링크는 30일간 유효합니다.</p><div id="siteDirectoryLinkState"></div><div class="site-directory-actions"><button class="btn btn-primary" onclick="generateSiteDirectoryLink()">목록 링크 발급 / 복사</button><button id="siteDirectoryRevoke" class="btn btn-secondary" onclick="revokeSiteDirectoryLink()" hidden>목록 링크 해제</button><button class="btn btn-secondary" onclick="refreshContractorDirectoryData()">목록 새로고침</button></div></div>
+
 <div class="stats-row contractor-stats" style="margin-bottom: 16px">
 <button class="stat-card contractor-stat-card active" id="conStatAll" onclick="setContractorFilter('all')">
 <div class="stat-label">전체 협력사</div>
@@ -1776,7 +1778,7 @@
                     </button>
 </div>
 <div class="contractor-add-grid">
-<input class="form-input" id="newContractor" onkeydown="if (event.key === 'Enter') addContractor();" placeholder="정확한 협력사명을 입력하세요" type="text"/>
+<input class="form-input" id="newContractor" onkeydown="if (event.key === 'Enter') addContractor();" placeholder="정확한 협력사명을 입력하세요" type="text"/><input class="form-input" id="newContractorManager" placeholder="협력사 관리자명 (선택)" maxlength="100"/><input class="form-input" id="newContractorPhone" type="tel" placeholder="전화번호 (선택)" maxlength="30"/>
 <button class="btn btn-primary" onclick="addContractor()">
                       등록
                     </button>
@@ -3641,7 +3643,7 @@
 </div>
 </div>
 <!-- 토스트 -->
-<div class="toast-wrap" id="toastWrap"></div>
+<dialog id="contractorContactDialog" class="contractor-contact-dialog"><form id="contractorContactForm"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h2 style="font-size:17px">협력사 연락처 수정</h2><button type="button" class="btn btn-secondary" onclick="document.getElementById('contractorContactDialog').close()">닫기</button></div><input id="contactContractorId" type="hidden"><p id="contactContractorName"></p><label>관리자명<input class="form-input" id="contactManagerName" maxlength="100"/></label><label>전화번호<input class="form-input" id="contactManagerPhone" type="tel" maxlength="30"/></label><p id="contactError" role="alert"></p><button class="btn btn-primary" id="contactSaveButton" type="submit">저장하기</button></form></dialog><div class="toast-wrap" id="toastWrap"></div>
 <script src="/src/main.js" type="module"></script>
 </body>
 </html>

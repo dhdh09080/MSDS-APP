@@ -1,5 +1,43 @@
 # MSDS-APP
 
+## Site contractor directory
+
+The Contractors screen provides a separate, revocable 30-day directory link at
+`/contractors.html?dtoken=...`. Site owners/admins issue it. Recipients see the
+site's complete contractor list, computed license/MSDS submission status,
+manager name and tappable phone number, can edit contact details, register a new
+company, and open that company's existing management portal. Mobile uses cards;
+desktop uses a table with search and missing-document filters.
+
+The directory schema and contact APIs were applied to production on 2026-10-22
+(Asia/Seoul).
+
+Contact fields `contractors.manager_name` and `manager_phone` are shared by the
+manager application and directory, with no duplicate contractor database.
+Submission flags are computed from `business_licenses` and `msds_records` using
+the manager application's received-file definition; no independent flags can
+become stale. Contact edits cannot rename a contractor, preserving existing
+name-based MSDS associations. Registration rejects normalized duplicate names.
+
+`supabase/contractor_directory.sql` adds these fields and the protected
+`contractor_directory_links` table. Tokens are deliberately separate from legacy
+`public_upload_links`, whose anonymous SELECT policies must not expose directory
+contact-edit capabilities. Only owners/admins can read, issue or revoke tokens.
+Anonymous legacy table reads cannot select the new contact columns; public
+registration uses a validated token RPC. Signed-in contact edits use a workspace
+membership check and update only contact fields. Token-scoped RPCs allow recipients to read/edit only that site's contacts and
+register into the existing contractors table. Invalid, revoked, expired or
+cross-site requests are rejected. Individual contractor links cannot enumerate
+contacts or access the directory. Existing upload/public links retain their
+scope and expiration. Directory links operate independently of public-upload
+link revocation. Both management screens can refresh shared data; returning to
+contractor management refreshes contacts and submission state.
+
+Validation: `tests/contractor-directory.sql` runs within a rollback-only database
+transaction; `tests/contractor-directory.browser.py` uses synthetic API responses
+and checks filters, edits, registration/duplicates, navigation, expired links
+and 360/390/768px layouts without customer-document writes.
+
 ## Contractor management portal
 
 `/upload.html?token=...` opens `{현장명} {협력사명} 관리페이지`.

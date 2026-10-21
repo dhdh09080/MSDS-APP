@@ -32,10 +32,14 @@ async function portalRequest(contractorId = null) {
 async function init() {
   try {
     const params = new URLSearchParams(location.search);
-    currentUploadToken = params.get('token') || params.get('ptoken') || '';
+    currentUploadToken = params.get('token') || params.get('ptoken') || params.get('dtoken') || '';
     if (!currentUploadToken) throw new Error('링크에 토큰이 없습니다. 담당 보건관리자에게 링크를 요청해주세요.');
-    const data = await portalRequest();
+    const data = await portalRequest(params.get('contractor_id'));
     wsData = data.workspace;
+    if (params.get('dtoken')) {
+      const back = document.getElementById('directoryBackLink');
+      back.href = `/contractors.html?dtoken=${encodeURIComponent(currentUploadToken)}`; back.hidden = false;
+    }
     if (data.public_link) publicLinkData = data.public_link;
     if (!data.contractor) {
       contractorList = data.contractors || [];
@@ -504,11 +508,7 @@ window.addNewContractorAndSelect = async function () {
     return;
   }
   try {
-    const { data, error } = await supabase
-      .from('contractors')
-      .insert({ workspace_id: wsData.id, name })
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc('register_public_contractor', {p_token:currentUploadToken,p_name:name});
     if (error) throw error;
     contractorData = { id: data.id, name: data.name };
     document.getElementById('loadingView').style.display = 'block';

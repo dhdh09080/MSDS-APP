@@ -905,6 +905,7 @@ function resetWorkspaceScopedState() {
   activeSnapshotId = null;
 
   publicLink = null;
+  siteDirectoryLink = null;
   sortingRows = [];
   mpMonth = '';
   mpRecords = [];
@@ -2712,6 +2713,7 @@ async function loadContractors() {
   contractors = data || [];
   renderContractorTags();
   populateContractorSelects();
+  renderSiteDirectoryLink();
 }
 
 async function loadWorkTypes() {
@@ -2807,7 +2809,7 @@ window.updateInlineContractorAdd = function (id) {
   btn.textContent = name && !exact ? `+ “${name}” 신규 협력사로 등록` : '';
 };
 
-async function insertContractor(name) {
+async function insertContractor(name, contact = {}) {
   const cleanName = name.trim().replace(/\s+/g, ' ');
   const existing = contractors.find(
     (c) =>
@@ -2821,7 +2823,7 @@ async function insertContractor(name) {
   }
   const { data, error } = await supabase
     .from('contractors')
-    .insert({ workspace_id: currentWS.id, name: cleanName })
+    .insert({ workspace_id: currentWS.id, name: cleanName, ...contact })
     .select()
     .single();
   if (error) throw error;
@@ -2937,7 +2939,7 @@ window.renderContractorTags = function () {
           ${escapeHtml(c.name)}
           <button class="btn btn-secondary btn-sm" onclick="renameContractor('${c.id}')">이름 수정</button>
         </div>
-        <div class="contractor-work-types">${wtChips}</div>
+        <div class="contractor-contact-line"><span>관리자 ${escapeHtml(c.manager_name || '미등록')}</span><span>${escapeHtml(c.manager_phone || '전화번호 미등록')}</span><button class="btn btn-secondary btn-sm" onclick="editContractorContact('${c.id}')">연락처 수정</button></div><div class="contractor-work-types">${wtChips}</div>
       </div>
       <div class="contractor-statuses">
         <button class="contractor-badge neutral" onclick="openContractorMsds('${c.id}')">🧪 MSDS ${msdsCnt}건</button>
@@ -3115,12 +3117,17 @@ window.addContractor = async function () {
   const v = document.getElementById('newContractor').value.trim();
   if (!v) return;
   try {
-    const { contractor, created } = await insertContractor(v);
+    const manager_name = document.getElementById('newContractorManager').value.trim();
+    const manager_phone = document.getElementById('newContractorPhone').value.trim();
+    if (manager_phone && !/^[0-9+() .-]{7,30}$/.test(manager_phone)) throw new Error('전화번호 형식을 확인해주세요');
+    const { contractor, created } = await insertContractor(v, {manager_name, manager_phone});
     if (!created) {
       toast('이미 등록된 협력사입니다', 'error');
       return;
     }
     document.getElementById('newContractor').value = '';
+    document.getElementById('newContractorManager').value = '';
+    document.getElementById('newContractorPhone').value = '';
     document.getElementById('conMgrSearch').value = '';
     setContractorFilter('all');
     populateContractorSelects();
@@ -8722,8 +8729,14 @@ window.toggleMeasureRound = async function (half, done) {
 // 전체 협력사용 공용 업로드 링크
 // ═══════════════════════════════════════════════
 let publicLink = null;
+let siteDirectoryLink = null;
+async function loadSiteDirectoryLink() {
+  const {data,error}=await supabase.from('contractor_directory_links').select('*').eq('workspace_id',currentWS.id).maybeSingle();
+  siteDirectoryLink=error?null:data;
+}
 
 async function loadPublicLink() {
+  await loadSiteDirectoryLink();
   const { data, error } = await supabase
     .from('public_upload_links')
     .select('*')
@@ -8738,6 +8751,7 @@ async function loadPublicLink() {
 }
 
 function renderPublicLinkUI() {
+  renderSiteDirectoryLink();
   const emptyEl = document.getElementById('publicLinkEmptyState');
   const activeEl = document.getElementById('publicLinkActiveState');
   if (!emptyEl || !activeEl) return;
@@ -8837,6 +8851,54 @@ window.updatePublicLinkSettings = async function () {
   publicLink.allow_license = allowLicense;
   toast('설정이 변경됐습니다', 'success');
 };
+// Site directory uses the same contractors, business_licenses and msds_records.
+function renderSiteDirectoryLink() {
+  const host = document.getElementById('siteDirectoryLinkState'); if (!host) return;
+  const active = siteDirectoryLink?.token && new Date(siteDirectoryLink.expires_at) > new Date();
+  document.getElementById('siteDirectoryRevoke').hidden = !active;
+  if (!active) { host.innerHTML = '<p class="form-note">발급된 목록 링크가 없습니다. 연락처 조회·수정이 가능하므로 현장 참여자에게만 공유해주세요.</p>'; return; }
+  const url = `${location.origin}/contractors.html?dtoken=${encodeURIComponent(siteDirectoryLink.token)}`;
+  host.innerHTML = `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(currentWS?.name || '현장')} 전체 협력사 리스트 열기 ↗</a><div class="token-url">${escapeHtml(url)}</div><p class="form-note">만료일: ${new Date(siteDirectoryLink.expires_at).toLocaleDateString('ko-KR')}</p>`;
+}
+window.generateSiteDirectoryLink = async function () {
+  const {data,error} = await supabase.rpc('manage_contractor_directory_link',{p_workspace:currentWS.id,p_revoke:false});
+  if(error) return toast('목록 링크 발급 실패: '+error.message,'error');
+  await loadPublicLink(); renderSiteDirectoryLink(); renderPublicLinkUI();
+  copyLink(`${location.origin}/contractors.html?dtoken=${encodeURIComponent(data.token)}`);
+};
+window.revokeSiteDirectoryLink = async function () {
+  if(!confirm('현장 전체 협력사 목록 링크를 해제할까요? 개별 협력사 링크는 계속 사용할 수 있습니다.')) return;
+  const {error}=await supabase.rpc('manage_contractor_directory_link',{p_workspace:currentWS.id,p_revoke:true});
+  if(error) return toast('목록 링크 해제 실패: '+error.message,'error');
+  await loadPublicLink(); renderSiteDirectoryLink(); toast('목록 링크가 해제됐습니다','success');
+};
+window.refreshContractorDirectoryData = async function () {
+  await Promise.all([loadContractors(),loadMsdsRecords(),loadBusinessLicenses(),loadPublicLink()]);
+  renderContractorTags(); renderSiteDirectoryLink(); toast('협력사 정보를 갱신했습니다','success');
+};
+window.editContractorContact = function (id) {
+  const c=contractors.find(c=>c.id===id); if(!c)return;
+  document.getElementById('contactContractorId').value=id;
+  document.getElementById('contactContractorName').textContent=c.name;
+  document.getElementById('contactManagerName').value=c.manager_name || '';
+  document.getElementById('contactManagerPhone').value=c.manager_phone || '';
+  document.getElementById('contactError').textContent='';
+  document.getElementById('contractorContactDialog').showModal();
+  document.getElementById('contactManagerName').focus();
+};
+document.getElementById('contractorContactForm').addEventListener('submit',async event=>{
+  event.preventDefault(); const button=document.getElementById('contactSaveButton'); button.disabled=true;
+  try {
+    const manager_name=document.getElementById('contactManagerName').value.trim();
+    const manager_phone=document.getElementById('contactManagerPhone').value.trim();
+    if(manager_phone && !/^[0-9+() .-]{7,30}$/.test(manager_phone))throw new Error('전화번호 형식을 확인해주세요');
+    const {error}=await supabase.rpc('save_workspace_contractor_contact',{p_workspace:currentWS.id,p_contractor_id:document.getElementById('contactContractorId').value,p_manager_name:manager_name,p_manager_phone:manager_phone});
+    if(error)throw error;
+    await loadContractors(); document.getElementById('contractorContactDialog').close(); toast('연락처가 저장됐습니다','success');
+  }catch(error){document.getElementById('contactError').textContent=error.message;}
+  finally{button.disabled=false;}
+});
+
 // ═══════════════════════════════════════════════
 // 검진 대상자 소팅
 // ═══════════════════════════════════════════════
@@ -10789,6 +10851,9 @@ window.switchContractorTab = function (tab) {
       };
     }
   });
+  if (contractorTab === 'companies' && !getDevPreviewPage()) {
+    Promise.all([loadContractors(),loadMsdsRecords(),loadBusinessLicenses(),loadPublicLink()]).then(() => { renderContractorTags(); renderSiteDirectoryLink(); });
+  }
   if (contractorTab === 'links') {
     renderTokenList();
     renderPublicLinkUI();
