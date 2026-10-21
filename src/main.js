@@ -1,3 +1,5 @@
+import { loadPosterFont } from './lib/weather-poster-fonts.js';
+import { posterLocale, localizeAdvice, localizeAlert, posterDateTitle } from './lib/weather-poster-i18n.js';
 import { weatherAlertsHtml, A4_POSTER, buildHealthPosterSvg, hourlyWeatherHtml, posterModel, kstDate, riskMetric } from './lib/weather-poster.js';
 import { loadWeatherDetail, loadWeatherObservations } from './lib/weather-detail.js';
 import { renderPpe, labelSafetySections } from './lib/warning-label.js';
@@ -9866,6 +9868,7 @@ window.cancelReupload = async function (id) {
 // ═══════════════════════════════════════════════
 const WX_REPO = 'dhdh09080/seongdongxi';
 let wxSeasonMode = 'auto';
+let wxPosterLanguage = 'ko', wxPosterRenderRequest = 0;
 let wxWeatherView = 'poster';
 let wxViewKey = '';
 let wxViewLoaded = new Set();
@@ -9877,19 +9880,19 @@ let wxPosterCache = {};
 let wxPosterSvg = '';
 let wxPosterObjectUrl = '';
 
-async function fetchWxForecast() {
+async function fetchWxForecast(workspace = {...currentWS}) {
   if (getDevPreviewPage()) {
     return {
       date: kstDate(),
-      latitude: currentWS.latitude,
-      longitude: currentWS.longitude,
-      address: currentWS.address,
+      latitude: workspace.latitude,
+      longitude: workspace.longitude,
+      address: workspace.address,
       hours: Array.from({length:14}, (_, i) => ({hour:i+6, temp:10+6*Math.sin(i/13*Math.PI), feel:9+7*Math.sin(i/13*Math.PI), humidity:60+i, wind:1.2+(i%5)*0.7})),
       source: 'preview',
     };
   }
-  const latitude = Number(currentWS?.latitude);
-  const longitude = Number(currentWS?.longitude);
+  const latitude = Number(workspace?.latitude);
+  const longitude = Number(workspace?.longitude);
   if (
     !Number.isFinite(latitude) ||
     !Number.isFinite(longitude) ||
@@ -9901,7 +9904,7 @@ async function fetchWxForecast() {
   const { data, error } = await supabase.functions.invoke('site-weather', {
     body: {
       action: 'forecast',
-      address: currentWS.address,
+      address: workspace.address,
       latitude,
       longitude,
     },
@@ -9931,21 +9934,32 @@ function renderWxSiteSummary() {
   return ready;
 }
 
-function renderWxSitePoster(fc) {
-  wxPosterSvg = buildHealthPosterSvg(fc, currentWS, wxSeasonMode);
+async function renderWxSitePoster(fc) {
+  const request = ++wxPosterRenderRequest;
+  const site = {...currentWS}, lang = wxPosterLanguage, mode = wxSeasonMode;
+  const font = await loadPosterFont(lang);
+  if (request !== wxPosterRenderRequest || fc !== wxForecast) return;
+  wxPosterSvg = buildHealthPosterSvg(fc, site, mode, lang, font);
   if (wxPosterObjectUrl) URL.revokeObjectURL(wxPosterObjectUrl);
-  wxPosterObjectUrl = URL.createObjectURL(
-    new Blob([wxPosterSvg], { type: 'image/svg+xml;charset=utf-8' }),
-  );
-  const model = posterModel(fc, wxSeasonMode);
+  wxPosterObjectUrl = URL.createObjectURL(new Blob([wxPosterSvg], {type:'image/svg+xml;charset=utf-8'}));
+  const model = posterModel(fc, mode), l = posterLocale(lang);
   document.getElementById('wxLatestPoster').innerHTML =
-    `<div class="wx-mobile-health"><h3>${model.title}</h3><p>${model.action}</p>${weatherAlertsHtml(model.alerts)}<div class="wx-mobile-health-metrics"><div><small>06–19시 최고 / 최저 기온</small><b>${riskMetric('temp',model.high,'°')} / ${riskMetric('temp',model.low,'°')}</b></div><div><small>06–19시 최고 체감온도</small><b>${riskMetric('feel',model.maxFeel,'°C')}</b></div><div><small>06–19시 최대 풍속</small><b>${riskMetric('wind',model.maxWind,' m/s')}</b></div></div><ol>${model.tips.map(tip => `<li>${escapeHtml(tip)}</li>`).join('')}</ol></div><a class="wx-poster-original" href="${wxPosterObjectUrl}" target="_blank" rel="noopener" aria-label="건강관리 포스터 원본 크게 보기"><img class="wx-site-poster" src="${wxPosterObjectUrl}" alt="${escapeHtml(currentWS?.name || '현장')} ${model.title} · 시간별 기온, 체감온도, 풍속 그래프"></a><p class="wx-detail-note"><a class="wx-poster-open-link" href="${wxPosterObjectUrl}" target="_blank" rel="noopener">포스터 원본 크게 보기 ↗</a> · PNG로 저장해 현장에 게시하거나 공유하세요.</p>`;
+    `<div class="wx-mobile-health" lang="${lang}" style="font-family:'${l.font}',sans-serif"><h3>${escapeHtml(site.name || l.site)}</h3><p>${escapeHtml(posterDateTitle(model.date,lang))}</p>${model.alerts.map(a=>localizeAlert(a,lang)).map(a=>`<p style="color:${a.color}">${escapeHtml(a.label)} · ${escapeHtml(a.threshold)}</p>`).join('')}<div class="wx-mobile-health-metrics"><div><small>${escapeHtml(l.high)} / ${escapeHtml(l.low)}</small><b>${riskMetric('temp',model.high,'°')} / ${riskMetric('temp',model.low,'°')}</b></div><div><small>${escapeHtml(l.feelHigh)}</small><b>${riskMetric('feel',model.maxFeel,'°C')}</b></div><div><small>${escapeHtml(l.windHigh)}</small><b>${riskMetric('wind',model.maxWind,' m/s')}</b></div></div><h4>${escapeHtml(l.tips)}</h4><ol>${localizeAdvice(model.tips,lang).map(tip=>`<li>${escapeHtml(tip)}</li>`).join('')}</ol></div><a class="wx-poster-original" href="${wxPosterObjectUrl}" target="_blank" rel="noopener" aria-label="포스터 원본 크게 보기"><img class="wx-site-poster" src="${wxPosterObjectUrl}" alt="${escapeHtml(site.name || l.site)} · ${escapeHtml(posterDateTitle(model.date,lang))}" lang="${lang}"></a><p class="wx-detail-note"><a class="wx-poster-open-link" href="${wxPosterObjectUrl}" target="_blank" rel="noopener">포스터 원본 크게 보기 ↗</a> · PNG로 저장해 현장에 게시하거나 공유하세요.</p>`;
   document.getElementById('wxDownloadPosterBtn').style.display = 'inline-flex';
 }
+window.setWxPosterLanguage = async function(lang) {
+  wxPosterLanguage = posterLocale(lang).lang;
+  if (wxForecast) {
+    document.getElementById('wxDownloadPosterBtn').style.display = 'none';
+    wxPosterSvg = '';
+    try { await renderWxSitePoster(wxForecast); }
+    catch(error) { toast(error.message, 'error'); }
+  }
+};
 
 window.printWxSitePoster = function () {
   if (!wxPosterSvg) { toast('포스터를 먼저 생성해주세요', 'error'); return; }
-  openPrintWindow(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>현장 건강관리 · A4</title><style>@page{size:A4 portrait;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}svg{display:block;width:210mm;height:297mm}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>${wxPosterSvg}</body></html>`);
+  openPrintWindow(`<!doctype html><html lang="${wxPosterLanguage}"><head><meta charset="utf-8"><title>현장 오늘의 날씨 · A4</title><style>@page{size:A4 portrait;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body>svg{display:block;width:210mm;height:297mm}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>${wxPosterSvg}</body></html>`);
 };
 
 window.downloadWxSitePoster = function () {
@@ -9968,7 +9982,7 @@ window.downloadWxSitePoster = function () {
         blob &&
         downloadBlob(
           blob,
-          `현장_건강관리_${currentWS?.name || '현장'}_${kstDate()}.png`,
+          `현장_날씨_${currentWS?.name || '현장'}_${kstDate()}_${wxPosterLanguage}.png`,
         ),
       'image/png',
     );
@@ -10019,7 +10033,7 @@ async function loadDashWeather() {
 
 window.setWxSeasonMode = function (mode) {
   wxSeasonMode = ['auto', 'summer', 'transition', 'winter'].includes(mode) ? mode : 'auto';
-  if (wxForecast) renderWxSitePoster(wxForecast);
+  if (wxForecast) renderWxSitePoster(wxForecast).catch(error => toast(error.message, 'error'));
 };
 
 window.setWeatherView = function (view) {
@@ -10046,9 +10060,10 @@ window.weatherViewKeydown = function (event) {
 };
 
 window.loadWeatherPage = async function (force) {
-  const key = `${currentWS?.id}:${currentWS?.latitude}:${currentWS?.longitude}:${kstDate()}`;
+  const key = `${JSON.stringify([currentWS?.id,currentWS?.name,currentWS?.address,currentWS?.latitude,currentWS?.longitude])}:${kstDate()}`;
   if (force || key !== wxViewKey) {
     wxViewKey = key;
+    ++wxPosterRenderRequest;
     ++wxPageRequest;
     wxViewLoaded.clear();
     wxForecast = null;
@@ -10081,7 +10096,7 @@ window.loadWeatherPage = async function (force) {
     const forecast = await wxForecastPending;
     if (key !== wxViewKey || token !== wxPageRequest) return;
     wxForecast = forecast;
-    renderWxSitePoster(forecast);
+    await renderWxSitePoster(forecast);
     el.innerHTML = wxHourlyHtml(forecast);
     wxViewLoaded.add('poster');
     wxViewLoaded.add('hourly');

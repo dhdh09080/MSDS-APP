@@ -115,3 +115,19 @@ These are user-requested site thresholds, not official KMA advisories.
 Daily guidance prioritizes all detected hazards, then temperature swing (≥10°C),
 hot/humid conditions, and seasonal advice. Risk-specific wording also rotates by
 Korean date, including when the same weather conditions persist across weeks.
+
+### 현장 날씨 포스터 언어와 위치
+
+날씨 → 포스터에서 한국어, 중국어(간체), 미얀마어, 러시아어를 선택합니다.
+현장명과 저장 주소는 등록한 원문을 유지하고, 제목 날짜·경고·그래프·수치표·건강 안내는 선택한 언어로 표시합니다.
+제목은 `현장명 / 월 일 오늘의 날씨`이며 건강 안내는 날짜, 계절, 예보와 현장 경고 기준에 따라 달라집니다.
+86개 안내 문구는 정적 번역 카탈로그로 관리하며 외부 번역 API를 호출하지 않습니다.
+외국어 포스터는 OFL 글꼴 부분집합을 SVG 안에 포함합니다. 라이선스는 `public/fonts/LICENSE-*`에 있습니다.
+A4 세로 인쇄 및 2520×3564 PNG로 저장할 수 있습니다.
+
+현장 설정에서 주소와 좌표를 저장하면 해당 좌표로 `site-weather` 예보를 요청합니다.
+현장명·주소·좌표·한국 날짜가 달라지면 포스터 캐시를 갱신하며 이전 위치 요청이 늦게 끝나도 새 포스터에 덮어쓰지 않습니다.
+2026-10-22 검증: 실제 지오코딩과 예보 API로 서울 시청(37.56637,126.97792) 및 제주 시청(33.50021,126.53222)을 조회했습니다.
+06–19시 기온은 서울 4.4–14.3°C, 제주 13.3–15.9°C로 달랐고 최대 풍속은 각각 1.28,4.8m/s였습니다.
+브라우저에서는 이 실제 응답을 재생해 설정 저장 → 위치별 요청 → 포스터 변경, 현장명만 변경할 때 캐시 갱신,
+네 언어 전환, PNG 크기를 확인했습니다. 실제 운영 현장 설정은 변경하지 않았습니다.

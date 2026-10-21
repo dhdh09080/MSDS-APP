@@ -26,7 +26,7 @@ test('poster retains every working hour and metric in valid XML, escaping site c
  assert.equal(doc.documentElement.getAttribute('height'),'1782');
  assert.equal(doc.getElementsByTagName('parsererror').length,0);
  assert.equal(doc.getElementsByTagName('script').length,0);
- assert.match(svg,/환절기 건강관리/);
+ assert.match(svg,/10월 19일 오늘의 날씨/);
  assert.match(svg,/미리보기 예시/);
  for(let h=6;h<=19;h++)assert.match(svg,new RegExp('>'+h+'시<'));
  assert.match(svg,/풍속 m\/s/);
@@ -61,7 +61,7 @@ test('download scales the complete A4 SVG to the print canvas and print action s
  const handlers=source.slice(source.indexOf('window.printWxSitePoster ='),source.indexOf('async function fetchWxPosterList('));
  const drawn=[];let printed='';let saved=false;
  const canvas={width:0,height:0,getContext:()=>({drawImage:(...args)=>drawn.push(args)}),toBlob:cb=>cb(new Blob(['png']))};
- const context={window:{},wxPosterSvg:buildHealthPosterSvg(fc),A4_POSTER,Blob,URL:{createObjectURL:()=> 'blob:poster',revokeObjectURL(){}},
+ const context={window:{},wxPosterSvg:buildHealthPosterSvg(fc),wxPosterLanguage:'ko',A4_POSTER,Blob,URL:{createObjectURL:()=> 'blob:poster',revokeObjectURL(){}},
   Image:class{set src(value){this.onload()}},document:{createElement:()=>canvas},
   openPrintWindow:html=>{printed=html},toast:()=>{throw Error('Unexpected error')},downloadBlob:()=>{saved=true},currentWS:{name:'현장'},kstDate:()=>fc.date};
  runInNewContext(handlers,context);
@@ -129,4 +129,36 @@ test('rounding cannot falsely suggest a threshold was crossed',async()=>{
  assert.equal(riskMetric('temp',-11.99,'°C'),'-11.99°C');
  assert.equal(riskMetric('temp',-14.99,'°C'),'-14.99°C');
  assert.equal(riskMetric('wind',10.04,' m/s'),'10 m/s');
+});
+
+test('all 86 weather guidance entries and warning stages are translated for each poster language',async()=>{
+ const {ALL_ADVICE}=await import('../src/lib/weather-advice.js');
+ const {POSTER_LANGUAGES,localizeAdvice,localizeAlert}=await import('../src/lib/weather-poster-i18n.js');
+ const {metricAlert}=await import('../src/lib/weather-poster.js');
+ const {DOMParser}=await import('@xmldom/xmldom');
+ for(const l of POSTER_LANGUAGES){
+  const tips=localizeAdvice(ALL_ADVICE,l.lang);
+  assert.equal(tips.length,86);
+  if(l.lang!=='ko') for(const tip of tips)assert.doesNotMatch(tip,/[가-힣]/);
+  for(const [kind,value]of[['feel',31],['feel',33],['feel',35],['temp',-12],['temp',-15],['wind',10]]){
+   const a=localizeAlert(metricAlert(kind,value),l.lang);
+   assert.ok(a.label && !a.label.includes('undefined'));
+  }
+  const svg=buildHealthPosterSvg(fc,{name:'현장 이름',address:'서울 주소'},'auto',l.lang);
+  const doc=new DOMParser().parseFromString(svg,'image/svg+xml');
+  assert.equal(doc.documentElement.getAttribute('lang'),l.lang);
+  assert.match(svg,/현장 이름/);
+  assert.match(svg,/서울 주소/);
+  if(l.lang!=='ko'){
+   const text=[...Array.from(doc.getElementsByTagName('text'))].map(n=>n.textContent).filter(t=>!t.includes('현장 이름')&&!t.includes('서울 주소')).join(' ');
+   assert.doesNotMatch(text,/[가-힣]/);
+  }
+ }
+});
+
+test('poster dates remain Burmese when the browser has no Burmese Intl date data',async()=>{
+ const {posterDateTitle,posterDateLabel}=await import('../src/lib/weather-poster-i18n.js');
+ assert.equal(posterDateTitle('2026-10-22','my'),'အောက်တိုဘာ 22 · ယနေ့ မိုးလေဝသ');
+ assert.match(posterDateLabel('2026-10-22','my'),/ကြာသပတေး/);
+ assert.doesNotMatch(posterDateLabel('2026-10-22','my'),/October|Thursday/);
 });
