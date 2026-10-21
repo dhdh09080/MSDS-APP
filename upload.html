@@ -6,8 +6,8 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#2563EB" />
-    <title>MSDS 업로드</title>
+    <meta name="theme-color" content="#27272b" />
+    <title>협력사 관리페이지</title>
     <style>
       :root {
         --primary: #2563eb;
@@ -468,15 +468,15 @@
   <body>
     <!-- 헤더 -->
     <div class="header">
-      <div class="header-logo">🛡️ GS 보건 현장관리 시스템</div>
-      <div class="header-ws" id="headerWS">현장 MSDS 업로드</div>
-      <div class="header-desc" id="headerDesc">MSDS 파일을 업로드해주세요</div>
+      <div class="header-logo"><span class="portal-brand">GS</span> 보건 현장관리 시스템 <span class="portal-label">협력사 전용</span></div>
+      <div class="header-ws" id="headerWS">협력사 관리페이지</div>
+      <div class="header-desc" id="headerDesc">협력사 안전보건 자료 관리</div>
     </div>
 
     <!-- 메인 컨텐츠 -->
     <div class="content">
       <!-- 로딩 -->
-      <div id="loadingView" class="loading">
+      <div id="loadingView" class="loading" role="status" aria-live="polite">
         <div class="spinner"></div>
         <div>잠시만 기다려주세요...</div>
       </div>
@@ -484,7 +484,7 @@
       <!-- 에러 -->
       <div id="errorView" class="error-screen" style="display: none">
         <div class="error-icon">❌</div>
-        <div class="error-title">링크가 유효하지 않습니다</div>
+        <div class="error-title">관리페이지에 연결할 수 없습니다</div><button class="btn btn-secondary" onclick="location.reload()">다시 시도</button>
         <div class="error-sub" id="errorMsg">
           만료된 링크이거나 잘못된 주소입니다.
           <br />
@@ -492,6 +492,29 @@
         </div>
       </div>
 
+      <main id="portalView" hidden>
+        <div class="portal-overview"><div><span class="eyebrow">CONTRACTOR WORKSPACE</span><h2>안전한 현장, 함께 관리합니다</h2><p>필요한 서류를 등록하고 현장에서 바로 확인하세요.</p></div><span class="portal-secure">협력사 전용 링크</span></div>
+        <div class="portal-stats"><div><span>등록 MSDS</span><strong><b id="recordCount">0</b><small>건</small></strong></div><div><span>인쇄 가능한 표지</span><strong><b id="warningCount">0</b><small>건</small></strong></div><div><span>사업자등록증</span><strong id="licenseSummary">미등록</strong></div></div>
+        <div id="portalTabs" role="tablist" aria-label="협력사 관리 메뉴">
+          <button id="recordsTab" data-msds data-portal-tab="records" role="tab" aria-controls="recordsPanel" onclick="switchPortalPanel('records')">MSDS 자료</button>
+          <button id="warningsTab" data-msds data-portal-tab="warnings" role="tab" aria-controls="warningsPanel" onclick="switchPortalPanel('warnings')">경고표지 인쇄</button>
+          <button id="licenseTab" data-portal-tab="license" role="tab" aria-controls="licensePanel" onclick="switchPortalPanel('license')">사업자등록증</button>
+        </div>
+        <section id="recordsPanel" data-portal-panel="records" role="tabpanel" aria-labelledby="recordsTab">
+          <div class="portal-section-heading"><div><h2>우리 협력사 MSDS</h2><p>기존 자료와 새로 업로드한 자료를 확인할 수 있습니다.</p></div><button class="btn btn-primary" onclick="switchPortalPanel('upload')">+ MSDS 업로드</button></div>
+          <div class="portal-toolbar"><input id="portalSearch" type="search" aria-label="MSDS 검색" placeholder="제품명, 공종, 공급업체 검색"><button class="btn btn-secondary" onclick="refreshPortalRecords()">새로고침</button></div>
+          <div id="portalRecordList" class="portal-list" aria-live="polite"></div>
+        </section>
+        <section id="warningsPanel" data-portal-panel="warnings" role="tabpanel" aria-labelledby="warningsTab" hidden>
+          <div class="portal-section-heading"><div><h2>경고표지 인쇄</h2><p>물질과 표지 크기를 선택해 인쇄하거나 PDF로 저장하세요.</p></div></div>
+          <div class="print-settings"><label>표지 크기<select id="portalPrintSize"><option value="a4">A4 · 1분할</option><option value="a5">A5 · 2분할</option><option value="a6">A6 · 4분할</option><option value="mini">소분용기 · 8분할</option></select></label><label>물질당 매수<input id="portalPrintCopies" type="number" min="1" max="20" value="1"></label><button class="btn btn-primary" id="printPortalWarnings" onclick="printPortalWarnings()">선택한 표지 인쇄</button></div>
+          <p class="portal-notice">관리자가 안전정보를 등록한 자료만 인쇄할 수 있습니다. 인쇄 전 원본 MSDS를 확인해주세요.</p>
+          <label class="select-all"><input type="checkbox" onchange="selectAllPortalWarnings(this.checked)"> 인쇄 가능 자료 전체 선택</label><div id="warningRecordList" class="portal-list"></div>
+        </section>
+        <section id="licensePanel" data-portal-panel="license" role="tabpanel" aria-labelledby="licenseTab" hidden><div class="portal-section-heading"><div><h2>사업자등록증 등록</h2><p>최초 한 번 등록하면 담당 보건관리자가 확인할 수 있습니다.</p></div></div><div id="licenseCardHost"></div></section>
+        <section id="uploadPanel" data-portal-panel="upload" aria-label="MSDS 업로드" hidden><button class="portal-back" onclick="switchPortalPanel('records')">← MSDS 자료로 돌아가기</button><div id="uploadViewHost"></div></section>
+        <footer class="portal-footer">GS 보건 현장관리 시스템<span>자료 확인 및 수정 문의는 현장 보건관리자에게 연락해주세요.</span></footer>
+      </main>
       <!-- 협력사 선택 (공용 링크 전용) -->
       <div id="contractorPickView" style="display: none">
         <div class="card">
@@ -771,656 +794,18 @@
 
     <div class="toast-wrap" id="toastWrap"></div>
 
-    <script type="module">
-      import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-      const supabase = createClient(
-        '__VITE_SUPABASE_URL__',
-        '__VITE_SUPABASE_ANON_KEY__',
-      );
-
-      let wsData = null,
-        tokenData = null,
-        contractorData = null;
-      let workTypes = [],
-        selectedWorkType = '',
-        fileQueue = [];
-      let licenseData = null;
-      let publicLinkData = null,
-        contractorList = [];
-      let currentUploadToken = '';
-
-      // ─── 초기화 ───
-      async function init() {
-        const params = new URLSearchParams(window.location.search);
-        const token = params.get('token');
-        const ptoken = params.get('ptoken');
-        currentUploadToken = token || ptoken || '';
-
-        if (!token && !ptoken) {
-          showError('링크에 토큰이 없습니다.');
-          return;
-        }
-
-        try {
-          if (ptoken) {
-            // ─── 공용 링크 ───
-            const { data: plink, error } = await supabase
-              .from('public_upload_links')
-              .select('*, workspace:workspace_id(*)')
-              .eq('token', ptoken)
-              .single();
-            if (error || !plink) {
-              showError('유효하지 않은 링크입니다.');
-              return;
-            }
-            if (plink.expires_at && new Date(plink.expires_at) < new Date()) {
-              showError('만료된 링크입니다. 새 링크를 요청해주세요.');
-              return;
-            }
-            publicLinkData = plink;
-            wsData = plink.workspace;
-
-            const { data: cons } = await supabase
-              .from('contractors')
-              .select('*')
-              .eq('workspace_id', wsData.id)
-              .order('name');
-            contractorList = cons || [];
-
-            document.getElementById('headerWS').textContent = wsData.name;
-            document.getElementById('headerDesc').textContent =
-              '협력사 선택 후 업로드';
-            document.getElementById('loadingView').style.display = 'none';
-            renderContractorPicker();
-            document.getElementById('contractorPickView').style.display =
-              'block';
-            return;
-          }
-
-          // ─── 개별 협력사 토큰 ───
-          const { data: tok, error } = await supabase
-            .from('upload_tokens')
-            .select(
-              '*, workspace:workspace_id(*), contractor:contractor_id(id,name)',
-            )
-            .eq('token', token)
-            .single();
-          if (error || !tok) {
-            showError('유효하지 않은 링크입니다.');
-            return;
-          }
-          if (tok.expires_at && new Date(tok.expires_at) < new Date()) {
-            showError('만료된 링크입니다.');
-            return;
-          }
-          tokenData = tok;
-          wsData = tok.workspace;
-          contractorData = tok.contractor;
-          await proceedToUploadView();
-        } catch (err) {
-          showError('오류가 발생했습니다: ' + err.message);
-        }
-      }
-
-      // 협력사 확정 후 (개별 토큰 또는 공용 링크에서 선택 완료) 공통 진입 처리
-      async function proceedToUploadView() {
-        // 공종 로드
-        const { data: wts } = await supabase
-          .from('work_types')
-          .select('*')
-          .eq('workspace_id', wsData.id)
-          .eq('contractor_id', contractorData.id)
-          .order('created_at');
-        workTypes = wts || [];
-
-        // 사업자등록증 제출 여부 로드
-        const { data: lic } = await supabase
-          .from('business_licenses')
-          .select('*')
-          .eq('contractor_id', contractorData.id)
-          .eq('workspace_id', wsData.id)
-          .maybeSingle();
-        licenseData = lic || null;
-
-        document.getElementById('headerDesc').textContent =
-          `${contractorData.name} · 업로드`;
-        document.getElementById('contractorPickView').style.display = 'none';
-
-        const allowMsds = publicLinkData ? publicLinkData.allow_msds : true;
-        const allowLicense = publicLinkData
-          ? publicLinkData.allow_license
-          : true;
-
-        if (!allowMsds && allowLicense) {
-          // MSDS 업로드 불가, 사업자등록증만 가능 → 바로 완료 화면(사업자등록증 카드만)으로
-          document.getElementById('uploadView').style.display = 'block';
-          document.getElementById('stepView1').style.display = 'none';
-          document.getElementById('stepView2').style.display = 'none';
-          document.getElementById('stepView3').style.display = 'block';
-          document.querySelector('.steps').style.display = 'none';
-          document.getElementById('licenseOnlyIntro').style.display = 'block';
-          document.querySelector('.complete-screen').style.display = 'none';
-          renderLicenseCard();
-          return;
-        }
-
-        document.getElementById('uploadView').style.display = 'block';
-        renderWorkTypes();
-        loadReuploadRequests();
-      }
-
-      function showError(msg) {
-        document.getElementById('loadingView').style.display = 'none';
-        document.getElementById('errorView').style.display = 'block';
-        document.getElementById('errorMsg').textContent = msg;
-      }
-
-      function renderWorkTypes() {
-        const grid = document.getElementById('worktypeGrid');
-        const noWt = document.getElementById('noWorktype');
-        if (workTypes.length === 0) {
-          grid.style.display = 'none';
-          noWt.style.display = 'block';
-          selectedWorkType = '미지정';
-          document.getElementById('step1Next').disabled = false;
-          return;
-        }
-        grid.innerHTML = workTypes
-          .map(
-            (w) =>
-              `<button class="worktype-btn" onclick="selectWorkType('${w.name}',this)">${w.name}</button>`,
-          )
-          .join('');
-      }
-
-      window.selectWorkType = function (name, btn) {
-        selectedWorkType = name;
-        document
-          .querySelectorAll('.worktype-btn')
-          .forEach((b) => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        document.getElementById('step1Next').disabled = false;
-      };
-
-      window.goStep2 = function () {
-        document.getElementById('stepView1').style.display = 'none';
-        document.getElementById('stepView2').style.display = 'block';
-        document.getElementById('selectedWorktypeLabel').textContent =
-          selectedWorkType;
-        setStep(2);
-      };
-
-      window.goStep1 = function () {
-        document.getElementById('stepView2').style.display = 'none';
-        document.getElementById('stepView1').style.display = 'block';
-        setStep(1);
-      };
-
-      function setStep(n) {
-        for (let i = 1; i <= 3; i++) {
-          const s = document.getElementById(`step${i}`);
-          s.className = 'step' + (i < n ? ' done' : i === n ? ' active' : '');
-        }
-        if (document.getElementById('line12'))
-          document.getElementById('line12').className =
-            'step-line' + (n >= 2 ? ' done' : '');
-        if (document.getElementById('line23'))
-          document.getElementById('line23').className =
-            'step-line' + (n >= 3 ? ' done' : '');
-      }
-
-      // ─── 파일 처리 ───
-      window.onDragOver = function (e) {
-        e.preventDefault();
-        document.getElementById('uploadZone').classList.add('drag');
-      };
-      window.onDragLeave = function (e) {
-        document.getElementById('uploadZone').classList.remove('drag');
-      };
-      window.onDrop = function (e) {
-        e.preventDefault();
-        document.getElementById('uploadZone').classList.remove('drag');
-        const ok = ['application/pdf', 'image/jpeg', 'image/png'];
-        const files = [...e.dataTransfer.files].filter((f) =>
-          ok.includes(f.type),
-        );
-        const non = e.dataTransfer.files.length - files.length;
-        if (non > 0) toast(`PDF/JPG/PNG만 가능합니다 (${non}개 제외)`, 'error');
-        if (files.length) addFiles(files);
-      };
-      window.onFileSelect = function (e) {
-        const ok = ['application/pdf', 'image/jpeg', 'image/png'];
-        const files = [...e.target.files].filter((f) => ok.includes(f.type));
-        addFiles(files);
-        e.target.value = '';
-      };
-
-      function addFiles(files) {
-        files.forEach((file) => {
-          const id = Date.now() + Math.random().toString(36).slice(2);
-          const item = {
-            id,
-            file,
-            name: file.name,
-            data: null,
-            mediaType: file.type,
-            status: 'waiting',
-          };
-          fileQueue.push(item);
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            item.data = ev.target.result.split(',')[1];
-            renderFileList();
-          };
-          reader.readAsDataURL(file);
-        });
-        renderFileList();
-      }
-
-      function renderFileList() {
-        const el = document.getElementById('fileList');
-        if (fileQueue.length === 0) {
-          el.style.display = 'none';
-          document.getElementById('uploadBtn').disabled = true;
-          return;
-        }
-        el.style.display = 'flex';
-        document.getElementById('uploadBtn').disabled = !fileQueue.some(
-          (f) => f.status === 'waiting',
-        );
-        el.innerHTML = fileQueue
-          .map(
-            (item) => `
-    <div class="file-item ${item.status}">
-      <span class="fi-icon">${{ waiting: '📄', uploading: '⏳', done: '✅', error: '❌' }[item.status]}</span>
-      <div class="fi-info">
-        <div class="fi-name">${item.name}</div>
-        <div class="fi-status">${{ waiting: '업로드 대기', uploading: '안전하게 접수 중...', done: '접수 완료', error: '오류 발생' }[item.status]}</div>
-        ${item.status === 'uploading' ? '<div class="progress-bar"><div class="progress-fill"></div></div>' : ''}
-      </div>
-      ${item.status !== 'uploading' ? `<button class="fi-remove" onclick="removeFile('${item.id}')">✕</button>` : ''}
-    </div>`,
-          )
-          .join('');
-      }
-
-      window.removeFile = function (id) {
-        fileQueue = fileQueue.filter((f) => f.id !== id);
-        renderFileList();
-      };
-
-      // ─── 업로드 ───
-      window.startUpload = async function () {
-        const waiting = fileQueue.filter((f) => f.status === 'waiting');
-        if (waiting.length === 0) return;
-        document.getElementById('uploadBtn').disabled = true;
-        let saved = 0;
-        for (const item of waiting) {
-          item.status = 'uploading';
-          renderFileList();
-          try {
-            // 공개 링크에서는 현장 관리자 API 비용과 문서 외부 전송을 막고 파일만 접수합니다.
-            // 보건관리자가 로그인 후 MSDS 대장에서 필요한 건만 AI 분석합니다.
-            // 파일을 먼저 스토리지에 올리고, PDF 정보를 포함해 한 번에 저장
-            // (기존 방식은 저장 후 UPDATE였는데, 비로그인 권한으로는 UPDATE가 조용히 실패해 has_pdf가 항상 false로 남는 버그가 있었음)
-            const recId = crypto.randomUUID();
-            const ext =
-              item.mediaType === 'application/pdf'
-                ? 'pdf'
-                : item.mediaType.split('/')[1] || 'jpg';
-            const path = `${wsData.id}/${recId}.${ext}`;
-            const bytes = atob(item.data);
-            const arr = new Uint8Array(bytes.length);
-            for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-            const blob = new Blob([arr], { type: item.mediaType });
-            const { error: stErr } = await supabase.storage
-              .from('msds-pdfs')
-              .upload(path, blob, {
-                contentType: item.mediaType,
-                upsert: true,
-              });
-            if (stErr)
-              throw new Error('원본 파일 업로드 실패: ' + stErr.message);
-            const hasPdf = true;
-            const { error: dbErr } = await supabase
-              .from('msds_records')
-              .insert({
-                id: recId,
-                workspace_id: wsData.id,
-                uploaded_by: null, // 협력사 업로드 = null
-                product_name: item.name.replace(/\.(pdf|jpg|jpeg|png)$/i, ''),
-                supplier: '',
-                supplier_contact: '',
-                contractor: contractorData.name,
-                work_type: selectedWorkType,
-                cas_no: '',
-                components: '',
-                signal_word: '',
-                h_codes: '',
-                p_codes: '',
-                pictograms: '',
-                issue_date: '',
-                protective_equipment: '',
-                legal_measurement: 'N',
-                legal_exam: 'N',
-                legal_exam_cycle: '',
-                legal_manage: 'N',
-                legal_permit: 'N',
-                legal_special: 'N',
-                legal_dangerous: 'N',
-                special: 'N',
-                status: 'active',
-                receipt_status: 'received',
-                receipt_date: new Date().toISOString().split('T')[0],
-                version: 1,
-                history: [],
-                has_pdf: hasPdf,
-                pdf_name: hasPdf ? item.name : null,
-                pdf_path: hasPdf ? path : null,
-              });
-            if (dbErr) {
-              await supabase.storage.from('msds-pdfs').remove([path]);
-              throw new Error('저장 실패: ' + dbErr.message);
-            }
-            saved++;
-            item.status = 'done';
-          } catch (err) {
-            item.status = 'error';
-            item.error = err.message;
-            console.error(err);
-          }
-          renderFileList();
-          await new Promise((r) => setTimeout(r, 300));
-        }
-        document.getElementById('uploadBtn').disabled = false;
-        if (saved > 0) {
-          const failed = waiting.length - saved;
-          document.getElementById('uploadedCount').textContent = saved;
-          const failureSummary = document.getElementById(
-            'uploadFailureSummary',
-          );
-          const retryBtn = document.getElementById('retryFailedBtn');
-          failureSummary.style.display = failed ? 'block' : 'none';
-          failureSummary.textContent = failed
-            ? `${failed}개 파일은 업로드하지 못했습니다. 아래 버튼으로 다시 시도해주세요.`
-            : '';
-          retryBtn.style.display = failed ? '' : 'none';
-          setStep(3);
-          document.getElementById('stepView2').style.display = 'none';
-          document.getElementById('stepView3').style.display = 'block';
-          renderLicenseCard();
-        } else {
-          toast('업로드 실패. 다시 시도해주세요.', 'error');
-        }
-      };
-
-      // ─── 완료 후 액션 ───
-      window.resetForm = function () {
-        fileQueue = [];
-        selectedWorkType = '';
-        document
-          .querySelectorAll('.worktype-btn')
-          .forEach((b) => b.classList.remove('selected'));
-        document.getElementById('step1Next').disabled = true;
-        document.getElementById('stepView3').style.display = 'none';
-        document.getElementById('stepView1').style.display = 'block';
-        renderFileList();
-        setStep(1);
-      };
-
-      window.retryFailedUploads = function () {
-        fileQueue = fileQueue
-          .filter((item) => item.status === 'error')
-          .map((item) => ({ ...item, status: 'waiting', error: null }));
-        document.getElementById('stepView3').style.display = 'none';
-        document.getElementById('stepView2').style.display = 'block';
-        renderFileList();
-        setStep(2);
-      };
-
-      function toast(msg, type = '') {
-        const wrap = document.getElementById('toastWrap');
-        const el = document.createElement('div');
-        el.className = 'toast ' + type;
-        el.textContent = msg;
-        wrap.appendChild(el);
-        setTimeout(() => el.remove(), 3000);
-      }
-
-      // ─── 사업자등록증 ───
-      // ─── 협력사 선택 (공용 링크) ───
-      function renderContractorPicker() {
-        const grid = document.getElementById('contractorPickGrid');
-        if (!contractorList.length) {
-          grid.innerHTML = `<div style="text-align:center;color:var(--text3);font-size:13px;padding:10px 0;">등록된 협력사가 없습니다. 아래에서 직접 추가해주세요.</div>`;
-          return;
-        }
-        grid.innerHTML = contractorList
-          .map(
-            (c) =>
-              `<button class="worktype-btn" onclick="selectExistingContractor('${c.id}')">${c.name}</button>`,
-          )
-          .join('');
-      }
-
-      window.selectExistingContractor = async function (id) {
-        const c = contractorList.find((x) => x.id === id);
-        if (!c) return;
-        contractorData = { id: c.id, name: c.name };
-        document.getElementById('loadingView').style.display = 'block';
-        document.getElementById('contractorPickView').style.display = 'none';
-        await proceedToUploadView();
-        document.getElementById('loadingView').style.display = 'none';
-      };
-
-      window.addNewContractorAndSelect = async function () {
-        const name = document
-          .getElementById('newContractorNameInput')
-          .value.trim();
-        if (!name) {
-          toast('협력사명을 입력하세요', 'error');
-          return;
-        }
-        if (contractorList.some((c) => c.name === name)) {
-          const existing = contractorList.find((c) => c.name === name);
-          selectExistingContractor(existing.id);
-          return;
-        }
-        try {
-          const { data, error } = await supabase
-            .from('contractors')
-            .insert({ workspace_id: wsData.id, name })
-            .select()
-            .single();
-          if (error) throw error;
-          contractorData = { id: data.id, name: data.name };
-          document.getElementById('loadingView').style.display = 'block';
-          document.getElementById('contractorPickView').style.display = 'none';
-          await proceedToUploadView();
+    <script>
+      document.getElementById('licenseCardHost').appendChild(document.getElementById('licenseCard'));
+      document.getElementById('uploadViewHost').appendChild(document.getElementById('uploadView'));
+      document.getElementById('uploadView').style.display = 'block';
+      setTimeout(function () {
+        if (document.getElementById('loadingView').style.display !== 'none') {
           document.getElementById('loadingView').style.display = 'none';
-        } catch (err) {
-          toast('협력사 추가 실패: ' + err.message, 'error');
+          document.getElementById('errorView').style.display = 'block';
+          document.getElementById('errorMsg').textContent = '연결이 지연되고 있습니다. 네트워크를 확인한 후 다시 시도해주세요.';
         }
-      };
-
-      function renderLicenseCard() {
-        const allowLicense = publicLinkData
-          ? publicLinkData.allow_license
-          : true;
-        if (!allowLicense) {
-          document.getElementById('licenseCard').style.display = 'none';
-          return;
-        }
-        document.getElementById('licenseCard').style.display = 'block';
-        if (licenseData) {
-          document.getElementById('licenseAlreadyDone').style.display = 'block';
-          document.getElementById('licenseUploadZoneWrap').style.display =
-            'none';
-          document.getElementById('licenseFileNameDisplay').textContent =
-            licenseData.file_name;
-        } else {
-          document.getElementById('licenseAlreadyDone').style.display = 'none';
-          document.getElementById('licenseUploadZoneWrap').style.display =
-            'block';
-        }
-      }
-
-      window.handleLicenseFileSelect = async function (e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        const statusEl = document.getElementById('licenseUploadStatus');
-        statusEl.textContent = '업로드 중...';
-        statusEl.style.color = 'var(--text3)';
-
-        try {
-          const ext = file.name.split('.').pop();
-          const path = `${wsData.id}/${contractorData.id}_${Date.now()}.${ext}`;
-          const { error: upErr } = await supabase.storage
-            .from('business-licenses')
-            .upload(path, file, { contentType: file.type, upsert: true });
-          if (upErr) throw upErr;
-
-          const { error: dbErr } = await supabase
-            .from('business_licenses')
-            .upsert(
-              {
-                workspace_id: wsData.id,
-                contractor_id: contractorData.id,
-                file_name: file.name,
-                file_path: path,
-                uploaded_by: 'contractor',
-              },
-              { onConflict: 'contractor_id' },
-            );
-          if (dbErr) throw dbErr;
-
-          licenseData = { file_name: file.name, file_path: path };
-          toast('사업자등록증이 제출됐습니다', 'success');
-          renderLicenseCard();
-        } catch (err) {
-          statusEl.textContent = '업로드 실패: ' + err.message;
-          statusEl.style.color = 'var(--danger)';
-        }
-      };
-
-      // ─── 재업로드 요청 (보건관리자가 요청한 MSDS 교체) ───
-      let reuploadItems = [];
-
-      async function loadReuploadRequests() {
-        const { data, error } = await supabase.rpc(
-          'get_public_reupload_requests',
-          {
-            p_token: currentUploadToken,
-            p_contractor_id: contractorData.id,
-          },
-        );
-        if (error) {
-          console.error('재업로드 요청 조회 실패', error);
-          return;
-        }
-        reuploadItems = (data || []).map((r) => ({ ...r, status: 'waiting' }));
-        renderReuploadSection();
-      }
-
-      function renderReuploadSection() {
-        const sec = document.getElementById('reuploadSection');
-        if (!reuploadItems.length) {
-          sec.style.display = 'none';
-          sec.innerHTML = '';
-          return;
-        }
-        sec.style.display = 'block';
-        sec.innerHTML = `
-    <div class="card" style="border:1.5px solid #fbbf24;background:#fffbeb;margin-bottom:16px;">
-      <div style="font-weight:800;font-size:15px;color:#92400e;margin-bottom:4px;">🔁 재업로드 요청 ${reuploadItems.filter((i) => i.status !== 'done').length}건</div>
-      <div style="font-size:12px;color:#a16207;margin-bottom:12px;">보건관리자가 아래 MSDS의 새 파일을 요청했습니다. 항목별로 파일을 올려주세요. (PDF/JPG/PNG)</div>
-      ${reuploadItems
-        .map(
-          (item) => `
-        <div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:8px;">
-          <span style="font-size:18px;">${{ waiting: '📄', uploading: '⏳', done: '✅', error: '❌' }[item.status]}</span>
-          <div style="flex:1;min-width:0;">
-            <div style="font-weight:700;font-size:13px;color:#1e293b;">${item.product_name} <span style="color:#94a3b8;font-weight:400;">v${item.version || 1}</span></div>
-            <div style="font-size:12px;color:#b45309;">${item.status === 'done' ? '재업로드 접수 완료! 감사합니다' : item.status === 'uploading' ? '안전하게 접수 중...' : item.status === 'error' ? '오류: ' + (item.error || '다시 시도해주세요') : '사유: ' + (item.reupload_reason || '재업로드 필요')}</div>
-          </div>
-          ${item.status === 'waiting' || item.status === 'error' ? `<button class="btn btn-primary" style="flex-shrink:0;padding:8px 14px;" onclick="pickReuploadFile('${item.id}')">파일 올리기</button>` : ''}
-        </div>`,
-        )
-        .join('')}
-    </div>`;
-      }
-
-      window.pickReuploadFile = function (recordId) {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.pdf,.jpg,.jpeg,.png';
-        input.onchange = (e) => {
-          const f = e.target.files[0];
-          if (f) doReupload(recordId, f);
-        };
-        input.click();
-      };
-
-      async function doReupload(recordId, file) {
-        const item = reuploadItems.find((i) => i.id === recordId);
-        if (!item) return;
-        const ok = ['application/pdf', 'image/jpeg', 'image/png'];
-        if (!ok.includes(file.type)) {
-          toast('PDF/JPG/PNG만 가능합니다', 'error');
-          return;
-        }
-        item.status = 'uploading';
-        renderReuploadSection();
-        try {
-          // 1) 파일 읽기
-          const base64 = await new Promise((res, rej) => {
-            const r = new FileReader();
-            r.onload = (ev) => res(ev.target.result.split(',')[1]);
-            r.onerror = rej;
-            r.readAsDataURL(file);
-          });
-          // 2) 공개 링크에서는 AI로 보내지 않고 스토리지 파일만 교체
-          const ext =
-            file.type === 'application/pdf'
-              ? 'pdf'
-              : file.type.split('/')[1] || 'jpg';
-          const path = `${wsData.id}/${recordId}.${ext}`;
-          const bytes = atob(base64);
-          const arr = new Uint8Array(bytes.length);
-          for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-          const { error: stErr } = await supabase.storage
-            .from('msds-pdfs')
-            .upload(path, new Blob([arr], { type: file.type }), {
-              contentType: file.type,
-              upsert: true,
-            });
-          const hasPdf = !stErr;
-          // 3) 토큰 검증 RPC로 버전 업 + 요청 해제 + 관리자 알림
-          const nv = (item.version || 1) + 1;
-          if (!hasPdf)
-            throw new Error('원본 파일 업로드 실패: ' + stErr.message);
-          const { error: upErr } = await supabase.rpc(
-            'complete_public_reupload',
-            {
-              p_token: currentUploadToken,
-              p_contractor_id: contractorData.id,
-              p_record_id: recordId,
-              p_file_name: file.name,
-              p_file_path: path,
-            },
-          );
-          if (upErr) throw new Error('저장 실패: ' + upErr.message);
-          item.status = 'done';
-          item.version = nv;
-        } catch (err) {
-          item.status = 'error';
-          item.error = err.message;
-        }
-        renderReuploadSection();
-      }
-
-      init();
+      }, 25000);
     </script>
+    <script type="module" src="/src/contractor-portal.js"></script>
   </body>
 </html>

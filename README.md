@@ -1,5 +1,41 @@
 # MSDS-APP
 
+## Contractor management portal
+
+`/upload.html?token=...` opens `{현장명} {협력사명} 관리페이지`.
+It includes existing MSDS originals/search, uploads, warning-label printing
+(A4/A5/A6/mini, copies, QR), and first-time business-license registration.
+Public `?ptoken=...` links retain contractor selection and their document-type
+permissions. The portal uses a separate, nonpersistent anonymous Supabase client
+so a manager's signed-in session cannot change the contractor's access.
+
+Deployment requires **both** the Vite build and
+`supabase/contractor_management_portal.sql`. The SQL was approved by the user,
+applied to production on 2026-10-22 (Asia/Seoul), and verified for anonymous
+execution and rejection of invalid and mismatched contractor tokens.
+
+The two RPCs intentionally use `SECURITY DEFINER` with an empty `search_path`;
+`PUBLIC` and `authenticated` execution are revoked and only `anon` is granted.
+`get_contractor_portal` validates the token and expiration on every call, derives
+site/company from the individual token, rejects mismatched contractor IDs, and
+returns only that site's company documents. Public links additionally enforce
+`allow_msds`/`allow_license`. `register_contractor_license` reuses those checks,
+validates the file path/name and inserts a first-time license without granting
+anonymous table UPDATE access. General table/storage policies are unchanged.
+These functions deliberately authorize by a bearer capability rather than
+`auth.uid()`, since recipients do not sign in. New individual/public link tokens
+use 192 cryptographic random bits; existing valid links continue working.
+
+Validation: `npm run build`, `npm test`, and
+`BASE_URL=http://localhost:3003 python tests/contractor-portal.browser.py` after
+starting `npm run preview -- --host 0.0.0.0 --port 3003`. The browser test uses
+synthetic API/storage responses, covers both link types, original-file links,
+search, license/MSDS uploads, four print sizes/QR, invalid/missing tokens and
+360/390/768px layouts. It does not write customer documents. The existing
+`warning-print.browser.py` checks printed QR pixels and label bounds for the
+shared warning renderer. Production SQL was validated in a rollback-only
+transaction against existing tokens, including invalid and mismatched tokens.
+
 ## Team invitations
 
 Workspace owners and admins create single-use team links from Settings. Links

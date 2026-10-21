@@ -4,7 +4,7 @@ export const generateCode = () =>
   Math.random().toString(36).slice(2, 8).toUpperCase();
 
 export const generateToken = () =>
-  Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  Array.from(crypto.getRandomValues(new Uint8Array(24)), byte => byte.toString(16).padStart(2, '0')).join('');
 
 export function base64ToBlob(b64, type) {
   const bytes = atob(b64);

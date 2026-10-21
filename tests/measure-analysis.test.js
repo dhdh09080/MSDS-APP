@@ -83,7 +83,7 @@ test('invalid PDF and empty/malformed analysis cannot become successful reports'
 });
 
 test('print document includes its autofit function and executes without reference errors', () => {
-  const source = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const source = fs.readFileSync(new URL('../src/lib/warning-print.js', import.meta.url), 'utf8');
   const fn = source.slice(source.indexOf('function fitWarningLabels(root'), source.indexOf('// 라벨 목록 →'));
   const markup = vm.runInNewContext(`const warnLabelSize = 'a4'; ${fn}; warningAutoFitPrintScript()`);
   const script = markup.replace(/^<script>/, '').replace(/<\/script>$/, '');
