@@ -509,7 +509,16 @@
           <div class="portal-section-heading"><div><h2>경고표지 인쇄</h2><p>물질과 표지 크기를 선택해 인쇄하거나 PDF로 저장하세요.</p></div></div>
           <div class="print-settings"><label>표지 크기<select id="portalPrintSize"><option value="a4">A4 · 1분할</option><option value="a5">A5 · 2분할</option><option value="a6">A6 · 4분할</option><option value="mini">소분용기 · 8분할</option></select></label><label>물질당 매수<input id="portalPrintCopies" type="number" min="1" max="20" value="1"></label><button class="btn btn-primary" id="printPortalWarnings" onclick="printPortalWarnings()">선택한 표지 인쇄</button></div>
           <p class="portal-notice">관리자가 안전정보를 등록한 자료만 인쇄할 수 있습니다. 인쇄 전 원본 MSDS를 확인해주세요.</p>
-          <label class="select-all"><input type="checkbox" onchange="selectAllPortalWarnings(this.checked)"> 인쇄 가능 자료 전체 선택</label><div id="warningRecordList" class="portal-list"></div>
+          <div class="portal-warning-workspace">
+            <div><label class="select-all"><input type="checkbox" onchange="selectAllPortalWarnings(this.checked)"> 인쇄 가능 자료 전체 선택</label><div id="warningRecordList" class="portal-list"></div></div>
+            <section class="portal-preview" aria-labelledby="portalPreviewHeading">
+              <div class="portal-preview-heading"><h3 id="portalPreviewHeading">경고표지 미리보기</h3><label class="muted">보기 배율 <select id="portalPreviewZoom" aria-label="경고표지 미리보기 배율"><option value="fit">화면에 맞춤</option><option value="actual">100%</option></select></label></div>
+              <p id="portalPreviewSummary" class="portal-preview-summary" aria-live="polite"></p>
+              <div id="portalPreviewEmpty" class="portal-empty" hidden>안전정보가 등록된 MSDS가 있으면 경고표지 예시를 확인할 수 있습니다.</div>
+              <div id="portalPreviewViewport" class="portal-preview-viewport"><div id="portalPreviewPaper"><iframe id="portalWarningPreview" title="선택한 MSDS 경고표지 인쇄 미리보기" sandbox="allow-same-origin" scrolling="no"></iframe></div></div>
+              <div id="portalPreviewPages" class="portal-preview-pages"><button id="portalPreviewPrev" class="btn btn-secondary" onclick="changePortalPreviewPage(-1)" aria-label="이전 미리보기 페이지">← 이전</button><span id="portalPreviewPageNumber" aria-live="polite"></span><button id="portalPreviewNext" class="btn btn-secondary" onclick="changePortalPreviewPage(1)" aria-label="다음 미리보기 페이지">다음 →</button></div>
+            </section>
+          </div>
         </section>
         <section id="licensePanel" data-portal-panel="license" role="tabpanel" aria-labelledby="licenseTab" hidden><div class="portal-section-heading"><div><h2>사업자등록증 등록</h2><p>최초 한 번 등록하면 담당 보건관리자가 확인할 수 있습니다.</p></div></div><div id="licenseCardHost"></div></section>
         <section id="uploadPanel" data-portal-panel="upload" aria-label="MSDS 업로드" hidden><button class="portal-back" onclick="switchPortalPanel('records')">← MSDS 자료로 돌아가기</button><div id="uploadViewHost"></div></section>

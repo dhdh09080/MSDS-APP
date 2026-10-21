@@ -106,18 +106,79 @@ function renderPortalRecords() {
   document.getElementById('portalRecordList').innerHTML = rows.length ? rows.map(r => `<article class="document-row"><div class="document-icon" aria-hidden="true">↗</div><div class="document-info"><h3>${escapeHtml(r.product_name)}</h3><p>${escapeHtml(r.work_type || '공종 미지정')} · ${escapeHtml(r.pdf_name || '첨부파일 없음')}</p><span class="status ${printable(r) ? 'ready' : ''}">${printable(r) ? '안전정보 등록' : '관리자 분석 대기'}</span></div><div class="document-actions">${r.pdf_path ? `<a class="btn btn-secondary" href="${import.meta.env.VITE_SUPABASE_URL}/functions/v1/msds-view?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener noreferrer">원본 보기 ↗</a>` : '<span class="muted">원본 없음</span>'}</div></article>`).join('') : `<div class="portal-empty">${query ? '검색 결과가 없습니다.' : '아직 등록된 MSDS가 없습니다. 새 자료를 업로드해주세요.'}</div>`;
   document.getElementById('warningRecordList').innerHTML = portalRecords.length ? portalRecords.map(r => `<label class="warning-row"><input type="checkbox" value="${r.id}" ${printable(r) ? '' : 'disabled'}><span><strong>${escapeHtml(r.product_name)}</strong><small>${printable(r) ? escapeHtml(r.work_type || '공종 미지정') : '관리자 안전정보 분석 후 인쇄할 수 있습니다'}</small></span></label>`).join('') : '<div class="portal-empty">등록된 MSDS가 없습니다.</div>';
   document.getElementById('printPortalWarnings').disabled = !portalRecords.some(printable);
+  updatePortalWarningPreview();
 }
 document.getElementById('portalSearch').addEventListener('input', renderPortalRecords);
-window.selectAllPortalWarnings = function (checked) { document.querySelectorAll('#warningRecordList input:not(:disabled)').forEach(el => el.checked = checked); };
-window.printPortalWarnings = function () {
+window.selectAllPortalWarnings = function (checked) { document.querySelectorAll('#warningRecordList input:not(:disabled)').forEach(el => el.checked = checked); updatePortalWarningPreview(); };
+let portalPreviewPage = 0;
+let portalPreviewSheets = [];
+let portalPreviewRenderer = null;
+function portalWarningOutput(example = false) {
   const selected = new Set([...document.querySelectorAll('#warningRecordList input:checked')].map(el => el.value));
-  const records = portalRecords.filter(r => selected.has(r.id) && printable(r));
-  if (!records.length) return toast('인쇄할 물질을 선택해주세요.', 'error');
+  let records = portalRecords.filter(r => selected.has(r.id) && printable(r));
+  const isExample = !records.length && example;
+  if (isExample) records = portalRecords.filter(printable).slice(0, 1);
   const size = document.getElementById('portalPrintSize').value;
-  const copies = Math.min(20, Math.max(1, Number(document.getElementById('portalPrintCopies').value) || 1));
+  const copies = Math.min(20, Math.max(1, parseInt(document.getElementById('portalPrintCopies').value, 10) || 1));
   const renderer = createWarningRenderer({ size });
   const labels = records.flatMap(r => Array.from({length: copies}, () => renderer.buildWarnLabel(r, wsData.name)));
-  openPrintWindow(`<!doctype html><html lang="ko"><head><meta charset="UTF-8"><title>경고표지</title><style>@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;font-family:'Malgun Gothic',sans-serif}${renderer.warnLabelCss()}</style></head><body>${renderer.warnSheets(labels).join('')}${renderer.warningAutoFitPrintScript()}</body></html>`);
+  return { renderer, sheets: renderer.warnSheets(labels), records, copies, isExample };
+}
+function updatePortalWarningPreview() {
+  if (!wsData) return;
+  const output = portalWarningOutput(true);
+  portalPreviewRenderer = output.renderer;
+  portalPreviewSheets = output.sheets;
+  portalPreviewPage = 0;
+  document.getElementById('portalPreviewSummary').textContent = output.isExample && output.records.length
+    ? `예시 · ${output.records[0].product_name} — 물질을 선택하면 실제 인쇄 내용으로 바뀝니다.`
+    : output.records.length ? `선택 ${output.records.length}종 · 물질당 ${output.copies}매 · A4 ${output.sheets.length}장` : '';
+  document.getElementById('portalPreviewEmpty').hidden = Boolean(output.sheets.length);
+  document.getElementById('portalPreviewViewport').hidden = !output.sheets.length;
+  document.getElementById('portalPreviewPages').hidden = !output.sheets.length;
+  renderPortalWarningPreviewPage();
+}
+function resizePortalWarningPreview() {
+  const viewport = document.getElementById('portalPreviewViewport');
+  if (!viewport.clientWidth) return;
+  const scale = document.getElementById('portalPreviewZoom').value === 'actual' ? 1 : Math.min(1, Math.max(1, viewport.clientWidth - 24) / 794);
+  const frame = document.getElementById('portalWarningPreview');
+  frame.style.transform = `scale(${scale})`;
+  const paper = document.getElementById('portalPreviewPaper');
+  paper.style.width = `${794 * scale}px`;
+  paper.style.height = `${1070 * scale}px`;
+}
+function renderPortalWarningPreviewPage() {
+  const frame = document.getElementById('portalWarningPreview');
+  document.getElementById('portalPreviewPrev').disabled = portalPreviewPage === 0;
+  document.getElementById('portalPreviewNext').disabled = portalPreviewPage >= portalPreviewSheets.length - 1;
+  document.getElementById('portalPreviewPageNumber').textContent = portalPreviewSheets.length ? `${portalPreviewPage + 1} / ${portalPreviewSheets.length}장` : '';
+  if (!portalPreviewSheets.length) { frame.removeAttribute('srcdoc'); return; }
+  const renderer = portalPreviewRenderer;
+  frame.onload = async () => {
+    const doc = frame.contentDocument;
+    if (!doc) return;
+    await Promise.all([doc.fonts.ready, ...[...doc.images].map(img => img.decode().catch(() => {}))]);
+    if (doc !== frame.contentDocument) return;
+    renderer.fitWarningLabels(doc);
+    resizePortalWarningPreview();
+  };
+  frame.srcdoc = `<!doctype html><html lang="ko"><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;width:210mm;font-family:'Malgun Gothic',sans-serif}${renderer.warnLabelCss()}</style></head><body>${portalPreviewSheets[portalPreviewPage]}</body></html>`;
+  resizePortalWarningPreview();
+}
+window.changePortalPreviewPage = function (delta) {
+  portalPreviewPage = Math.min(portalPreviewSheets.length - 1, Math.max(0, portalPreviewPage + delta));
+  renderPortalWarningPreviewPage();
+};
+document.getElementById('warningRecordList').addEventListener('change', updatePortalWarningPreview);
+document.getElementById('portalPrintSize').addEventListener('change', updatePortalWarningPreview);
+document.getElementById('portalPrintCopies').addEventListener('input', updatePortalWarningPreview);
+document.getElementById('portalPreviewZoom').addEventListener('change', resizePortalWarningPreview);
+new ResizeObserver(resizePortalWarningPreview).observe(document.getElementById('portalPreviewViewport'));
+window.printPortalWarnings = function () {
+  const { renderer, sheets, records } = portalWarningOutput();
+  if (!records.length) return toast('인쇄할 물질을 선택해주세요.', 'error');
+  openPrintWindow(`<!doctype html><html lang="ko"><head><meta charset="UTF-8"><title>경고표지</title><style>@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;font-family:'Malgun Gothic',sans-serif}${renderer.warnLabelCss()}</style></head><body>${sheets.join('')}${renderer.warningAutoFitPrintScript()}</body></html>`);
 };
 
 function showError(msg) {

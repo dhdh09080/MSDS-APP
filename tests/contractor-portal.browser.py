@@ -56,16 +56,43 @@ async def main():
         await page.locator('#portalSearch').fill('')
         await page.screenshot(path=str(OUT/'desktop.png'),full_page=True)
         await page.locator('#warningsTab').click()
+        preview=page.frame_locator('#portalWarningPreview')
+        await preview.locator('.wlabel').wait_for()
+        assert '예시' in await page.locator('#portalPreviewSummary').inner_text()
+        assert await preview.locator('.wl-name-box').inner_text()=='테스트 도료'
+        assert await preview.locator('.wl-qr svg').count()==1
         assert await page.locator('#warningRecordList input:disabled').count()==1
         await page.locator('.select-all input').check()
         for size in ['a4','a5','a6','mini']:
             await page.select_option('#portalPrintSize',size)
+            await preview.locator('.wlabel--'+size).wait_for()
+            assert '선택 1종' in await page.locator('#portalPreviewSummary').inner_text()
             await page.locator('#printPortalWarnings').click()
             await page.locator('#__printFrame').evaluate('(f)=>f.contentWindow.print=()=>{}')
             await page.wait_for_timeout(500)
             assert await page.frames[-1].locator('.wlabel').count()==1
             assert await page.frames[-1].locator('.wl-qr svg').count()==1
             await page.locator('#__printFrame').evaluate('(f)=>f.remove()')
+        await page.select_option('#portalPrintSize','a6')
+        await page.locator('#portalPrintCopies').fill('5')
+        await page.wait_for_function("document.getElementById('portalPreviewPageNumber').textContent === '1 / 2장'")
+        await preview.locator('.wlabel').nth(3).wait_for()
+        await page.locator('#portalPreviewNext').click()
+        await page.wait_for_function("document.getElementById('portalPreviewPageNumber').textContent === '2 / 2장'")
+        await preview.locator('.wlabel').wait_for()
+        assert await preview.locator('.wlabel').count()==1
+        await page.locator('#portalPreviewPrev').click()
+        for width in [360,390,768,1440]:
+            await page.set_viewport_size(dict(width=width,height=1000))
+            await page.wait_for_timeout(100)
+            assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
+            if width==390:
+                await page.locator('#portalWarningPreview').scroll_into_view_if_needed()
+                await page.screenshot(path=str(OUT/'warning-preview-mobile.png'),full_page=True)
+        await page.select_option('#portalPreviewZoom','actual')
+        assert await page.locator('#portalWarningPreview').evaluate("el=>el.style.transform")=='scale(1)'
+        await page.select_option('#portalPreviewZoom','fit')
+        await page.screenshot(path=str(OUT/'warning-preview-desktop.png'),full_page=True)
         await page.locator('#licenseTab').click()
         assert await page.locator('#licenseFileInput').count()==1
         await page.locator('#licenseFileInput').set_input_files(dict(name='사업자등록증.pdf',mimeType='application/pdf',buffer=b'%PDF-1.4 fixture'))
