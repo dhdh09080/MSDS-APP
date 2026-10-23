@@ -72,7 +72,10 @@ async function proceedToUploadView(data) {
     document.querySelectorAll('[data-msds]').forEach(el => el.hidden = !allowMsds);
     document.getElementById('licenseTab').hidden = !allowLicense;
     renderWorkTypes(); renderLicenseCard(); renderPortalRecords();
-    window.switchPortalPanel(allowMsds ? 'records' : 'license');
+    const requestedPanel = new URLSearchParams(location.search).get('panel');
+    const canOpenRequestedPanel = (requestedPanel === 'license' && allowLicense)
+      || (['records', 'upload', 'warnings'].includes(requestedPanel) && allowMsds);
+    window.switchPortalPanel(canOpenRequestedPanel ? requestedPanel : allowMsds ? 'records' : 'license');
     if (allowMsds) loadReuploadRequests();
   } catch (err) { showError(err.message); }
   finally { document.getElementById('loadingView').style.display = 'none'; }

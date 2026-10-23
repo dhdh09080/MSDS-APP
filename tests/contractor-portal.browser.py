@@ -113,11 +113,12 @@ async def main():
             await page.locator('#recordsTab').click()
             assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
             if width==390: await page.screenshot(path=str(OUT/'mobile.png'),full_page=True)
-        await page.goto(BASE+'/upload.html?ptoken=public-token-0000')
+        await page.goto(BASE+'/upload.html?ptoken=public-token-0000&panel=upload')
         await page.wait_for_selector('#contractorPickView',state='visible')
         await page.locator('#contractorPickGrid button').click()
         await page.wait_for_selector('#licensePanel',state='visible')
         assert not await page.locator('#recordsTab').is_visible()
+        assert not await page.locator('#uploadPanel').is_visible()
         assert not await page.locator('#loadingView').is_visible()
         for suffix in ['', '?token=invalid-token-0000']:
             await page.goto(BASE+'/upload.html'+suffix)
