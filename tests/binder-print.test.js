@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseBinderCatalog,paginateBinderLabels,buildBinderPrintHtml} from '../src/lib/binder-print.js';
+import {parseBinderCatalog,paginateBinderLabels,buildBinderPrintHtml,binderPrintWidth} from '../src/lib/binder-print.js';
 const docs = parseBinderCatalog('E-04\t일반건강진단\t9\t보건\n06-03\t밀폐공간 작업허가서\t7\t관리\n01\t자료\t4');
 test('catalog preserves leading zeros and rejects missing or ambiguous widths',()=>{
  assert.equal(docs[2].code,'01');
@@ -12,7 +12,7 @@ test('catalog preserves leading zeros and rejects missing or ambiguous widths',(
 test('mixed widths and copies stay inside A4 printable width',()=>{
  const pages=paginateBinderLabels(docs,3);
  assert.equal(pages.flat().length,9);
- for(const page of pages) assert.ok(page.reduce((sum,d)=>sum+d.width,0)+4*(page.length-1)<=190);
+ for(const page of pages) assert.ok(page.reduce((sum,d)=>sum+binderPrintWidth(d.width),0)+4*(page.length-1)<=190);
  assert.equal(paginateBinderLabels([{width:100}],2).length,2);
  assert.equal(paginateBinderLabels([{width:90}],2).length,1);
  assert.throws(()=>paginateBinderLabels(docs,1.5));
@@ -20,7 +20,10 @@ test('mixed widths and copies stay inside A4 printable width',()=>{
 test('print enforces physical dimensions and escapes user text',()=>{
  const html=buildBinderPrintHtml([{...docs[0],title:'<script>alert(1)</script>'}],{site:'현장 <A>',height:260});
  assert.match(html,/size:A4 portrait/);
- assert.match(html,/width:90mm;height:260mm/);
+ assert.match(html,/width:87mm;height:260mm/);
+ assert.match(buildBinderPrintHtml([{...docs[1],width:70}],{site:'현장'}),/width:67mm;height:260mm/);
+ assert.equal(docs[0].width,90);
+ assert.equal(docs[1].width,70);
  assert.ok(!html.includes('<script>'));
  assert.match(html,/현장 &lt;A&gt;/);
  assert.throws(()=>buildBinderPrintHtml(docs,{site:'현장',height:278}));

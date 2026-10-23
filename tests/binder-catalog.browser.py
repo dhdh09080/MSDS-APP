@@ -26,7 +26,7 @@ async def main():
   assert await frame.locator('.binder-title-column').text_content()=='밀폐공간 작업'
   await page.select_option('[data-width-code="SR-E-06-01"]','90')
   frame=page.frame_locator('#binderPreview iframe');await frame.locator('.binder-label').wait_for()
-  assert await frame.locator('.binder-label').evaluate('(e)=>e.style.width')=='90mm'
+  assert await frame.locator('.binder-label').evaluate('(e)=>e.style.width')=='87mm'
   await page.select_option('[data-width-code="SR-E-06-01"]','70')
   await page.locator('#binderManageOpen').click()
   await page.locator('#binderStandard').evaluate('(e)=>e.click()')

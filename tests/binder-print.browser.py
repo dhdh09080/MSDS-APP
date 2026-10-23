@@ -24,6 +24,11 @@ async def main():
   assert '2종 · 6개 라벨' in await page.locator('#binderStatus').inner_text()
   frame=page.frame_locator('#binderPreview iframe');await frame.locator('.binder-label').first.wait_for()
   assert await frame.locator('.binder-label').count()==6
+  assert await frame.locator('.binder-label').evaluate_all('(els)=>els.map(e=>e.style.width)')==['67mm']*4+['87mm']*2
+  await page.emulate_media(media='print')
+  widths=await frame.locator('.binder-label').evaluate_all('(els)=>els.map(e=>e.getBoundingClientRect().width*25.4/96)')
+  assert all(abs(a-b)<.05 for a,b in zip(widths,[67]*4+[87]*2)),widths
+  await page.emulate_media(media='screen')
   assert await frame.locator('.binder-title-column').count()==6
   assert await frame.locator('.binder-cut-frame').count()==6
   titles=await frame.locator('.binder-title-column').all_text_contents()
