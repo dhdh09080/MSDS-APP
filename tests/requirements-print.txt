@@ -1,0 +1,4 @@
+playwright==1.58.0
+PyMuPDF==1.26.6
+Pillow==12.3.0
+zxing-cpp==2.3.0
