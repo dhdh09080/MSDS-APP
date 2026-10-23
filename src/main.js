@@ -1,3 +1,4 @@
+import { mountBinderWorkbench } from './lib/binder-workbench.js';
 import { loadPosterFont } from './lib/weather-poster-fonts.js';
 import { createHazardMap } from './lib/hazard-map.js';
 import { posterLocale, localizeAdvice, localizeAlert, posterDateTitle } from './lib/weather-poster-i18n.js';
@@ -1675,6 +1676,7 @@ window.showPage = function (id) {
     renderTokenList();
     renderPublicLinkUI();
   }
+  if (id === 'binders') mountBinderWorkbench(document.getElementById('binderWorkbench'), {workspace: currentWS, client: supabase, preview: Boolean(getDevPreviewPage())});
   if (id === 'health') switchHealthSub(activeHealthSub);
   if (id === 'photos') {
     renderPhotoFolderTree();

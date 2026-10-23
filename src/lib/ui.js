@@ -43,7 +43,7 @@ export function toast(msg, type = '') {
 
 // 인쇄 공통 유틸 — 팝업 차단에 안전한 숨김 iframe 방식
 // (기존 window.open 방식은 팝업 차단 시 조용히 실패해 "인쇄가 안 됨"으로 보이는 문제가 있었음)
-export function openPrintWindow(html) {
+export function openPrintWindow(html, { beforePrint } = {}) {
   const old = document.getElementById('__printFrame');
   if (old) old.remove();
   const iframe = document.createElement('iframe');
@@ -65,6 +65,7 @@ export function openPrintWindow(html) {
   setTimeout(async () => {
     try {
       await Promise.race([Promise.all([doc.fonts?.ready, ...Array.from(doc.images).map(image => image.decode().catch(() => {}))]), new Promise(resolve => setTimeout(resolve, 2500))]);
+      if (beforePrint) await beforePrint(doc);
       iframe.contentWindow.fitWarningLabels?.();
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
