@@ -1,4 +1,5 @@
 import { loadPosterFont } from './lib/weather-poster-fonts.js';
+import { createHazardMap } from './lib/hazard-map.js';
 import { posterLocale, localizeAdvice, localizeAlert, posterDateTitle } from './lib/weather-poster-i18n.js';
 import { createWarningRenderer } from './lib/warning-print.js';
 import { weatherAlertsHtml, A4_POSTER, buildHealthPosterSvg, hourlyWeatherHtml, posterModel, kstDate, riskMetric } from './lib/weather-poster.js';
@@ -94,6 +95,8 @@ let announcements = [],
   announcementCurrentId = null;
 let announcementsLoadedAt = 0,
   announcementsWorkspaceId = null;
+
+const hazardMap = createHazardMap({ supabase, getWorkspace: () => currentWS, getUser: () => user, getContractors: () => contractors, toast });
 
 // 전역 붙여넣기 캐치: 사진 업로드 모달이 열려있을 때 어디서 Ctrl+V를 눌러도 잡히도록 보강
 document.addEventListener('paste', (e) => {
@@ -866,6 +869,7 @@ function translateAuthError(m) {
 // Workspace
 // ═══════════════════════════════════════════════
 function resetWorkspaceScopedState() {
+  hazardMap.reset();
   createdTeamInvite = null;
   const inviteUrl = document.getElementById('teamInviteUrl');
   if (inviteUrl) inviteUrl.value = '';
@@ -1151,6 +1155,7 @@ window.enterAdminConsole = async function () {
 };
 
 window.goWorkspaces = function () {
+  hazardMap.reset();
   adminStandalone = false;
   document.body.classList.remove('admin-standalone');
   document.getElementById('appScreen').style.display = 'none';
@@ -1675,6 +1680,7 @@ window.showPage = function (id) {
     renderPhotoFolderTree();
     renderPhotoMain();
   }
+  if (id === 'hazard-map') hazardMap.show();
   if (id === 'measure') {
     renderMeasureRoundsChecklist();
     renderMeasureList();
@@ -10794,7 +10800,8 @@ function mountGsWorkspace() {
     'warnFilterContractor',
     'linkContractor',
   ].forEach((id) => mountGsCombo(id));
-  document.querySelectorAll('.nav-item').forEach((el, i) => {
+  let navIconIndex = 0;
+  document.querySelectorAll('.nav-item').forEach((el) => {
     el.tabIndex = 0;
     el.setAttribute('role', 'button');
     el.onkeydown = (e) => {
@@ -10804,7 +10811,9 @@ function mountGsWorkspace() {
       }
     };
     const icon = el.querySelector('.nav-icon');
-    if (icon) icon.innerHTML = gsIcon(i);
+    if (icon) icon.innerHTML = el.id === 'nav-hazard-map'
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>'
+      : gsIcon(navIconIndex++);
   });
   document.querySelectorAll('.more-item').forEach((el) => {
     if (el.getAttribute('onclick')?.includes("'calendar'")) el.remove();

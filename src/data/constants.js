@@ -10,6 +10,7 @@ export const PAGES = [
   'library',
   'msds',
   'warning',
+  'hazard-map',
   'contractors',
   'upload-link',
   'health',

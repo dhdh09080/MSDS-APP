@@ -190,6 +190,7 @@
 <span class="nav-icon">⚠️</span>
               경고표지
             </button>
+<button class="nav-item" id="nav-hazard-map" onclick="showPage('hazard-map')" type="button"><span class="nav-icon">📍</span>위험물 위치도</button>
 <button class="nav-item" id="nav-contractors" onclick="showPage('contractors')" type="button">
 <span class="nav-icon">👷</span>
               협력사 관리
@@ -992,6 +993,10 @@
 </div>
 </div>
 <!-- ═══ 사진 클라우드 ═══ -->
+<div class="page" id="page-hazard-map">
+<div class="page-header"><div><div class="page-title">위험물 위치도</div><div class="page-subtitle">현장 전경에서 저장소 위치와 관리 정보를 한눈에 확인하세요</div></div></div>
+<div class="content-scroll"><div id="hazardMapRoot"></div></div>
+</div>
 <div class="page" id="page-photos">
 <div class="page-header">
 <div>
@@ -2176,6 +2181,7 @@
 <span class="more-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 10 18H2ZM12 9v5M12 17v.5"/></svg></span>
 <span class="more-item-label">경고표지</span>
 </button>
+<button class="more-item" type="button" onclick="showPage('hazard-map');closeModal('moreSheet')"><span class="more-item-icon" aria-hidden="true">📍</span><span class="more-item-label">위험물 위치도</span></button>
 <button class="more-item" type="button" onclick="showPage('contractors');closeModal('moreSheet')">
 <span class="more-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 21h18M5 21V4h10v17M15 10h4v11M8 8h4M8 12h4M8 16h4"/></svg></span>
 <span class="more-item-label">협력사 관리</span>
