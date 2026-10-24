@@ -870,6 +870,8 @@ function translateAuthError(m) {
 // Workspace
 // ═══════════════════════════════════════════════
 function resetWorkspaceScopedState() {
+  workerHealthView++;
+  document.getElementById('workerHealthWorkbench')?.workerHealthDispose?.();
   hazardMap.reset();
   createdTeamInvite = null;
   const inviteUrl = document.getElementById('teamInviteUrl');
@@ -1643,6 +1645,21 @@ window.deleteAiKey = async function (provider) {
 // ═══════════════════════════════════════════════
 // Navigation
 // ═══════════════════════════════════════════════
+let workerHealthView = 0;
+async function openWorkerHealthWorkbench() {
+  const root = document.getElementById('workerHealthWorkbench');
+  if (root.workerHealthDispose) return;
+  const token = ++workerHealthView, workspaceId = currentWS?.id;
+  root.textContent = '명단 제작 화면을 준비하고 있습니다…';
+  try {
+    const { mount } = await import('./lib/worker-health-entry.js');
+    if (token !== workerHealthView || workspaceId !== currentWS?.id) return;
+    root.replaceChildren(); mount(root);
+  } catch (error) {
+    if (token === workerHealthView) root.textContent = '화면을 불러오지 못했습니다. 다시 메뉴를 눌러 주세요.';
+  }
+}
+
 // (PAGES, MOBILE_TABS → src/data/constants.js 로 이동)
 
 window.showPage = function (id) {
@@ -1676,6 +1693,7 @@ window.showPage = function (id) {
     renderTokenList();
     renderPublicLinkUI();
   }
+  if (id === 'worker-health') openWorkerHealthWorkbench();
   if (id === 'binders') mountBinderWorkbench(document.getElementById('binderWorkbench'), {workspace: currentWS, client: supabase, preview: Boolean(getDevPreviewPage())});
   if (id === 'health') switchHealthSub(activeHealthSub);
   if (id === 'photos') {
