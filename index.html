@@ -209,6 +209,7 @@
 <span class="nav-icon">🩺</span>
               고령자 혈압
             </button>
+<button class="nav-item" id="nav-worker-health" onclick="showPage('worker-health')" type="button"><span class="nav-icon">📋</span>혈압측정 명단 제작</button>
 <div class="nav-section">작업환경</div>
 <button class="nav-item" id="nav-measure" onclick="showPage('measure')" type="button">
 <span class="nav-icon">📊</span>
@@ -1343,6 +1344,7 @@
 </div>
 </div>
 </div>
+<div class="page" id="page-worker-health"><div class="page-header"><div><div class="page-title">혈압측정 명단 제작</div><div class="page-subtitle">원본 엑셀 분석 · 만 63세 이상 / 고혈압 재측정 · XLSX / PNG</div></div></div><div class="content-scroll" id="workerHealthWorkbench"></div></div>
 <!-- ═══ 고령자 혈압측정 ═══ -->
 <div class="page" id="page-bp">
 <div class="page-header">
@@ -2200,6 +2202,7 @@
 <span class="more-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0M5 21v-2a7 7 0 0 1 14 0v2M17 4h5M19.5 1.5v5"/></svg></span>
 <span class="more-item-label">취약자 명단</span>
 </button>
+<button class="more-item" type="button" onclick="showPage('worker-health');closeModal('moreSheet')"><span class="more-item-icon">📋</span><span class="more-item-label">혈압측정 명단 제작</span></button>
 <button class="more-item" type="button" onclick="showPage('bp');closeModal('moreSheet')">
 <span class="more-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 3v5a5 5 0 0 0 10 0V3M3 3h3M12 3h3M9 13v3a5 5 0 0 0 10 0v-2M21 11a2 2 0 1 1-4 0 2 2 0 0 1 4 0"/></svg></span>
 <span class="more-item-label">고령자 혈압</span>

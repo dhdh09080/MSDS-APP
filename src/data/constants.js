@@ -16,6 +16,7 @@ export const PAGES = [
   'health',
   'vulnerable',
   'bp',
+  'worker-health',
   'measure',
   'weather',
   'binders',
