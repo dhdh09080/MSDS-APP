@@ -15,6 +15,7 @@ let wsData = null,
 let workTypes = [],
   selectedWorkType = '',
   fileQueue = [];
+let uploadInProgress = false;
 let licenseData = null;
 let publicLinkData = null,
   contractorList = [];
@@ -209,32 +210,78 @@ function showError(msg) {
 }
 
 function renderWorkTypes() {
-  window.workTypesForPicker = workTypes.map(w => w.name);
-  const grid = document.getElementById('worktypeGrid');
-  const noWt = document.getElementById('noWorktype');
-  if (workTypes.length === 0) {
-    grid.style.display = 'none';
-    noWt.style.display = 'block';
-    selectedWorkType = '미지정';
-    document.getElementById('step1Next').disabled = false;
-    return;
-  }
-  grid.innerHTML = workTypes
-    .map(
-      (w) =>
-        `<button class="worktype-btn" onclick="selectWorkType(workTypesForPicker[${workTypes.indexOf(w)}],this)">${escapeHtml(w.name)}</button>`,
-    )
-    .join('');
-}
-
-window.selectWorkType = function (name, btn) {
-  selectedWorkType = name;
-  document
-    .querySelectorAll('.worktype-btn')
-    .forEach((b) => b.classList.remove('selected'));
-  btn.classList.add('selected');
+  window.workTypesForPicker = [...new Set(workTypes.map(w => w.name))];
+  if (!window.workTypesForPicker.length) window.workTypesForPicker = ['미지정'];
+  if (!window.workTypesForPicker.includes(selectedWorkType)) selectedWorkType = window.workTypesForPicker[0];
+  document.getElementById('noWorktype').style.display = workTypes.length ? 'none' : 'block';
+  document.getElementById('worktypeGrid').innerHTML = window.workTypesForPicker.map((name, index) => {
+    const count = fileQueue.filter(item => item.workType === name && item.status !== 'done').length;
+    return `<button type="button" class="worktype-btn trade-drop-zone ${selectedWorkType === name ? 'selected' : ''}" data-trade-index="${index}"
+      onclick="pickTradeFiles(${index})" ondragover="onTradeDragOver(event)" ondragleave="this.classList.remove('drag')" ondrop="onTradeDrop(event,${index})" ${uploadInProgress ? 'disabled' : ''}>
+      <strong>${escapeHtml(name)}</strong><span>파일 드래그 또는 클릭</span><small>${count ? `대기 ${count}개` : 'PDF · JPG · PNG'}</small></button>`;
+  }).join('');
   document.getElementById('step1Next').disabled = false;
+  document.getElementById('selectedWorktypeLabel').textContent = selectedWorkType;
+}
+window.selectWorkType = function (name) {
+  if (uploadInProgress) return;
+  selectedWorkType = name;
+  renderWorkTypes();
 };
+window.pickTradeFiles = function (index) {
+  if (uploadInProgress) return;
+  window.selectWorkType(window.workTypesForPicker[index]);
+  document.getElementById('fileInput').click();
+};
+window.onTradeDragOver = function (event) {
+  event.preventDefault();
+  if (!uploadInProgress) event.currentTarget.classList.add('drag');
+};
+window.onTradeDrop = function (event, index) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag');
+  if (uploadInProgress) return;
+  const name = window.workTypesForPicker[index];
+  if (!name) return;
+  const queuedId = event.dataTransfer.getData('application/x-msds-queue');
+  if (queuedId) {
+    const item = fileQueue.find(item => item.id === queuedId && ['waiting', 'error'].includes(item.status));
+    if (item) item.workType = name;
+    renderFileList();
+  } else {
+    selectedWorkType = name;
+    addSupportedFiles([...event.dataTransfer.files], name);
+  }
+  renderWorkTypes();
+};
+window.dragQueuedFile = function (event, id) {
+  if (uploadInProgress) { event.preventDefault(); return; }
+  event.dataTransfer.setData('application/x-msds-queue', id);
+};
+document.getElementById('portalWorkTypeForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (uploadInProgress) return;
+  const input = document.getElementById('portalWorkTypeName');
+  const button = document.getElementById('portalWorkTypeAdd');
+  if (button.disabled) return;
+  const errorEl = document.getElementById('portalWorkTypeError');
+  const name = input.value.trim();
+  if (!name) return;
+  button.disabled = true; errorEl.textContent = '';
+  try {
+    const { data, error } = await supabase.rpc('register_contractor_work_type', {
+      p_token: currentUploadToken, p_contractor_id: contractorData.id, p_name: name,
+    });
+    if (error) throw error;
+    if (!workTypes.some(type => type.id === data.id)) workTypes.push(data);
+    selectedWorkType = data.name;
+    input.value = '';
+    renderWorkTypes();
+    toast('공종이 추가됐습니다');
+  } catch (error) {
+    errorEl.textContent = '공종 추가 실패: ' + (error.message || '다시 시도해주세요');
+  } finally { button.disabled = uploadInProgress; }
+});
 
 window.goStep2 = function () {
   document.getElementById('stepView1').style.display = 'none';
@@ -274,27 +321,27 @@ window.onDragLeave = function (e) {
 window.onDrop = function (e) {
   e.preventDefault();
   document.getElementById('uploadZone').classList.remove('drag');
-  const ok = ['application/pdf', 'image/jpeg', 'image/png'];
-  const files = [...e.dataTransfer.files].filter((f) =>
-    ok.includes(f.type),
-  );
-  const non = e.dataTransfer.files.length - files.length;
-  if (non > 0) toast(`PDF/JPG/PNG만 가능합니다 (${non}개 제외)`, 'error');
-  if (files.length) addFiles(files);
+  addSupportedFiles([...e.dataTransfer.files], selectedWorkType);
 };
 window.onFileSelect = function (e) {
-  const ok = ['application/pdf', 'image/jpeg', 'image/png'];
-  const files = [...e.target.files].filter((f) => ok.includes(f.type));
-  addFiles(files);
+  addSupportedFiles([...e.target.files], selectedWorkType);
   e.target.value = '';
 };
+function addSupportedFiles(files, workType) {
+  if (uploadInProgress) return;
+  const types = ['application/pdf', 'image/jpeg', 'image/png'];
+  const valid = files.filter(file => types.includes(file.type));
+  if (valid.length < files.length) toast(`PDF/JPG/PNG만 가능합니다 (${files.length - valid.length}개 제외)`, 'error');
+  if (valid.length) addFiles(valid, workType);
+}
 
-function addFiles(files) {
+function addFiles(files, workType) {
   files.forEach((file) => {
     const id = Date.now() + Math.random().toString(36).slice(2);
     const item = {
       id,
       file,
+      workType: workType || '미지정',
       name: file.name,
       data: null,
       mediaType: file.type,
@@ -309,44 +356,59 @@ function addFiles(files) {
     reader.readAsDataURL(file);
   });
   renderFileList();
+  renderWorkTypes();
 }
 
 function renderFileList() {
   const el = document.getElementById('fileList');
   if (fileQueue.length === 0) {
+    el.replaceChildren();
     el.style.display = 'none';
     document.getElementById('uploadBtn').disabled = true;
     return;
   }
   el.style.display = 'flex';
-  document.getElementById('uploadBtn').disabled = !fileQueue.some(
-    (f) => f.status === 'waiting',
-  );
+  document.getElementById('uploadBtn').disabled = uploadInProgress
+    || !fileQueue.some(item => item.status === 'waiting')
+    || fileQueue.some(item => item.status === 'waiting' && !item.data);
   el.innerHTML = fileQueue
     .map(
       (item) => `
-    <div class="file-item ${item.status}">
+    <div class="file-item ${item.status}" draggable="${!uploadInProgress && ['waiting','error'].includes(item.status)}" ondragstart="dragQueuedFile(event,'${item.id}')">
 <span class="fi-icon">${{ waiting: '📄', uploading: '⏳', done: '✅', error: '❌' }[item.status]}</span>
 <div class="fi-info">
-  <div class="fi-name">${item.name}</div>
+  <div class="fi-name">${escapeHtml(item.name)}</div><div class="fi-trade">${escapeHtml(item.workType)} · 드래그해서 공종 변경</div>
   <div class="fi-status">${{ waiting: '업로드 대기', uploading: '안전하게 접수 중...', done: '접수 완료', error: '오류 발생' }[item.status]}</div>
+  ${item.error ? `<div class="fi-error">${escapeHtml(item.error)}</div>` : ''}
   ${item.status === 'uploading' ? '<div class="progress-bar"><div class="progress-fill"></div></div>' : ''}
 </div>
-${item.status !== 'uploading' ? `<button class="fi-remove" onclick="removeFile('${item.id}')">✕</button>` : ''}
+${!uploadInProgress && item.status === 'error' ? `<button class="btn btn-secondary" onclick="retryQueuedFile('${item.id}')">재시도</button>` : ''}
+${!uploadInProgress ? `<button class="fi-remove" onclick="removeFile('${item.id}')">✕</button>` : ''}
     </div>`,
     )
     .join('');
 }
 
+window.retryQueuedFile = function (id) {
+  if (uploadInProgress) return;
+  const item = fileQueue.find(item => item.id === id && item.status === 'error');
+  if (item) { item.status = 'waiting'; item.error = null; renderFileList(); renderWorkTypes(); }
+};
+
 window.removeFile = function (id) {
+  if (uploadInProgress) return;
   fileQueue = fileQueue.filter((f) => f.id !== id);
-  renderFileList();
+  renderFileList(); renderWorkTypes();
 };
 
 // ─── 업로드 ───
 window.startUpload = async function () {
-  const waiting = fileQueue.filter((f) => f.status === 'waiting');
+  if (uploadInProgress || fileQueue.some(item => item.status === 'waiting' && !item.data)) return;
+  const waiting = fileQueue.filter((f) => f.status === 'waiting' && f.data);
   if (waiting.length === 0) return;
+  uploadInProgress = true;
+  document.getElementById('portalWorkTypeAdd').disabled = true;
+  renderWorkTypes();
   document.getElementById('uploadBtn').disabled = true;
   let saved = 0;
   for (const item of waiting) {
@@ -386,7 +448,7 @@ window.startUpload = async function () {
           supplier: '',
           supplier_contact: '',
           contractor: contractorData.name,
-          work_type: selectedWorkType,
+          work_type: item.workType,
           cas_no: '',
           components: '',
           signal_word: '',
@@ -426,7 +488,6 @@ window.startUpload = async function () {
     renderFileList();
     await new Promise((r) => setTimeout(r, 300));
   }
-  document.getElementById('uploadBtn').disabled = false;
   if (saved > 0) {
     await refreshPortalRecords();
     const failed = waiting.length - saved;
@@ -441,12 +502,16 @@ window.startUpload = async function () {
       : '';
     retryBtn.style.display = failed ? '' : 'none';
     setStep(3);
+    document.getElementById('stepView1').style.display = 'none';
     document.getElementById('stepView2').style.display = 'none';
     document.getElementById('stepView3').style.display = 'block';
     renderLicenseCard();
   } else {
     toast('업로드 실패. 다시 시도해주세요.', 'error');
   }
+  uploadInProgress = false;
+  document.getElementById('portalWorkTypeAdd').disabled = false;
+  renderFileList(); renderWorkTypes();
 };
 
 // ─── 완료 후 액션 ───
@@ -459,6 +524,7 @@ window.resetForm = function () {
   document.getElementById('step1Next').disabled = true;
   document.getElementById('stepView3').style.display = 'none';
   document.getElementById('stepView1').style.display = 'block';
+  document.getElementById('stepView2').style.display = 'block';
   renderWorkTypes();
   renderFileList();
   setStep(1);
@@ -469,6 +535,7 @@ window.retryFailedUploads = function () {
     .filter((item) => item.status === 'error')
     .map((item) => ({ ...item, status: 'waiting', error: null }));
   document.getElementById('stepView3').style.display = 'none';
+  document.getElementById('stepView1').style.display = 'block';
   document.getElementById('stepView2').style.display = 'block';
   renderFileList();
   setStep(2);
