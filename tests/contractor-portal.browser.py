@@ -120,7 +120,6 @@ async def main():
         await page.locator('#recordsTab').click()
         await page.get_by_role('button',name='+ MSDS 업로드').click()
         await page.locator('.worktype-btn').first.click()
-        await page.locator('#step1Next').click()
         file_input=page.locator('#stepView2 input[type=file]')
         await file_input.set_input_files(dict(name='새로운_MSDS.pdf',mimeType='application/pdf',buffer=b'%PDF-1.4 fixture'))
         await page.locator('#uploadBtn:not([disabled])').click()

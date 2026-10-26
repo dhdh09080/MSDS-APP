@@ -10,3 +10,28 @@
 .upload-existing-records .portal-section-heading{margin-bottom:14px}
 #uploadExistingList{max-height:340px;overflow-y:auto}
 @media(max-width:640px){#uploadExistingList{max-height:300px}}
+
+.portal-upload-workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:24px;align-items:start}
+.portal-upload-workspace>*{min-width:0}
+.portal-upload-workspace .upload-existing-records{border:0;padding:0;margin:0;position:sticky;top:20px}
+.portal-upload-workspace #uploadExistingList{max-height:70vh}
+.portal-upload-workspace #uploadViewHost .steps,.portal-upload-workspace #step1Next{display:none}
+.portal-upload-workspace #stepView2>div:last-child>.btn-secondary{display:none}
+.portal-upload-workspace .card{padding:20px}
+.portal-upload-workspace #stepView2{margin-top:16px}
+.portal-upload-workspace #worktypeGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.trade-drop-zone{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;min-height:112px;overflow-wrap:anywhere;white-space:normal}
+.trade-drop-zone span,.trade-drop-zone small{font-size:11px;font-weight:400;color:var(--text3)}
+.trade-drop-zone.drag{border-color:var(--primary);background:var(--primary-light);outline:2px solid var(--primary)}
+.portal-trade-form{display:flex;gap:8px;margin-top:16px}
+.portal-trade-form input{flex:1;min-width:0;border:1px solid var(--border);border-radius:7px;padding:10px;font-size:12px}
+#portalWorkTypeError{color:var(--danger);font-size:12px;margin-top:8px}
+.fi-trade{font-size:11px;color:var(--text3);margin-top:4px}
+.file-item[draggable=true]{cursor:grab}
+.portal-upload-workspace .document-row{flex-wrap:wrap;padding:16px}
+.portal-upload-workspace .document-actions{width:100%;margin-left:52px}
+@media(max-width:900px){.portal-upload-workspace{grid-template-columns:1fr}.portal-upload-workspace .upload-existing-records{position:static}.portal-upload-workspace #uploadExistingList{max-height:300px}.portal-upload-workspace .document-actions{margin-left:0}}
+.portal-upload-workspace #uploadZone{padding:20px 12px}
+.portal-upload-workspace #uploadZone .upload-icon{display:none}
+.portal-upload-workspace #uploadZone .upload-text{font-size:13px;line-height:1.8}
+.fi-error{color:var(--danger);font-size:11px;overflow-wrap:anywhere;margin-top:4px}
