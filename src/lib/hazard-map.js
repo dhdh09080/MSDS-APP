@@ -61,7 +61,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
         <form id="hmUploadForm">
           <div class="hm-dialog-heading"><h2 id="hmUploadTitle">전경 사진 업로드</h2><button type="button" class="btn btn-outline" data-close>닫기</button></div>
           <label>사진 이름 <span aria-hidden="true">*</span><input class="form-input" name="title" required maxlength="120" placeholder="예: 현장 전체 전경 / 지하 1층" /></label>
-          <label>전경 사진 <span aria-hidden="true">*</span><input class="form-input" name="photo" type="file" required accept="image/jpeg,image/png,image/webp" /></label>
+          <label for="hmPhotoInput">전경 사진 <span aria-hidden="true">*</span></label><div class="upload-dropzone upload-dropzone--field" data-upload-input="hmPhotoInput" role="button" tabindex="0"><strong>사진 선택 또는 여기에 드래그</strong><span>JPG · PNG · WebP · 최대 20MB</span><input id="hmPhotoInput" name="photo" type="file" accept="image/jpeg,image/png,image/webp" hidden /><span data-upload-status>선택된 파일 없음</span></div>
           <p class="hm-hint" id="hmUploadHint"></p>
           <p class="hm-form-error" role="alert"></p><button type="submit" class="btn btn-primary">업로드하기</button>
         </form>
