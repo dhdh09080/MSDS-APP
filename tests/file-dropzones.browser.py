@@ -7,7 +7,7 @@ BASE=os.environ.get('BASE_URL','http://localhost:3003');OUT=Path(os.environ.get(
 PNG=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jMZkAAAAASUVORK5CYII=')
 companies=[dict(id=f'con-{i}',name=n) for i,n in enumerate(['대한건설','한빛전기','성우도장','새길설비'],1)]
 async def main():
- OUT.mkdir(parents=True,exist_ok=True);errors=[];writes=[];licenses=[];portal_licenses={};reuploads=[]
+ OUT.mkdir(parents=True,exist_ok=True);errors=[];writes=[];licenses=[];portal_licenses={};reuploads=[];license_storage_requests=[]
  async with async_playwright() as p:
   browser=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
   ctx=await browser.new_context(viewport=dict(width=1440,height=1080),locale='ko-KR')
@@ -16,6 +16,10 @@ async def main():
    if u.hostname in ['localhost','127.0.0.1']:return await route.continue_()
    if not u.hostname.endswith('.supabase.co'):return await route.abort()
    if '/storage/' in u.path:
+    if req.method=='POST' and '/business-licenses/' in u.path:
+     license_storage_requests.append(dict(path=u.path,upsert=req.headers.get('x-upsert')))
+     if req.headers.get('x-upsert')=='true':
+      return await route.fulfill(status=403,json=dict(statusCode='403',error='Unauthorized',message='new row violates row-level security policy'))
     await asyncio.sleep(.1);return await route.fulfill(json=dict(Key='example'))
    data=json.loads(req.post_data or '{}');name=u.path.rsplit('/',1)[-1]
    if name=='get_contractor_portal':return await route.fulfill(json=dict(workspace=dict(id='example-ws',name='성동 안전현장'),contractor=companies[0],public_link=None,work_types=[dict(id='wt-1',name='도장'),dict(id='wt-2',name='방수')],license=portal_licenses.get(data['p_token']),records=[dict(id='r1',product_name='수성도료',pdf_name='수성도료.pdf')]))
@@ -105,7 +109,7 @@ async def main():
   await page.locator('#msdsFileQueue .file-item').last.get_by_text('분석 대기 · 성우도장 / 도장').wait_for()
   await page.screenshot(path=str(OUT/'manager-msds-queue.png'),full_page=True)
   await page.goto(BASE+'/upload.html?token=license-click&panel=license');await page.locator('#licenseUploadZone').wait_for(state='visible');await choose('#licenseUploadZone','클릭등록증.png');await page.locator('#licenseAlreadyDone').wait_for(state='visible');assert portal_licenses['license-click']['file_name']=='클릭등록증.png'
-  await page.goto(BASE+'/upload.html?token=license-drop&panel=license');await page.locator('#licenseUploadZone').wait_for(state='visible');await page.screenshot(path=str(OUT/'partner-license-dropzone.png'),full_page=True);await drop('#licenseUploadZone','드롭등록증.png');await page.locator('#licenseAlreadyDone').wait_for(state='visible');assert portal_licenses['license-drop']['file_name']=='드롭등록증.png'
+  await page.goto(BASE+'/upload.html?token=license-drop&panel=license');await page.locator('#licenseUploadZone').wait_for(state='visible');await page.screenshot(path=str(OUT/'partner-license-dropzone.png'),full_page=True);await drop('#licenseUploadZone','드롭등록증.png');await page.locator('#licenseAlreadyDone').wait_for(state='visible');assert portal_licenses['license-drop']['file_name']=='드롭등록증.png';await page.screenshot(path=str(OUT/'partner-license-uploaded.png'),full_page=True)
   await page.goto(BASE+'/upload.html?token=reupload&panel=upload');await page.locator('#reuploadSection [data-upload-input]').wait_for(state='visible');await page.screenshot(path=str(OUT/'partner-msds-reupload.png'),full_page=True)
   await drop('#reuploadSection [data-upload-input]','개정MSDS.pdf','application/pdf');await page.get_by_text('재업로드 접수 완료! 감사합니다',exact=False).wait_for();assert reuploads[-1]['p_record_id']=='r1'
   await choose('#uploadZone','신규MSDS.pdf','application/pdf');await page.locator('.file-item').wait_for();await drop('#uploadZone','추가MSDS.png');await page.wait_for_function('document.querySelectorAll(".file-item").length===2')
@@ -114,5 +118,8 @@ async def main():
    await page.set_viewport_size(dict(width=width,height=844));assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
    if width==390:await page.screenshot(path=str(OUT/'partner-upload-mobile.png'),full_page=True)
   assert not errors,errors
-  await browser.close();print('PASS: 16 picker/drop routing contexts; admin license click/drop target and busy safety; invalid/multiple rejection; actual manager and partner MSDS queues; partner license click/drop; reupload; mobile; no JS errors. All APIs synthetic.')
+  assert len(license_storage_requests)==4
+  assert all(request['upsert']=='false' for request in license_storage_requests)
+  assert len({request['path'] for request in license_storage_requests})==4
+  await browser.close();print('PASS: 16 picker/drop routing contexts; admin license click/drop target and busy safety; invalid/multiple rejection; actual manager and partner MSDS queues; partner license click/drop; reupload; mobile; no JS errors. License uploads require INSERT-only storage permissions and unique paths. All APIs synthetic.')
 asyncio.run(main())
