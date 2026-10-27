@@ -1,4 +1,5 @@
 import { createPmxPanel } from './lib/pmx-panel.js';
+import { installFileDropzones } from './lib/file-dropzone.js';
 import { mountBinderWorkbench } from './lib/binder-workbench.js';
 import { loadPosterFont } from './lib/weather-poster-fonts.js';
 import { createHazardMap } from './lib/hazard-map.js';
@@ -52,6 +53,8 @@ import {
 import { analyzeMeasurePdf } from './lib/measure-analysis.js';
 import { extractMeasurePages } from './lib/measure-pdf-text.js';
 import { parseLocalMeasureReport } from './lib/measure-local.js';
+
+installFileDropzones({onError: message => toast(message, 'error')});
 
 // ═══════════════════════════════════════════════
 // State
@@ -928,7 +931,6 @@ function resetWorkspaceScopedState() {
   placementSnapshots = [];
   activeSnapshotId = null;
 
-  publicLink = null;
   siteDirectoryLink = null;
   sortingRows = [];
   mpMonth = '';
@@ -1138,7 +1140,7 @@ window.enterWorkspace = async function (wsId) {
     loadWorkTypes(),
     loadMembers(),
     loadTokens(),
-    loadPublicLink(),
+    loadSiteDirectoryLink(),
   ]);
   await Promise.all([
     loadMsdsRecords(),
@@ -1691,14 +1693,10 @@ window.showPage = function (id) {
   if (id === 'msds') { renderContractorSidebar(); renderMsdsTable(); }
   if (id === 'requests') renderMsdsRequests();
   if (id === 'contractors')
-    switchContractorTab(linksRequested ? 'links' : contractorTab);
+    switchContractorTab(linksRequested ? 'companies' : contractorTab);
   if (id === 'warning') {
     renderWarnPickList();
     updateWarningPreview();
-  }
-  if (id === 'upload-link') {
-    renderTokenList();
-    renderPublicLinkUI();
   }
   if (id === 'binders') mountBinderWorkbench(document.getElementById('binderWorkbench'), {workspace: currentWS, client: supabase, preview: Boolean(getDevPreviewPage())});
   if (id === 'health') switchHealthSub(activeHealthSub);
@@ -2761,7 +2759,6 @@ function populateContractorSelects() {
   [
     'batchContractor',
     'f_contractor',
-    'linkContractor',
     'workTypeContractor',
   ].forEach((id) => {
     const el = document.getElementById(id);
@@ -2922,28 +2919,20 @@ window.renderContractorTags = function () {
   const q = (document.getElementById('conMgrSearch')?.value || '')
     .trim()
     .toLowerCase();
-  const submittedIds = new Set(businessLicenses.map((l) => l.contractor_id));
   const hasReceivedMsds = (c) =>
     msdsRecords.some((r) => r.contractor === c.name && msdsReceived(r));
-  const missingLicense = contractors.filter((c) => !submittedIds.has(c.id));
   const missingMsds = contractors.filter((c) => !hasReceivedMsds(c));
   const list = contractors.filter((c) => {
     const matchesQuery = !q || c.name.toLowerCase().includes(q);
     const matchesFilter =
-      contractorFilter === 'missing-license'
-        ? !submittedIds.has(c.id)
-        : contractorFilter === 'missing-msds'
-          ? !hasReceivedMsds(c)
-          : true;
+      contractorFilter === 'missing-msds' ? !hasReceivedMsds(c) : true;
     return matchesQuery && matchesFilter;
   });
   const cnt = document.getElementById('conMgrCount');
   if (cnt) cnt.textContent = `(${list.length}/${contractors.length}개사)`;
   const totalEl = document.getElementById('conStatTotal');
-  const licenseEl = document.getElementById('conStatMissingLicense');
   const msdsEl = document.getElementById('conStatMissingMsds');
   if (totalEl) totalEl.textContent = contractors.length;
-  if (licenseEl) licenseEl.textContent = missingLicense.length;
   if (msdsEl) msdsEl.textContent = missingMsds.length;
   if (!list.length) {
     el.innerHTML = `<div class="contractor-empty">
@@ -2956,7 +2945,6 @@ window.renderContractorTags = function () {
     .map((c) => {
       const wts = getWorkTypesForContractor(c.id);
       const msdsCnt = msdsRecords.filter((r) => r.contractor === c.name).length;
-      const hasLic = businessLicenses.some((l) => l.contractor_id === c.id);
       const wtChips =
         wts
           .map(
@@ -2975,8 +2963,6 @@ window.renderContractorTags = function () {
       </div>
       <div class="contractor-statuses">
         <button class="contractor-badge neutral" onclick="openContractorMsds('${c.id}')">🧪 MSDS ${msdsCnt}건</button>
-        <button class="contractor-badge ${hasLic ? 'ok' : 'danger'}" onclick="${hasLic ? `scrollToBusinessLicenses()` : `uploadLicenseForContractor('${c.id}')`}">📑 ${hasLic ? '등록증 제출' : '등록증 미제출'}</button>
-        <button class="btn btn-outline btn-sm" onclick="openContractorUploadLink('${c.id}')">링크 관리</button>
         <button class="btn btn-danger btn-sm" onclick="removeContractor('${c.id}')">삭제</button>
       </div>
     </div>`;
@@ -2985,7 +2971,8 @@ window.renderContractorTags = function () {
 };
 
 window.setContractorFilter = function (filter) {
-  contractorFilter = filter || 'all';
+  if (filter === 'missing-license') { openContractorPage(filter); return; }
+  contractorFilter = filter === 'missing-msds' ? filter : 'all';
   const select = document.getElementById('conMgrFilter');
   if (select && select.value !== contractorFilter)
     select.value = contractorFilter;
@@ -2993,11 +2980,7 @@ window.setContractorFilter = function (filter) {
     .querySelectorAll('.contractor-stat-card')
     .forEach((el) => el.classList.remove('active'));
   const activeId =
-    contractorFilter === 'missing-license'
-      ? 'conStatLicense'
-      : contractorFilter === 'missing-msds'
-        ? 'conStatMsds'
-        : 'conStatAll';
+    contractorFilter === 'missing-msds' ? 'conStatMsds' : 'conStatAll';
   document.getElementById(activeId)?.classList.add('active');
   renderContractorTags();
 };
@@ -3005,7 +2988,12 @@ window.setContractorFilter = function (filter) {
 window.openContractorPage = function (filter = 'all') {
   showPage('contractors');
   switchContractorTab(filter === 'missing-license' ? 'licenses' : 'companies');
-  setContractorFilter(filter);
+  setContractorFilter(filter === 'missing-license' ? 'all' : filter);
+  if (filter === 'missing-license') {
+    document.getElementById('businessLicenseFilter').value = 'missing';
+    document.getElementById('businessLicenseSearch').value = '';
+    renderBusinessLicenseStatus();
+  }
 };
 
 window.focusNewContractor = function () {
@@ -3047,18 +3035,10 @@ window.openContractorMsds = function (id) {
   renderContractorSidebar?.();
 };
 
-window.openContractorUploadLink = function (id) {
+window.focusSiteContractorDirectory = function () {
   showPage('contractors');
-  switchContractorTab('links');
-  const select = document.getElementById('linkContractor');
-  if (select) select.value = id;
-  setTimeout(
-    () =>
-      document
-        .getElementById('linkContractor')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
-    100,
-  );
+  switchContractorTab('companies');
+  document.getElementById('siteDirectoryCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
 window.scrollToBusinessLicenses = function () {
@@ -3069,6 +3049,7 @@ window.scrollToBusinessLicenses = function () {
 };
 
 window.uploadLicenseForContractor = function (id) {
+  if (document.getElementById('manualLicenseInput')?.disabled) return;
   let target = document.getElementById('manualLicenseContractor');
   if (!target) {
     target = document.createElement('input');
@@ -3165,7 +3146,7 @@ window.addContractor = async function () {
     populateContractorSelects();
     toggleNewContractorForm(false);
     toast(
-      `${contractor.name} 등록 완료 — 목록에서 공종·등록증·링크를 관리하세요`,
+      `${contractor.name} 등록 완료 — 목록에서 협력사 정보와 공종을 관리하세요`,
       'success',
     );
   } catch (error) {
@@ -3469,62 +3450,6 @@ async function loadTokens() {
   tokens = data || [];
 }
 
-window.generateUploadLink = async function () {
-  const conId = document.getElementById('linkContractor').value;
-  if (!conId) {
-    toast('협력사를 선택하세요', 'error');
-    return;
-  }
-  const existing = tokens.find((t) => t.contractor_id === conId);
-  if (existing) {
-    toast('이미 발급된 링크가 있습니다', 'warn');
-    renderTokenList();
-    return;
-  }
-  const token = generateToken();
-  const { data, error } = await supabase
-    .from('upload_tokens')
-    .insert({ workspace_id: currentWS.id, contractor_id: conId, token })
-    .select('*, contractor:contractor_id(name)')
-    .single();
-  if (error) {
-    toast('발급 실패: ' + error.message, 'error');
-    return;
-  }
-  tokens.push(data);
-  renderTokenList();
-  toast('링크가 발급됐습니다', 'success');
-};
-
-function renderTokenList() {
-  const el = document.getElementById('tokenList');
-  if (!el) return;
-  const wsTokens = tokens;
-  if (wsTokens.length === 0) {
-    el.innerHTML =
-      '<div style="font-size:13px;color:var(--text3);text-align:center;padding:20px;">발급된 링크가 없습니다</div>';
-    return;
-  }
-  const base = window.location.origin + '/upload.html';
-  el.innerHTML = wsTokens
-    .map((t) => {
-      const url = `${base}?token=${t.token}`;
-      return `<div class="token-card">
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">👷 ${t.contractor?.name || '알 수 없음'}</div>
-        <div class="token-url">${url}</div>
-        <div class="token-meta">발급일: ${new Date(t.created_at).toLocaleDateString('ko-KR')}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
-        <button class="btn btn-primary btn-sm" onclick="copyLink('${url}')">복사</button>
-        <button class="btn btn-secondary btn-sm" onclick="shareLink('${url}','${t.contractor?.name || ''}')">공유</button>
-        <button class="btn btn-danger btn-sm" onclick="revokeToken('${t.id}')">삭제</button>
-      </div>
-    </div>`;
-    })
-    .join('');
-}
-
 window.copyLink = function (url) {
   navigator.clipboard
     .writeText(url)
@@ -3550,19 +3475,6 @@ window.shareLink = function (url, name) {
   } else {
     copyLink(url);
   }
-};
-
-window.revokeToken = async function (id) {
-  if (
-    !confirm(
-      '링크를 삭제하면 협력사에서 더 이상 업로드할 수 없습니다. 계속하시겠습니까?',
-    )
-  )
-    return;
-  await supabase.from('upload_tokens').delete().eq('id', id);
-  tokens = tokens.filter((t) => t.id !== id);
-  renderTokenList();
-  toast('링크가 삭제됐습니다');
 };
 
 // ═══════════════════════════════════════════════
@@ -3770,7 +3682,7 @@ window.dropMsdsFiles = function (e) {
 window.handleMsdsFileSelect = function (e) {
   const ok = ['application/pdf', 'image/jpeg', 'image/png'];
   const files = [...e.target.files].filter((f) => ok.includes(f.type));
-  addMsdsFilesToQueue(files, null);
+  addMsdsFilesToQueue(files, null, files.some(file => file.webkitRelativePath));
   e.target.value = '';
 };
 
@@ -7786,61 +7698,25 @@ function renderBusinessLicenseStatus() {
   const statusEl = document.getElementById('businessLicenseStatus');
   const listEl = document.getElementById('businessLicenseList');
   if (!statusEl || !listEl) return;
-
-  const submittedIds = new Set(businessLicenses.map((l) => l.contractor_id));
-  const missing = contractors.filter((c) => !submittedIds.has(c.id));
-
-  statusEl.innerHTML = `<span style="color:var(--ok);">제출 ${businessLicenses.length}개</span> / 전체 ${contractors.length}개 협력사
-    ${missing.length ? `<span style="color:var(--danger);margin-left:8px;">미제출 ${missing.length}개</span>` : ''}`;
-
+  const query = (document.getElementById('businessLicenseSearch')?.value || '').trim().toLowerCase();
+  const filter = document.getElementById('businessLicenseFilter')?.value || 'missing';
+  const submittedIds = new Set(businessLicenses.map(l => l.contractor_id));
+  const missing = contractors.filter(c => !submittedIds.has(c.id));
+  const submitted = contractors.filter(c => submittedIds.has(c.id));
+  statusEl.innerHTML = `<span style="color:var(--danger)">미제출 ${missing.length}개</span> / <span style="color:var(--ok)">제출 ${submitted.length}개</span> / 전체 ${contractors.length}개 협력사`;
+  const matches = name => !query || (name || '').toLowerCase().includes(query);
   let html = '';
-  if (missing.length) {
-    html += `<div style="margin-bottom:14px;">
-      <div style="font-size:12.5px;font-weight:700;color:var(--danger);margin-bottom:6px;">⚠️ 미제출 협력사</div>
-      <div class="license-missing-list">${missing
-        .map(
-          (c) => `<div class="license-missing-item">
-        <span>${c.name}</span>
-        <div>
-          <button class="btn btn-outline btn-sm" onclick="openContractorUploadLink('${c.id}')">링크 관리</button>
-          <button class="btn btn-primary btn-sm" onclick="uploadLicenseForContractor('${c.id}')">등록증 업로드</button>
-        </div>
-      </div>`,
-        )
-        .join('')}</div>
-    </div>`;
+  const missingRows = missing.filter(c => matches(c.name));
+  if (filter !== 'submitted' && missingRows.length) {
+    html += `<section style="margin-bottom:14px" aria-label="사업자등록증 미제출 협력사"><h3 style="font-size:13px;color:var(--danger);margin-bottom:8px">미제출 협력사</h3><div class="license-missing-list">${missingRows.map(c => `<div class="license-missing-item upload-dropzone" data-upload-input="manualLicenseInput" data-upload-value-target="manualLicenseContractor" data-upload-value="${c.id}" role="button" tabindex="0" aria-label="${escapeHtml(c.name)} 사업자등록증 파일 선택 또는 드래그"><span>${escapeHtml(c.name)}<span class="upload-dropzone-hint">PDF · JPG · PNG · 클릭하여 선택하거나 파일을 놓아주세요</span></span><button class="btn btn-primary btn-sm" onclick="uploadLicenseForContractor('${c.id}')">등록증 업로드</button></div>`).join('')}</div></section>`;
   }
-  if (businessLicenses.length) {
-    html += `<div style="font-size:12.5px;font-weight:700;color:var(--text2);margin-bottom:6px;">✅ 제출 완료</div>`;
-    html += businessLicenses
-      .map(
-        (l) => `
-      <div class="snapshot-item" style="cursor:default;">
-        <div>
-          <div style="font-weight:700;font-size:13.5px;">${l.contractor?.name || '알 수 없음'}</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px;">${l.file_name} · ${l.uploaded_by === 'contractor' ? '협력사 제출' : '관리자 업로드'} · ${new Date(l.uploaded_at).toLocaleDateString('ko-KR')}</div>
-        </div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-outline btn-sm" onclick="viewLicense('${l.id}')">보기</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteLicense('${l.id}')">삭제</button>
-        </div>
-      </div>
-    `,
-      )
-      .join('');
+  const submittedRows = businessLicenses.filter(l => matches(l.contractor?.name || contractors.find(c => c.id === l.contractor_id)?.name));
+  if (filter !== 'missing' && submittedRows.length) {
+    html += `<section aria-label="사업자등록증 제출 완료"><h3 style="font-size:13px;color:var(--ok);margin-bottom:8px">제출 완료</h3>${submittedRows.map(l => `<div class="snapshot-item" style="cursor:default"><div><div style="font-weight:700;font-size:13.5px">${escapeHtml(l.contractor?.name || contractors.find(c => c.id === l.contractor_id)?.name || '알 수 없음')}</div><div style="font-size:12px;color:var(--text3);margin-top:2px">${escapeHtml(l.file_name)} · ${l.uploaded_by === 'contractor' ? '협력사 제출' : '관리자 업로드'} · ${new Date(l.uploaded_at).toLocaleDateString('ko-KR')}</div></div><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" onclick="viewLicense('${l.id}')">보기</button><button class="btn btn-danger btn-sm" onclick="deleteLicense('${l.id}')">삭제</button></div></div>`).join('')}</section>`;
   }
-  listEl.innerHTML =
-    html ||
-    `<div style="color:var(--text3);font-size:13px;padding:8px 0;">데이터가 없습니다</div>`;
-
-  // hidden input for manual upload contractor targeting
-  if (!document.getElementById('manualLicenseContractor')) {
-    const hidden = document.createElement('input');
-    hidden.type = 'hidden';
-    hidden.id = 'manualLicenseContractor';
-    listEl.appendChild(hidden);
-  }
+  listEl.innerHTML = html || `<div class="contractor-empty">${query ? '검색 조건에 맞는 협력사가 없습니다.' : filter === 'missing' ? '사업자등록증 미제출 협력사가 없습니다.' : filter === 'submitted' ? '제출된 사업자등록증이 없습니다.' : '등록된 협력사가 없습니다.'}</div>`;
 }
+window.renderBusinessLicenseStatus = renderBusinessLicenseStatus;
 
 function renderLicenseAlert() {
   const wrap = document.getElementById('licenseAlertWrap');
@@ -7861,7 +7737,11 @@ function renderLicenseAlert() {
 
 window.handleManualLicenseUpload = async function (e) {
   const file = e.target.files[0];
-  if (!file) return;
+  if (!file || e.target.disabled) return;
+  if (!/\.(pdf|jpe?g|png)$/i.test(file.name) || file.size > 20 * 1024 * 1024) {
+    e.target.value = '';
+    return toast('PDF, JPG, PNG 파일을 20MB 이하로 선택해주세요.', 'error');
+  }
   const conId = document.getElementById('manualLicenseContractor')?.value;
   if (!conId) {
     toast('업로드할 협력사를 먼저 선택하세요', 'error');
@@ -7869,37 +7749,42 @@ window.handleManualLicenseUpload = async function (e) {
     return;
   }
 
-  const ext = file.name.split('.').pop();
-  const path = `${currentWS.id}/${conId}_${Date.now()}.${ext}`;
-  const { error: upErr } = await supabase.storage
-    .from('business-licenses')
-    .upload(path, file, { contentType: file.type, upsert: true });
-  if (upErr) {
-    toast('업로드 실패: ' + upErr.message, 'error');
-    e.target.value = '';
-    return;
-  }
+  e.target.disabled = true;
+  try {
+    const ext = file.name.split('.').pop();
+    const path = `${currentWS.id}/${conId}_${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from('business-licenses')
+      .upload(path, file, { contentType: file.type, upsert: true });
+    if (upErr) {
+      toast('업로드 실패: ' + upErr.message, 'error');
+      e.target.value = '';
+      return;
+    }
 
-  const { error } = await supabase.from('business_licenses').upsert(
-    {
-      workspace_id: currentWS.id,
-      contractor_id: conId,
-      file_name: file.name,
-      file_path: path,
-      uploaded_by: 'manager',
-    },
-    { onConflict: 'contractor_id' },
-  );
-  if (error) {
-    await supabase.storage.from('business-licenses').remove([path]);
-    toast('저장 실패: ' + error.message, 'error');
-    e.target.value = '';
-    return;
-  }
+    const { error } = await supabase.from('business_licenses').upsert(
+      {
+        workspace_id: currentWS.id,
+        contractor_id: conId,
+        file_name: file.name,
+        file_path: path,
+        uploaded_by: 'manager',
+      },
+      { onConflict: 'contractor_id' },
+    );
+    if (error) {
+      await supabase.storage.from('business-licenses').remove([path]);
+      toast('저장 실패: ' + error.message, 'error');
+      e.target.value = '';
+      return;
+    }
 
-  e.target.value = '';
-  await loadBusinessLicenses();
-  toast('사업자등록증이 업로드됐습니다', 'success');
+    e.target.value = '';
+    await loadBusinessLicenses();
+    toast('사업자등록증이 업로드됐습니다', 'success');
+  } catch (error) {
+    toast('업로드 실패: ' + error.message, 'error');
+  } finally { e.target.disabled = false; e.target.value = ''; }
 };
 
 window.viewLicense = async function (id) {
@@ -8789,131 +8674,14 @@ window.toggleMeasureRound = async function (half, done) {
 };
 
 // ═══════════════════════════════════════════════
-// 전체 협력사용 공용 업로드 링크
+// 현장 전체 협력사 리스트
 // ═══════════════════════════════════════════════
-let publicLink = null;
 let siteDirectoryLink = null;
 async function loadSiteDirectoryLink() {
   const {data,error}=await supabase.from('contractor_directory_links').select('*').eq('workspace_id',currentWS.id).maybeSingle();
   siteDirectoryLink=error?null:data;
 }
 
-async function loadPublicLink() {
-  await loadSiteDirectoryLink();
-  const { data, error } = await supabase
-    .from('public_upload_links')
-    .select('*')
-    .eq('workspace_id', currentWS.id)
-    .maybeSingle();
-  if (error) {
-    console.error(error);
-    publicLink = null;
-    return;
-  }
-  publicLink = data || null;
-}
-
-function renderPublicLinkUI() {
-  renderSiteDirectoryLink();
-  const emptyEl = document.getElementById('publicLinkEmptyState');
-  const activeEl = document.getElementById('publicLinkActiveState');
-  if (!emptyEl || !activeEl) return;
-
-  if (!publicLink) {
-    emptyEl.style.display = '';
-    activeEl.style.display = 'none';
-    return;
-  }
-  emptyEl.style.display = 'none';
-  activeEl.style.display = '';
-
-  const url = `${window.location.origin}/upload.html?ptoken=${publicLink.token}`;
-  document.getElementById('publicLinkUrl').textContent = url;
-  document.getElementById('publicLinkMeta').textContent =
-    `발급일: ${new Date(publicLink.created_at).toLocaleDateString('ko-KR')}`;
-  document.getElementById('publicLinkAllowMsdsEdit').checked =
-    publicLink.allow_msds;
-  document.getElementById('publicLinkAllowLicenseEdit').checked =
-    publicLink.allow_license;
-}
-
-window.generatePublicUploadLink = async function () {
-  const allowMsds = document.getElementById('publicLinkAllowMsds').checked;
-  const allowLicense = document.getElementById(
-    'publicLinkAllowLicense',
-  ).checked;
-  if (!allowMsds && !allowLicense) {
-    toast('최소 하나는 선택해야 합니다', 'error');
-    return;
-  }
-
-  const token = generateToken();
-  const { data, error } = await supabase
-    .from('public_upload_links')
-    .insert({
-      workspace_id: currentWS.id,
-      token,
-      allow_msds: allowMsds,
-      allow_license: allowLicense,
-      created_by: user.id,
-    })
-    .select()
-    .single();
-  if (error) {
-    toast('발급 실패: ' + error.message, 'error');
-    return;
-  }
-  publicLink = data;
-  renderPublicLinkUI();
-  toast('공용 링크가 발급됐습니다', 'success');
-};
-
-window.copyPublicLink = function () {
-  if (!publicLink) return;
-  const url = `${window.location.origin}/upload.html?ptoken=${publicLink.token}`;
-  copyLink(url);
-};
-
-window.revokePublicLink = async function () {
-  if (!publicLink) return;
-  if (
-    !confirm(
-      '공용 링크를 삭제하면 더 이상 사용할 수 없습니다. 계속하시겠습니까?',
-    )
-  )
-    return;
-  await supabase.from('public_upload_links').delete().eq('id', publicLink.id);
-  publicLink = null;
-  renderPublicLinkUI();
-  toast('공용 링크가 삭제됐습니다');
-};
-
-window.updatePublicLinkSettings = async function () {
-  if (!publicLink) return;
-  const allowMsds = document.getElementById('publicLinkAllowMsdsEdit').checked;
-  const allowLicense = document.getElementById(
-    'publicLinkAllowLicenseEdit',
-  ).checked;
-  if (!allowMsds && !allowLicense) {
-    toast('최소 하나는 선택해야 합니다', 'error');
-    document.getElementById('publicLinkAllowMsdsEdit').checked =
-      publicLink.allow_msds;
-    document.getElementById('publicLinkAllowLicenseEdit').checked =
-      publicLink.allow_license;
-    return;
-  }
-  const { error } = await supabase
-    .from('public_upload_links')
-    .update({ allow_msds: allowMsds, allow_license: allowLicense })
-    .eq('id', publicLink.id);
-  if (error) {
-    toast('설정 변경 실패: ' + error.message, 'error');
-    return;
-  }
-  publicLink.allow_msds = allowMsds;
-  publicLink.allow_license = allowLicense;
-  toast('설정이 변경됐습니다', 'success');
-};
 // Site directory uses the same contractors, business_licenses and msds_records.
 function renderSiteDirectoryLink() {
   const host = document.getElementById('siteDirectoryLinkState'); if (!host) return;
@@ -8926,17 +8694,17 @@ function renderSiteDirectoryLink() {
 window.generateSiteDirectoryLink = async function () {
   const {data,error} = await supabase.rpc('manage_contractor_directory_link',{p_workspace:currentWS.id,p_revoke:false});
   if(error) return toast('목록 링크 발급 실패: '+error.message,'error');
-  await loadPublicLink(); renderSiteDirectoryLink(); renderPublicLinkUI();
+  await loadSiteDirectoryLink(); renderSiteDirectoryLink();
   copyLink(`${location.origin}/contractors.html?dtoken=${encodeURIComponent(data.token)}`);
 };
 window.revokeSiteDirectoryLink = async function () {
   if(!confirm('현장 전체 협력사 목록 링크를 해제할까요? 개별 협력사 링크는 계속 사용할 수 있습니다.')) return;
   const {error}=await supabase.rpc('manage_contractor_directory_link',{p_workspace:currentWS.id,p_revoke:true});
   if(error) return toast('목록 링크 해제 실패: '+error.message,'error');
-  await loadPublicLink(); renderSiteDirectoryLink(); toast('목록 링크가 해제됐습니다','success');
+  await loadSiteDirectoryLink(); renderSiteDirectoryLink(); toast('목록 링크가 해제됐습니다','success');
 };
 window.refreshContractorDirectoryData = async function () {
-  await Promise.all([loadContractors(),loadMsdsRecords(),loadBusinessLicenses(),loadPublicLink()]);
+  await Promise.all([loadContractors(),loadMsdsRecords(),loadBusinessLicenses(),loadSiteDirectoryLink()]);
   renderContractorTags(); renderSiteDirectoryLink(); toast('협력사 정보를 갱신했습니다','success');
 };
 window.editContractorContact = function (id) {
@@ -10820,14 +10588,14 @@ function mountGsWorkspace() {
   tabs.id = 'gsContractorTabs';
   tabs.className = 'gs-tabs';
   tabs.setAttribute('role', 'tablist');
-  tabs.innerHTML = ['companies', 'licenses', 'links']
+  tabs.innerHTML = ['companies', 'licenses']
     .map(
       (id, i) =>
-        `<button role="tab" id="gs-tab-${id}" aria-controls="gs-con-${id}" onclick="switchContractorTab('${id}')">${['협력사 관리', '사업자등록증 미제출 협력사', '업로드 링크'][i]}</button>`,
+        `<button role="tab" id="gs-tab-${id}" aria-controls="gs-con-${id}" onclick="switchContractorTab('${id}')">${['협력사 관리', '사업자등록증'][i]}</button>`,
     )
     .join('');
   content.prepend(tabs);
-  ['companies', 'licenses', 'links'].forEach((id) => {
+  ['companies', 'licenses'].forEach((id) => {
     const pane = document.createElement('div');
     pane.id = 'gs-con-' + id;
     pane.setAttribute('role', 'tabpanel');
@@ -10843,19 +10611,11 @@ function mountGsWorkspace() {
       )
       .appendChild(el),
   );
-  const linkContent = document.querySelector(
-    '#page-upload-link > .content-scroll',
-  );
-  if (linkContent)
-    [...linkContent.children].forEach((el) =>
-      document.getElementById('gs-con-links').appendChild(el),
-    );
   // Remove separate search/select pairs; retain hidden select as the value source for existing handlers.
   [
     'batchContractor',
     'batchWorkType',
     'warnFilterContractor',
-    'linkContractor',
   ].forEach((id) => mountGsCombo(id));
   let navIconIndex = 0;
   document.querySelectorAll('.nav-item').forEach((el) => {
@@ -10894,10 +10654,10 @@ function gsIcon(index) {
 }
 
 window.switchContractorTab = function (tab) {
-  contractorTab = ['companies', 'licenses', 'links'].includes(tab)
+  contractorTab = ['companies', 'licenses'].includes(tab)
     ? tab
     : 'companies';
-  ['companies', 'licenses', 'links'].forEach((id) => {
+  ['companies', 'licenses'].forEach((id) => {
     const pane = document.getElementById('gs-con-' + id),
       button = document.getElementById('gs-tab-' + id);
     if (pane) pane.hidden = id !== contractorTab;
@@ -10908,21 +10668,17 @@ window.switchContractorTab = function (tab) {
       button.onkeydown = (e) => {
         if (['ArrowLeft', 'ArrowRight'].includes(e.key)) {
           e.preventDefault();
-          const ids = ['companies', 'licenses', 'links'];
+          const ids = ['companies', 'licenses'];
           switchContractorTab(
-            ids[(ids.indexOf(id) + (e.key === 'ArrowRight' ? 1 : 2)) % 3],
+            ids[(ids.indexOf(id) + (e.key === 'ArrowRight' ? 1 : ids.length - 1)) % ids.length],
           );
           document.getElementById('gs-tab-' + contractorTab).focus();
         }
       };
     }
   });
-  if (contractorTab === 'companies' && !getDevPreviewPage()) {
-    Promise.all([loadContractors(),loadMsdsRecords(),loadBusinessLicenses(),loadPublicLink()]).then(() => { renderContractorTags(); renderSiteDirectoryLink(); });
-  }
-  if (contractorTab === 'links') {
-    renderTokenList();
-    renderPublicLinkUI();
+  if (!getDevPreviewPage()) {
+    Promise.all([loadContractors(),loadMsdsRecords(),loadBusinessLicenses(),loadSiteDirectoryLink()]).then(() => { renderContractorTags(); renderSiteDirectoryLink(); renderBusinessLicenseStatus(); });
   }
   if (contractorTab === 'licenses') renderBusinessLicenseStatus();
 };
@@ -11230,10 +10986,10 @@ window.renderMsdsRequests = function () {
     list
       .map(
         ({ c, token, received, redo }) =>
-          `<tr><td><strong>${escapeHtml(c.name)}</strong></td><td>${token?.created_at ? escapeHtml(token.created_at.slice(0, 10)) : '—'}</td><td><span class="badge ${redo.length ? 'badge-warn' : received.length ? 'badge-ok' : 'badge-gray'}">${redo.length ? '재업로드 요청' : received.length ? '원본 등록 완료' : token ? '제출 대기' : '원본 확인 필요'}</span></td><td>원본 ${received.length}건${redo.length ? ' · 재요청 ' + redo.length + '건' : ''}</td><td><div class="gs-inline-actions"><button class="btn btn-secondary btn-sm" onclick="openContractorMsds('${c.id}')">대장 보기</button><button class="btn btn-outline btn-sm" onclick="openContractorUploadLink('${c.id}')">링크 관리</button></div></td></tr>`,
+          `<tr><td><strong>${escapeHtml(c.name)}</strong></td><td>${token?.created_at ? escapeHtml(token.created_at.slice(0, 10)) : '—'}</td><td><span class="badge ${redo.length ? 'badge-warn' : received.length ? 'badge-ok' : 'badge-gray'}">${redo.length ? '재업로드 요청' : received.length ? '원본 등록 완료' : token ? '제출 대기' : '원본 확인 필요'}</span></td><td>원본 ${received.length}건${redo.length ? ' · 재요청 ' + redo.length + '건' : ''}</td><td><div class="gs-inline-actions"><button class="btn btn-secondary btn-sm" onclick="openContractorMsds('${c.id}')">대장 보기</button><button class="btn btn-outline btn-sm" onclick="focusSiteContractorDirectory()">전체 협력사 리스트</button></div></td></tr>`,
       )
       .join('') ||
-    '<tr class="empty-row"><td colspan="5">요청 내역이 없습니다. 협력사 관리에서 업로드 링크를 발급하세요.</td></tr>';
+    '<tr class="empty-row"><td colspan="5">요청 내역이 없습니다. 전체 협력사 리스트에서 MSDS 제출을 요청하세요.</td></tr>';
 };
 
 function gsWeatherIcon(code) {

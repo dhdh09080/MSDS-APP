@@ -522,7 +522,17 @@
           </div>
         </section>
         <section id="licensePanel" data-portal-panel="license" role="tabpanel" aria-labelledby="licenseTab" hidden><div class="portal-section-heading"><div><h2>사업자등록증 등록</h2><p>최초 한 번 등록하면 담당 보건관리자가 확인할 수 있습니다.</p></div></div><div id="licenseCardHost"></div></section>
-        <section id="uploadPanel" data-portal-panel="upload" aria-label="MSDS 업로드" hidden><button class="portal-back" onclick="switchPortalPanel('records')">← MSDS 자료로 돌아가기</button><div id="uploadViewHost"></div></section>
+        <section id="uploadPanel" data-portal-panel="upload" aria-label="MSDS 업로드" hidden>
+          <button class="portal-back" onclick="switchPortalPanel('records')">← MSDS 자료로 돌아가기</button>
+          <div class="portal-upload-workspace">
+          <section class="upload-existing-records" aria-labelledby="uploadExistingHeading">
+            <div class="portal-section-heading"><div><h2 id="uploadExistingHeading">이미 등록된 MSDS <span id="uploadExistingCount" class="muted"></span></h2><p>우리 협력사에 등록된 자료를 먼저 확인하고, 없는 자료만 추가해주세요.</p></div></div>
+            <div class="portal-toolbar"><input id="uploadExistingSearch" type="search" aria-label="등록된 MSDS 검색" placeholder="제품명, 공종, 공급업체 검색"><button type="button" class="btn btn-secondary" onclick="refreshPortalRecords()">새로고침</button></div>
+            <div id="uploadExistingList" class="portal-list" aria-live="polite"></div>
+          </section>
+          <div id="uploadViewHost"></div>
+          </div>
+        </section>
         <footer class="portal-footer">GS 보건 현장관리 시스템<span>자료 확인 및 수정 문의는 현장 보건관리자에게 연락해주세요.</span></footer>
       </main>
       <!-- 협력사 선택 (공용 링크 전용) -->
@@ -598,8 +608,14 @@
         <!-- STEP 1: 공종 선택 -->
         <div id="stepView1">
           <div class="card">
-            <div class="card-title">🏗️ 공종을 선택해주세요</div>
+            <div class="card-title">공종별 MSDS 추가</div>
+            <p class="portal-notice">각 공종에 파일을 드래그하거나 눌러서 선택하세요. 여러 공종의 파일을 한 번에 업로드할 수 있습니다.</p>
             <div class="worktype-grid" id="worktypeGrid"></div>
+            <form id="portalWorkTypeForm" class="portal-trade-form">
+              <input id="portalWorkTypeName" aria-label="새 공종명" placeholder="새 공종명 입력 (예: 도장)" maxlength="100" required>
+              <button id="portalWorkTypeAdd" class="btn btn-secondary" type="submit">+ 공종 추가</button>
+            </form>
+            <p id="portalWorkTypeError" role="alert"></p>
             <div
               id="noWorktype"
               style="
@@ -612,7 +628,7 @@
             >
               등록된 공종이 없습니다.
               <br />
-              담당자에게 문의하세요.
+              아래에서 공종을 추가하거나 미지정으로 업로드할 수 있습니다.
             </div>
           </div>
           <button
@@ -626,9 +642,9 @@
         </div>
 
         <!-- STEP 2: 파일 업로드 -->
-        <div id="stepView2" style="display: none">
+        <div id="stepView2" style="display: block">
           <div class="card">
-            <div class="card-title">📄 MSDS 파일을 올려주세요</div>
+            <div class="card-title">추가할 파일</div>
             <div
               style="
                 background: var(--primary-light);
@@ -642,19 +658,15 @@
               <b>선택한 공종:</b>
               <span id="selectedWorktypeLabel"></span>
             </div>
-            <div
+            <div data-upload-input="fileInput"
               id="uploadZone"
               class="upload-zone"
-              onclick="document.getElementById('fileInput').click()"
-              ondragover="onDragOver(event)"
-              ondrop="onDrop(event)"
-              ondragleave="onDragLeave(event)"
             >
               <div class="upload-icon">📂</div>
               <div class="upload-text">
                 파일을 여기에 드래그하거나
                 <br />
-                탭하여 선택하세요
+                눌러서 선택하세요
               </div>
               <div class="upload-sub" style="margin-top: 8px">
                 PDF · JPG · PNG
@@ -769,14 +781,13 @@
             </div>
             <div id="licenseUploadZoneWrap">
               <div class="form-note" style="margin-bottom: 10px">
-                최초 1회만 제출하면 됩니다. 사업자등록증 사본(PDF 또는 사진)을
+                파일 선택 또는 드래그로 최초 1회 제출하면 됩니다. 사업자등록증 사본(PDF 또는 사진)을
                 올려주세요.
               </div>
-              <div
+              <div data-upload-input="licenseFileInput"
                 id="licenseUploadZone"
                 class="upload-zone"
                 style="padding: 24px 16px"
-                onclick="document.getElementById('licenseFileInput').click()"
               >
                 <input
                   type="file"

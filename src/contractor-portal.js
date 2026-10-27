@@ -1,3 +1,6 @@
+import { installFileDropzones } from './lib/file-dropzone.js';
+import { collectDroppedFiles } from './lib/upload-files.js';
+import { createContractorWorkspace } from './contractor-workspace.js';
 import { createClient } from '@supabase/supabase-js';
 import './contractor-portal.css';
 import { createWarningRenderer } from './lib/warning-print.js';
@@ -15,12 +18,14 @@ let wsData = null,
 let workTypes = [],
   selectedWorkType = '',
   fileQueue = [];
+let uploadInProgress = false;
 let licenseData = null;
 let publicLinkData = null,
   contractorList = [];
 let currentUploadToken = '';
 
 let portalRecords = [];
+const workspace = createContractorWorkspace({supabase,getContext:()=>({workspace:wsData,contractor:contractorData,token:currentUploadToken}),navigate:panel=>window.switchPortalPanel(panel),toast:(...args)=>toast(...args)});
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function portalRequest(contractorId = null) {
   const { data, error } = await supabase.rpc('get_contractor_portal', {
@@ -72,30 +77,23 @@ async function proceedToUploadView(data) {
     document.querySelectorAll('[data-msds]').forEach(el => el.hidden = !allowMsds);
     document.getElementById('licenseTab').hidden = !allowLicense;
     renderWorkTypes(); renderLicenseCard(); renderPortalRecords();
+    workspace.mount({allowMsds,allowLicense});
     const requestedPanel = new URLSearchParams(location.search).get('panel');
     const canOpenRequestedPanel = (requestedPanel === 'license' && allowLicense)
-      || (['records', 'upload', 'warnings'].includes(requestedPanel) && allowMsds);
-    window.switchPortalPanel(canOpenRequestedPanel ? requestedPanel : allowMsds ? 'records' : 'license');
+      || (['records', 'upload', 'warnings', 'hazard'].includes(requestedPanel) && allowMsds)
+      || ['dashboard','contacts','workers','worker-changes'].includes(requestedPanel);
+    window.switchPortalPanel(canOpenRequestedPanel ? requestedPanel : 'dashboard');
     if (allowMsds) loadReuploadRequests();
   } catch (err) { showError(err.message); }
   finally { document.getElementById('loadingView').style.display = 'none'; }
 }
 window.switchPortalPanel = function (panel) {
+  if (!['dashboard','contacts','records','upload','warnings','license','hazard','workers','worker-changes'].includes(panel)) panel = 'dashboard';
+  if (publicLinkData && ((['records','upload','warnings','hazard'].includes(panel) && !publicLinkData.allow_msds) || (panel === 'license' && !publicLinkData.allow_license))) panel = 'dashboard';
   document.querySelectorAll('[data-portal-panel]').forEach(el => el.hidden = el.dataset.portalPanel !== panel);
-  document.querySelectorAll('[data-portal-tab]').forEach(el => {
-    const active = el.dataset.portalTab === panel;
-    el.setAttribute('aria-selected', String(active));
-    el.tabIndex = active ? 0 : -1;
-  });
+  workspace.activate(panel);
   if (panel === 'warnings') renderPortalRecords();
 };
-document.getElementById('portalTabs').addEventListener('keydown', event => {
-  if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
-  const tabs = [...document.querySelectorAll('[data-portal-tab]')].filter(el => !el.hidden);
-  let i = tabs.indexOf(document.activeElement);
-  i = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (i + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-  event.preventDefault(); tabs[i].click(); tabs[i].focus();
-});
 async function refreshPortalRecords() {
   try {
     const data = await portalRequest(contractorData.id);
@@ -104,18 +102,30 @@ async function refreshPortalRecords() {
 }
 window.refreshPortalRecords = refreshPortalRecords;
 function printable(r) { return Boolean(r.signal_word && (r.h_codes || r.pictograms)); }
+function renderPortalDocumentLists() {
+  for (const [searchId, listId] of [['portalSearch', 'portalRecordList'], ['uploadExistingSearch', 'uploadExistingList']]) {
+    const query = document.getElementById(searchId).value.trim().toLowerCase();
+    const rows = portalRecords.filter(r => [r.product_name, r.work_type, r.supplier, r.pdf_name]
+      .some(value => (value || '').toLowerCase().includes(query)));
+  document.getElementById(listId).innerHTML = rows.length ? rows.map(r => `<article class="document-row"><div class="document-icon" aria-hidden="true">↗</div><div class="document-info"><h3>${escapeHtml(r.product_name)}</h3><p>${escapeHtml(r.work_type || '공종 미지정')} · ${escapeHtml(r.pdf_name || '첨부파일 없음')}</p><span class="status ${printable(r) ? 'ready' : ''}">${printable(r) ? '안전정보 등록' : '관리자 분석 대기'}</span></div><div class="document-actions">${r.pdf_path ? `<a class="btn btn-secondary" href="${import.meta.env.VITE_SUPABASE_URL}/functions/v1/msds-view?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener noreferrer">원본 보기 ↗</a>` : '<span class="muted">원본 없음</span>'}</div></article>`).join('') : `<div class="portal-empty">${query ? '검색 결과가 없습니다.' : '아직 등록된 MSDS가 없습니다. 새 자료를 업로드해주세요.'}</div>`;
+    if (listId === 'uploadExistingList') {
+      document.getElementById('uploadExistingCount').textContent = query
+        ? `검색 ${rows.length}건 / 전체 ${portalRecords.length}건` : `${portalRecords.length}건`;
+    }
+  }
+}
 function renderPortalRecords() {
-  const query = document.getElementById('portalSearch').value.trim().toLowerCase();
-  const rows = portalRecords.filter(r => [r.product_name,r.work_type,r.supplier].some(v => (v || '').toLowerCase().includes(query)));
+  renderPortalDocumentLists();
   document.getElementById('recordCount').textContent = portalRecords.length;
   document.getElementById('licenseSummary').textContent = licenseData ? '등록 완료' : '미등록';
   document.getElementById('warningCount').textContent = portalRecords.filter(printable).length;
-  document.getElementById('portalRecordList').innerHTML = rows.length ? rows.map(r => `<article class="document-row"><div class="document-icon" aria-hidden="true">↗</div><div class="document-info"><h3>${escapeHtml(r.product_name)}</h3><p>${escapeHtml(r.work_type || '공종 미지정')} · ${escapeHtml(r.pdf_name || '첨부파일 없음')}</p><span class="status ${printable(r) ? 'ready' : ''}">${printable(r) ? '안전정보 등록' : '관리자 분석 대기'}</span></div><div class="document-actions">${r.pdf_path ? `<a class="btn btn-secondary" href="${import.meta.env.VITE_SUPABASE_URL}/functions/v1/msds-view?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener noreferrer">원본 보기 ↗</a>` : '<span class="muted">원본 없음</span>'}</div></article>`).join('') : `<div class="portal-empty">${query ? '검색 결과가 없습니다.' : '아직 등록된 MSDS가 없습니다. 새 자료를 업로드해주세요.'}</div>`;
+
   document.getElementById('warningRecordList').innerHTML = portalRecords.length ? portalRecords.map(r => `<label class="warning-row"><input type="checkbox" value="${r.id}" ${printable(r) ? '' : 'disabled'}><span><strong>${escapeHtml(r.product_name)}</strong><small>${printable(r) ? escapeHtml(r.work_type || '공종 미지정') : '관리자 안전정보 분석 후 인쇄할 수 있습니다'}</small></span></label>`).join('') : '<div class="portal-empty">등록된 MSDS가 없습니다.</div>';
   document.getElementById('printPortalWarnings').disabled = !portalRecords.some(printable);
   updatePortalWarningPreview();
 }
-document.getElementById('portalSearch').addEventListener('input', renderPortalRecords);
+document.getElementById('portalSearch').addEventListener('input', renderPortalDocumentLists);
+document.getElementById('uploadExistingSearch').addEventListener('input', renderPortalDocumentLists);
 window.selectAllPortalWarnings = function (checked) { document.querySelectorAll('#warningRecordList input:not(:disabled)').forEach(el => el.checked = checked); updatePortalWarningPreview(); };
 let portalPreviewPage = 0;
 let portalPreviewSheets = [];
@@ -197,32 +207,82 @@ function showError(msg) {
 }
 
 function renderWorkTypes() {
-  window.workTypesForPicker = workTypes.map(w => w.name);
-  const grid = document.getElementById('worktypeGrid');
-  const noWt = document.getElementById('noWorktype');
-  if (workTypes.length === 0) {
-    grid.style.display = 'none';
-    noWt.style.display = 'block';
-    selectedWorkType = '미지정';
-    document.getElementById('step1Next').disabled = false;
-    return;
-  }
-  grid.innerHTML = workTypes
-    .map(
-      (w) =>
-        `<button class="worktype-btn" onclick="selectWorkType(workTypesForPicker[${workTypes.indexOf(w)}],this)">${escapeHtml(w.name)}</button>`,
-    )
-    .join('');
-}
-
-window.selectWorkType = function (name, btn) {
-  selectedWorkType = name;
-  document
-    .querySelectorAll('.worktype-btn')
-    .forEach((b) => b.classList.remove('selected'));
-  btn.classList.add('selected');
+  window.workTypesForPicker = [...new Set(workTypes.map(w => w.name))];
+  if (!window.workTypesForPicker.length) window.workTypesForPicker = ['미지정'];
+  if (!window.workTypesForPicker.includes(selectedWorkType)) selectedWorkType = window.workTypesForPicker[0];
+  document.getElementById('noWorktype').style.display = workTypes.length ? 'none' : 'block';
+  document.getElementById('worktypeGrid').innerHTML = window.workTypesForPicker.map((name, index) => {
+    const count = fileQueue.filter(item => item.workType === name && item.status !== 'done').length;
+    return `<button type="button" class="worktype-btn trade-drop-zone ${selectedWorkType === name ? 'selected' : ''}" data-trade-index="${index}"
+      onclick="pickTradeFiles(${index})" ondragover="onTradeDragOver(event)" ondragleave="this.classList.remove('drag')" ondrop="onTradeDrop(event,${index})" ${uploadInProgress ? 'disabled' : ''}>
+      <strong>${escapeHtml(name)}</strong><span>파일 드래그 또는 클릭</span><small>${count ? `대기 ${count}개` : 'PDF · JPG · PNG'}</small></button>`;
+  }).join('');
   document.getElementById('step1Next').disabled = false;
+  document.getElementById('selectedWorktypeLabel').textContent = selectedWorkType;
+}
+window.selectWorkType = function (name) {
+  if (uploadInProgress) return;
+  selectedWorkType = name;
+  renderWorkTypes();
 };
+window.pickTradeFiles = function (index) {
+  if (uploadInProgress) return;
+  window.selectWorkType(window.workTypesForPicker[index]);
+  document.getElementById('fileInput').click();
+};
+window.onTradeDragOver = function (event) {
+  event.preventDefault();
+  if (!uploadInProgress) event.currentTarget.classList.add('drag');
+};
+window.onTradeDrop = async function (event, index) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag');
+  if (uploadInProgress) return;
+  const name = window.workTypesForPicker[index];
+  if (!name) return;
+  const queuedId = event.dataTransfer.getData('application/x-msds-queue');
+  if (queuedId) {
+    const item = fileQueue.find(item => item.id === queuedId && ['waiting', 'error'].includes(item.status));
+    if (item) item.workType = name;
+    renderFileList();
+  } else {
+    try {
+      const files = await collectDroppedFiles(event.dataTransfer);
+      if (uploadInProgress) return;
+      selectedWorkType = name;
+      addSupportedFiles(files, name);
+    } catch (error) { toast('파일을 읽지 못했습니다. 다시 선택해주세요.', 'error'); }
+  }
+  renderWorkTypes();
+};
+window.dragQueuedFile = function (event, id) {
+  if (uploadInProgress) { event.preventDefault(); return; }
+  event.dataTransfer.setData('application/x-msds-queue', id);
+};
+document.getElementById('portalWorkTypeForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (uploadInProgress) return;
+  const input = document.getElementById('portalWorkTypeName');
+  const button = document.getElementById('portalWorkTypeAdd');
+  if (button.disabled) return;
+  const errorEl = document.getElementById('portalWorkTypeError');
+  const name = input.value.trim();
+  if (!name) return;
+  button.disabled = true; errorEl.textContent = '';
+  try {
+    const { data, error } = await supabase.rpc('register_contractor_work_type', {
+      p_token: currentUploadToken, p_contractor_id: contractorData.id, p_name: name,
+    });
+    if (error) throw error;
+    if (!workTypes.some(type => type.id === data.id)) workTypes.push(data);
+    selectedWorkType = data.name;
+    input.value = '';
+    renderWorkTypes();
+    toast('공종이 추가됐습니다');
+  } catch (error) {
+    errorEl.textContent = '공종 추가 실패: ' + (error.message || '다시 시도해주세요');
+  } finally { button.disabled = uploadInProgress; }
+});
 
 window.goStep2 = function () {
   document.getElementById('stepView1').style.display = 'none';
@@ -262,27 +322,27 @@ window.onDragLeave = function (e) {
 window.onDrop = function (e) {
   e.preventDefault();
   document.getElementById('uploadZone').classList.remove('drag');
-  const ok = ['application/pdf', 'image/jpeg', 'image/png'];
-  const files = [...e.dataTransfer.files].filter((f) =>
-    ok.includes(f.type),
-  );
-  const non = e.dataTransfer.files.length - files.length;
-  if (non > 0) toast(`PDF/JPG/PNG만 가능합니다 (${non}개 제외)`, 'error');
-  if (files.length) addFiles(files);
+  addSupportedFiles([...e.dataTransfer.files], selectedWorkType);
 };
 window.onFileSelect = function (e) {
-  const ok = ['application/pdf', 'image/jpeg', 'image/png'];
-  const files = [...e.target.files].filter((f) => ok.includes(f.type));
-  addFiles(files);
+  addSupportedFiles([...e.target.files], selectedWorkType);
   e.target.value = '';
 };
+function addSupportedFiles(files, workType) {
+  if (uploadInProgress) return;
+  const types = ['application/pdf', 'image/jpeg', 'image/png'];
+  const valid = files.filter(file => types.includes(file.type));
+  if (valid.length < files.length) toast(`PDF/JPG/PNG만 가능합니다 (${files.length - valid.length}개 제외)`, 'error');
+  if (valid.length) addFiles(valid, workType);
+}
 
-function addFiles(files) {
+function addFiles(files, workType) {
   files.forEach((file) => {
     const id = Date.now() + Math.random().toString(36).slice(2);
     const item = {
       id,
       file,
+      workType: workType || '미지정',
       name: file.name,
       data: null,
       mediaType: file.type,
@@ -297,44 +357,59 @@ function addFiles(files) {
     reader.readAsDataURL(file);
   });
   renderFileList();
+  renderWorkTypes();
 }
 
 function renderFileList() {
   const el = document.getElementById('fileList');
   if (fileQueue.length === 0) {
+    el.replaceChildren();
     el.style.display = 'none';
     document.getElementById('uploadBtn').disabled = true;
     return;
   }
   el.style.display = 'flex';
-  document.getElementById('uploadBtn').disabled = !fileQueue.some(
-    (f) => f.status === 'waiting',
-  );
+  document.getElementById('uploadBtn').disabled = uploadInProgress
+    || !fileQueue.some(item => item.status === 'waiting')
+    || fileQueue.some(item => item.status === 'waiting' && !item.data);
   el.innerHTML = fileQueue
     .map(
       (item) => `
-    <div class="file-item ${item.status}">
+    <div class="file-item ${item.status}" draggable="${!uploadInProgress && ['waiting','error'].includes(item.status)}" ondragstart="dragQueuedFile(event,'${item.id}')">
 <span class="fi-icon">${{ waiting: '📄', uploading: '⏳', done: '✅', error: '❌' }[item.status]}</span>
 <div class="fi-info">
-  <div class="fi-name">${item.name}</div>
+  <div class="fi-name">${escapeHtml(item.name)}</div><div class="fi-trade">${escapeHtml(item.workType)} · 드래그해서 공종 변경</div>
   <div class="fi-status">${{ waiting: '업로드 대기', uploading: '안전하게 접수 중...', done: '접수 완료', error: '오류 발생' }[item.status]}</div>
+  ${item.error ? `<div class="fi-error">${escapeHtml(item.error)}</div>` : ''}
   ${item.status === 'uploading' ? '<div class="progress-bar"><div class="progress-fill"></div></div>' : ''}
 </div>
-${item.status !== 'uploading' ? `<button class="fi-remove" onclick="removeFile('${item.id}')">✕</button>` : ''}
+${!uploadInProgress && item.status === 'error' ? `<button class="btn btn-secondary" onclick="retryQueuedFile('${item.id}')">재시도</button>` : ''}
+${!uploadInProgress ? `<button class="fi-remove" onclick="removeFile('${item.id}')">✕</button>` : ''}
     </div>`,
     )
     .join('');
 }
 
+window.retryQueuedFile = function (id) {
+  if (uploadInProgress) return;
+  const item = fileQueue.find(item => item.id === id && item.status === 'error');
+  if (item) { item.status = 'waiting'; item.error = null; renderFileList(); renderWorkTypes(); }
+};
+
 window.removeFile = function (id) {
+  if (uploadInProgress) return;
   fileQueue = fileQueue.filter((f) => f.id !== id);
-  renderFileList();
+  renderFileList(); renderWorkTypes();
 };
 
 // ─── 업로드 ───
 window.startUpload = async function () {
-  const waiting = fileQueue.filter((f) => f.status === 'waiting');
+  if (uploadInProgress || fileQueue.some(item => item.status === 'waiting' && !item.data)) return;
+  const waiting = fileQueue.filter((f) => f.status === 'waiting' && f.data);
   if (waiting.length === 0) return;
+  uploadInProgress = true;
+  document.getElementById('portalWorkTypeAdd').disabled = true;
+  renderWorkTypes();
   document.getElementById('uploadBtn').disabled = true;
   let saved = 0;
   for (const item of waiting) {
@@ -374,7 +449,7 @@ window.startUpload = async function () {
           supplier: '',
           supplier_contact: '',
           contractor: contractorData.name,
-          work_type: selectedWorkType,
+          work_type: item.workType,
           cas_no: '',
           components: '',
           signal_word: '',
@@ -414,7 +489,6 @@ window.startUpload = async function () {
     renderFileList();
     await new Promise((r) => setTimeout(r, 300));
   }
-  document.getElementById('uploadBtn').disabled = false;
   if (saved > 0) {
     await refreshPortalRecords();
     const failed = waiting.length - saved;
@@ -429,12 +503,16 @@ window.startUpload = async function () {
       : '';
     retryBtn.style.display = failed ? '' : 'none';
     setStep(3);
+    document.getElementById('stepView1').style.display = 'none';
     document.getElementById('stepView2').style.display = 'none';
     document.getElementById('stepView3').style.display = 'block';
     renderLicenseCard();
   } else {
     toast('업로드 실패. 다시 시도해주세요.', 'error');
   }
+  uploadInProgress = false;
+  document.getElementById('portalWorkTypeAdd').disabled = false;
+  renderFileList(); renderWorkTypes();
 };
 
 // ─── 완료 후 액션 ───
@@ -447,6 +525,7 @@ window.resetForm = function () {
   document.getElementById('step1Next').disabled = true;
   document.getElementById('stepView3').style.display = 'none';
   document.getElementById('stepView1').style.display = 'block';
+  document.getElementById('stepView2').style.display = 'block';
   renderWorkTypes();
   renderFileList();
   setStep(1);
@@ -457,6 +536,7 @@ window.retryFailedUploads = function () {
     .filter((item) => item.status === 'error')
     .map((item) => ({ ...item, status: 'waiting', error: null }));
   document.getElementById('stepView3').style.display = 'none';
+  document.getElementById('stepView1').style.display = 'block';
   document.getElementById('stepView2').style.display = 'block';
   renderFileList();
   setStep(2);
@@ -615,13 +695,13 @@ function renderReuploadSection() {
 ${reuploadItems
   .map(
     (item) => `
-  <div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+  <div ${['waiting','error'].includes(item.status) ? `class="upload-dropzone" data-upload-input="reuploadFile-${item.id}" role="button" tabindex="0"` : ''} style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:#fff;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:8px;">
     <span style="font-size:18px;">${{ waiting: '📄', uploading: '⏳', done: '✅', error: '❌' }[item.status]}</span>
     <div style="flex:1;min-width:0;">
       <div style="font-weight:700;font-size:13px;color:#1e293b;">${item.product_name} <span style="color:#94a3b8;font-weight:400;">v${item.version || 1}</span></div>
       <div style="font-size:12px;color:#b45309;">${item.status === 'done' ? '재업로드 접수 완료! 감사합니다' : item.status === 'uploading' ? '안전하게 접수 중...' : item.status === 'error' ? '오류: ' + (item.error || '다시 시도해주세요') : '사유: ' + (item.reupload_reason || '재업로드 필요')}</div>
     </div>
-    ${item.status === 'waiting' || item.status === 'error' ? `<button class="btn btn-primary" style="flex-shrink:0;padding:8px 14px;" onclick="pickReuploadFile('${item.id}')">파일 올리기</button>` : ''}
+    ${item.status === 'waiting' || item.status === 'error' ? `<button class="btn btn-primary" style="flex-shrink:0;padding:8px 14px;" onclick="pickReuploadFile('${item.id}')">파일 올리기</button><input type="file" id="reuploadFile-${item.id}" accept=".pdf,.jpg,.jpeg,.png" hidden onchange="onReuploadFileSelect(event,'${item.id}')"><span class="upload-dropzone-hint">파일 선택 또는 여기에 드래그</span>` : ''}
   </div>`,
   )
   .join('')}
@@ -629,14 +709,14 @@ ${reuploadItems
 }
 
 window.pickReuploadFile = function (recordId) {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.pdf,.jpg,.jpeg,.png';
-  input.onchange = (e) => {
-    const f = e.target.files[0];
-    if (f) doReupload(recordId, f);
-  };
+  const input = document.getElementById(`reuploadFile-${recordId}`);
+  if (!input || input.disabled) return;
+  input.value = '';
   input.click();
+};
+window.onReuploadFileSelect = function (event, recordId) {
+  const file = event.target.files[0];
+  if (file) doReupload(recordId, file);
 };
 
 async function doReupload(recordId, file) {
@@ -703,4 +783,5 @@ document.querySelectorAll('.upload-zone').forEach(zone => {
     if ((event.key === 'Enter' || event.key === ' ') && event.target === zone) { event.preventDefault(); zone.click(); }
   });
 });
+installFileDropzones({onError: message => toast(message, 'error')});
 init();

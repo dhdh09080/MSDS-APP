@@ -16,14 +16,17 @@ export function parseBinderCatalog(text) {
   seen.add(code);return {code,title,width,category};
  });
 }
+// Keep the saved binder size (70/90mm); only the physical print width has clearance.
+export const binderPrintWidth = width => width === 70 ? 67 : width === 90 ? 87 : width;
 export function paginateBinderLabels(items,copies=1) {
  if(!Number.isInteger(copies)||copies<1||copies>20)throw new Error('매수는 1~20 사이의 정수로 입력해주세요.');
  const pages=[];let row=[],used=0;
  for(const item of items){
   if(!isBinderWidth(item.width))throw new Error('바인더 폭을 20~190mm로 지정해주세요.');
+  const printWidth=binderPrintWidth(item.width);
   for(let i=0;i<copies;i++){
-   if(used+(row.length?4:0)+item.width>190){pages.push(row);row=[];used=0;}
-   used+=(row.length?4:0)+item.width;row.push(item);
+   if(used+(row.length?4:0)+printWidth>190){pages.push(row);row=[];used=0;}
+   used+=(row.length?4:0)+printWidth;row.push(item);
   }
  }
  if(row.length)pages.push(row);return pages;
@@ -57,7 +60,7 @@ export const binderPrintCss=`
 html,body{margin:0;color:#000;font-family:'BinderHY','HY헤드라인M','HYHeadLine-Medium','Malgun Gothic','Noto Sans CJK KR','Apple SD Gothic Neo',sans-serif}
 .binder-sheet{width:210mm;height:297mm;padding:10mm;display:flex;align-items:flex-start;gap:4mm;break-after:page;page-break-after:always;background:#fff}
 .binder-sheet:last-child{break-after:auto;page-break-after:auto}
-.binder-label{flex-shrink:0;position:relative;text-align:center;background:#fff;font-weight:900;isolation:isolate}.binder-cut-frame{position:absolute;inset:0;z-index:5;border:.25mm solid #000;pointer-events:none}
+.binder-label{flex-shrink:0;position:relative;overflow:hidden;text-align:center;background:#fff;font-weight:900;isolation:isolate}.binder-cut-frame{position:absolute;inset:0;z-index:5;border:.25mm solid #000;pointer-events:none}
 .binder-source-borders{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
 .binder-box{position:absolute;display:flex;align-items:center;justify-content:center;min-width:0;overflow:hidden;overflow-wrap:anywhere;line-height:1.1;padding:.25mm}
 .binder-site{background:#ffc000;print-color-adjust:exact;-webkit-print-color-adjust:exact}
@@ -81,20 +84,20 @@ export function binderTitleTokens(title){
  });
 }
 export function binderTitleSize(doc,height=260){
- const template=binderTemplate(doc.width),box=template.boxes.title;
- const scale=Math.min(doc.width*72/25.4/template.widthPt,height*72/25.4/template.heightPt);
+ const template=binderTemplate(doc.width),box=template.boxes.title,printWidth=binderPrintWidth(doc.width);
+ const scale=Math.min(printWidth*72/25.4/template.widthPt,height*72/25.4/template.heightPt);
  const units=binderTitleTokens(doc.title).reduce((sum,t)=>sum+t.units,0);
- return Math.min(template.fonts.title*scale,(box.height/template.heightPt*height*72/25.4-2)/(Math.max(1,units)),(box.width/template.widthPt*doc.width*72/25.4-2)/1.15);
+ return Math.min(template.fonts.title*scale,(box.height/template.heightPt*height*72/25.4-2)/(Math.max(1,units)),(box.width/template.widthPt*printWidth*72/25.4-2)/1.15);
 }
 export function binderSheetsHtml(items,{site='',height=260,copies=1}={}) {
  if(!Number.isFinite(height)||height<180||height>277)throw new Error('라벨 높이는 180~277mm로 입력해주세요.');
  if(!String(site).trim()||String(site).length>60)throw new Error('현장명을 1~60자로 입력해주세요.');
  const esc=escapeBinderText;
  return paginateBinderLabels(items,copies).map(page=>`<section class="binder-sheet">${page.map(item=>{
-  const doc=normalizeBinderDocument(item),template=binderTemplate(doc.width),boxes=template.boxes;
-  const scale=Math.min(doc.width*72/25.4/template.widthPt,height*72/25.4/template.heightPt);
+  const doc=normalizeBinderDocument(item),template=binderTemplate(doc.width),boxes=template.boxes,printWidth=binderPrintWidth(doc.width);
+  const scale=Math.min(printWidth*72/25.4/template.widthPt,height*72/25.4/template.heightPt);
   const boxFont=(key,text)=>{
-   const box=boxes[key],w=box.width/template.widthPt*doc.width*72/25.4,h=box.height/template.heightPt*height*72/25.4;
+   const box=boxes[key],w=box.width/template.widthPt*printWidth*72/25.4,h=box.height/template.heightPt*height*72/25.4;
    let font=(template.fonts[key]??17)*scale;
    for(let i=0;i<80;i++){
     const cols=Math.max(1,Math.floor((w-1.5)/font)),rows=Math.max(1,Math.floor((h-1.5)/(font*1.1)));
@@ -109,7 +112,7 @@ export function binderSheetsHtml(items,{site='',height=260,copies=1}={}) {
   const footerBottom=boxes.footer.y+boxes.footer.height;
   const logoBox={x:0,y:footerBottom,width:template.widthPt,height:template.heightPt-footerBottom};
   const label=doc.labelNumber?`(${doc.labelNumber})`:'';
-  return `<article class="binder-label" data-template="${template.name}" data-document="${esc(doc.code)}" style="width:${doc.width}mm;height:${height}mm"><div class="binder-cut-frame" aria-hidden="true"></div>${textBox('site',site,'binder-site')}${textBox('majorCode',doc.majorCode,'binder-class-code')}${textBox('majorName',doc.majorName,'binder-class-name')}${textBox('middleCode',doc.middleCode,'binder-class-code')}${textBox('middleName',doc.middleName,'binder-class-name')}${textBox('minor',doc.minorNumber,'binder-minor')}<div class="binder-title" style="${position(boxes.title,template)}"><div class="binder-title-lines" style="font-size:${font.toFixed(3)}pt">${lines.map((line,index)=>`<div class="binder-title-column" data-line="${index+1}">${binderTitleTokens(line).map(t=>`<span class="binder-title-character${t.latin?' binder-title-latin':''}" style="height:${t.units}em">${esc(t.text)}</span>`).join('')}</div>`).join('')}</div></div>${textBox('number',label,'binder-number')}<div class="binder-footer" style="${position(boxes.footer,template)};grid-template-columns:${footerGrid};font-size:${(template.fonts.footer*scale).toFixed(3)}pt"><div>${esc(doc.footer1)}</div><div>${esc(doc.footer2)}</div><div>${esc(doc.footer3)}</div><div>현장<br>안전</div></div><div class="binder-logo" style="${position(logoBox,template)}"><img style="width:${pct(template.logo.width,template.widthPt)}" src="${template.logoData}" alt="GS건설"></div>${borderSvg(template)}</article>`;
+  return `<article class="binder-label" data-template="${template.name}" data-document="${esc(doc.code)}" style="width:${printWidth}mm;height:${height}mm"><div class="binder-cut-frame" aria-hidden="true"></div>${textBox('site',site,'binder-site')}${textBox('majorCode',doc.majorCode,'binder-class-code')}${textBox('majorName',doc.majorName,'binder-class-name')}${textBox('middleCode',doc.middleCode,'binder-class-code')}${textBox('middleName',doc.middleName,'binder-class-name')}${textBox('minor',doc.minorNumber,'binder-minor')}<div class="binder-title" style="${position(boxes.title,template)}"><div class="binder-title-lines" style="font-size:${font.toFixed(3)}pt">${lines.map((line,index)=>`<div class="binder-title-column" data-line="${index+1}">${binderTitleTokens(line).map(t=>`<span class="binder-title-character${t.latin?' binder-title-latin':''}" style="height:${t.units}em">${esc(t.text)}</span>`).join('')}</div>`).join('')}</div></div>${textBox('number',label,'binder-number')}<div class="binder-footer" style="${position(boxes.footer,template)};grid-template-columns:${footerGrid};font-size:${(template.fonts.footer*scale).toFixed(3)}pt"><div>${esc(doc.footer1)}</div><div>${esc(doc.footer2)}</div><div>${esc(doc.footer3)}</div><div>현장<br>안전</div></div><div class="binder-logo" style="${position(logoBox,template)}"><img style="width:${pct(template.logo.width,template.widthPt)}" src="${template.logoData}" alt="GS건설"></div>${borderSvg(template)}</article>`;
  }).join('')}</section>`).join('');
 }
 export function buildBinderPrintHtml(items,options) {

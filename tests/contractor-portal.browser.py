@@ -45,14 +45,33 @@ async def main():
                 uploads.append(json.loads(req.post_data)); return await route.fulfill(status=201,body='')
             await route.fulfill(status=400,json=dict(message='Unexpected request: '+url))
         await page.route('**/*.supabase.co/**', api)
-        await page.goto(BASE+'/upload.html?token=individual-token-0000')
+        await page.goto(BASE+'/upload.html?token=individual-token-0000&panel=upload')
+        await page.locator('#uploadPanel').wait_for(state='visible')
+        assert await page.locator('#uploadExistingList .document-row').count()==2
+        assert await page.locator('#uploadExistingCount').inner_text()=='2건'
+        assert await page.locator('#uploadExistingList .document-info h3').first.inner_text()=='테스트 도료'
+        assert await page.locator('#uploadExistingList .document-actions a').get_attribute('href')==f'https://zobflntvegpunktphauf.supabase.co/functions/v1/msds-view?id={RID}'
+        await page.locator('#uploadExistingSearch').fill('대기.pdf')
+        assert await page.locator('#uploadExistingList .document-row').count()==1
+        assert await page.locator('#uploadExistingList .document-info h3').inner_text()=='<미분석 제품>'
+        assert await page.locator('#uploadExistingCount').inner_text()=='검색 1건 / 전체 2건'
+        await page.locator('#uploadExistingSearch').fill('없는제품')
+        assert await page.locator('#uploadExistingList .document-row').count()==0
+        assert '검색 결과가 없습니다' in await page.locator('#uploadExistingList').inner_text()
+        await page.locator('#uploadExistingSearch').fill('')
+        await page.screenshot(path=str(OUT/'upload-existing-desktop.png'),full_page=True)
+        await page.set_viewport_size(dict(width=390,height=844))
+        assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        await page.screenshot(path=str(OUT/'upload-existing-mobile.png'),full_page=True)
+        await page.set_viewport_size(dict(width=1440,height=1000))
+        await page.goto(BASE+'/upload.html?token=individual-token-0000&panel=records')
         await page.wait_for_selector('#portalView:not([hidden])')
         assert await page.title()=='서울 신축현장 안전건설 관리페이지'
         assert not await page.locator('#loadingView').is_visible()
-        assert await page.locator('.document-row').count()==2
-        assert await page.locator('.document-actions a').get_attribute('href')==f'https://zobflntvegpunktphauf.supabase.co/functions/v1/msds-view?id={RID}'
+        assert await page.locator('#portalRecordList .document-row').count()==2
+        assert await page.locator('#portalRecordList .document-actions a').get_attribute('href')==f'https://zobflntvegpunktphauf.supabase.co/functions/v1/msds-view?id={RID}'
         await page.locator('#portalSearch').fill('존재하지않는자료')
-        assert await page.locator('.document-row').count()==0
+        assert await page.locator('#portalRecordList .document-row').count()==0
         await page.locator('#portalSearch').fill('')
         await page.screenshot(path=str(OUT/'desktop.png'),full_page=True)
         await page.locator('#warningsTab').click()
@@ -99,9 +118,7 @@ async def main():
         await page.wait_for_selector('#licenseAlreadyDone',state='visible')
         assert uploads[-1]['p_contractor_id']==CON
         await page.locator('#recordsTab').click()
-        await page.get_by_role('button',name='+ MSDS 업로드').click()
         await page.locator('.worktype-btn').first.click()
-        await page.locator('#step1Next').click()
         file_input=page.locator('#stepView2 input[type=file]')
         await file_input.set_input_files(dict(name='새로운_MSDS.pdf',mimeType='application/pdf',buffer=b'%PDF-1.4 fixture'))
         await page.locator('#uploadBtn:not([disabled])').click()
@@ -110,12 +127,15 @@ async def main():
         assert uploads[-1]['work_type']=="도장 '공종'"
         for width in [360,390,768]:
             await page.set_viewport_size(dict(width=width,height=844))
+            await page.locator('#cwMenuToggle').click()
             await page.locator('#recordsTab').click()
             assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
             if width==390: await page.screenshot(path=str(OUT/'mobile.png'),full_page=True)
         await page.goto(BASE+'/upload.html?ptoken=public-token-0000&panel=upload')
         await page.wait_for_selector('#contractorPickView',state='visible')
         await page.locator('#contractorPickGrid button').click()
+        await page.locator('#cwMenuToggle').click()
+        await page.locator('#licenseTab').click()
         await page.wait_for_selector('#licensePanel',state='visible')
         assert not await page.locator('#recordsTab').is_visible()
         assert not await page.locator('#uploadPanel').is_visible()
