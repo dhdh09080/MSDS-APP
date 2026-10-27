@@ -12,7 +12,6 @@ export const PAGES = [
   'warning',
   'hazard-map',
   'contractors',
-  'upload-link',
   'health',
   'vulnerable',
   'bp',
