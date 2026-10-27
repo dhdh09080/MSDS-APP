@@ -16,7 +16,7 @@ create policy ws_all on public.workspaces to authenticated using(owner_id=auth.u
 alter table public.workspace_members enable row level security;
 `);
 await db.exec(readFileSync('supabase/migrations/20261015055940_workspace_invite_links.sql','utf8'));
-await db.exec(readFileSync('supabase/migrations/20261024001502_pmx_sync_and_team_approval.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20261027051550_pmx_sync_and_team_approval.sql','utf8'));
 const a='11111111-1111-4111-8111-111111111111',b='22222222-2222-4222-8222-222222222222',c='33333333-3333-4333-8333-333333333333',w='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 await db.exec(`insert into auth.users values('${a}','manager@example.test','{}'),('${b}','worker@example.test','{}'),('${c}','stranger@example.test','{}');insert into workspaces(id,name,owner_id,pmx_prj_cd) values('${w}','현장','${a}','000012');insert into workspace_members(workspace_id,user_id,role) values('${w}','${a}','admin');`);
 const as=async id=>{await db.exec(`reset role;set request.jwt.claim.sub='${id}';set role authenticated;`);};
