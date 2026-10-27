@@ -64,7 +64,7 @@ async def main():
         assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         await page.screenshot(path=str(OUT/'upload-existing-mobile.png'),full_page=True)
         await page.set_viewport_size(dict(width=1440,height=1000))
-        await page.goto(BASE+'/upload.html?token=individual-token-0000')
+        await page.goto(BASE+'/upload.html?token=individual-token-0000&panel=records')
         await page.wait_for_selector('#portalView:not([hidden])')
         assert await page.title()=='서울 신축현장 안전건설 관리페이지'
         assert not await page.locator('#loadingView').is_visible()
@@ -118,7 +118,6 @@ async def main():
         await page.wait_for_selector('#licenseAlreadyDone',state='visible')
         assert uploads[-1]['p_contractor_id']==CON
         await page.locator('#recordsTab').click()
-        await page.get_by_role('button',name='+ MSDS 업로드').click()
         await page.locator('.worktype-btn').first.click()
         file_input=page.locator('#stepView2 input[type=file]')
         await file_input.set_input_files(dict(name='새로운_MSDS.pdf',mimeType='application/pdf',buffer=b'%PDF-1.4 fixture'))
@@ -128,12 +127,15 @@ async def main():
         assert uploads[-1]['work_type']=="도장 '공종'"
         for width in [360,390,768]:
             await page.set_viewport_size(dict(width=width,height=844))
+            await page.locator('#cwMenuToggle').click()
             await page.locator('#recordsTab').click()
             assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
             if width==390: await page.screenshot(path=str(OUT/'mobile.png'),full_page=True)
         await page.goto(BASE+'/upload.html?ptoken=public-token-0000&panel=upload')
         await page.wait_for_selector('#contractorPickView',state='visible')
         await page.locator('#contractorPickGrid button').click()
+        await page.locator('#cwMenuToggle').click()
+        await page.locator('#licenseTab').click()
         await page.wait_for_selector('#licensePanel',state='visible')
         assert not await page.locator('#recordsTab').is_visible()
         assert not await page.locator('#uploadPanel').is_visible()

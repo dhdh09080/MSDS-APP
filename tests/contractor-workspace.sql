@@ -1,0 +1,72 @@
+begin;
+do $test$
+declare u uuid; ws uuid:=gen_random_uuid(); other_ws uuid:=gen_random_uuid(); ca uuid:=gen_random_uuid(); cb uuid:=gen_random_uuid(); cc uuid:=gen_random_uuid(); ma uuid:=gen_random_uuid(); mb uuid:=gen_random_uuid(); mid uuid; common uuid;
+  tok text:='workspace-test-'||gen_random_uuid()::text; license_tok text:='license-test-'||gen_random_uuid()::text;
+  result jsonb; worker_id uuid; contact_a uuid; contact_b uuid; blocked boolean;
+begin
+  select id into u from auth.users order by id limit 1;
+  insert into public.workspaces(id,name,code,owner_id) values(ws,'Contractor rollback A',substr(ws::text,1,8),u),(other_ws,'Contractor rollback B',substr(other_ws::text,1,8),u);
+  insert into public.contractors(id,workspace_id,name) values(ca,ws,'Company A'),(cb,ws,'Company B'),(cc,other_ws,'Other site');
+  insert into public.upload_tokens(workspace_id,contractor_id,token,expires_at) values(ws,ca,tok,now()+interval '1 day');
+  insert into public.public_upload_links(workspace_id,token,allow_msds,allow_license) values(ws,license_tok,false,true);
+  result:=public.save_contractor_contact(tok,ca,'save',null,'관리자 A','010-1111-1111',false);
+  contact_a:=(result->'contacts'->0->>'id')::uuid;
+  assert (result->'contacts'->0->>'is_primary')::boolean;
+  result:=public.save_contractor_contact(tok,ca,'save',null,'관리자 B','010-2222-2222',true);
+  contact_b:=(result->'contacts'->0->>'id')::uuid;
+  assert contact_a<>contact_b;
+  assert (select manager_phone='010-2222-2222' from public.contractors where id=ca),'primary not synced to administrator';
+  update public.contractors set manager_name='수정 관리자',manager_phone='010-3333-3333' where id=ca;
+  assert (select phone='010-3333-3333' from public.contractor_contacts where id=contact_b),'admin edit not synced';
+  result:=public.save_contractor_contact(tok,ca,'delete',contact_b);
+  assert (result->'contacts'->0->>'id')::uuid=contact_a;
+  assert (select manager_phone='010-1111-1111' from public.contractors where id=ca);
+  blocked:=false;begin perform public.get_contractor_workspace(tok,cb);exception when others then blocked:=true;end;assert blocked;
+  blocked:=false;begin perform public.save_contractor_contact(tok,ca,'save',null,'bad','x',false);exception when others then blocked:=true;end;assert blocked;
+  blocked:=false;begin perform public.save_contractor_contact(tok,ca,'primary',gen_random_uuid());exception when others then blocked:=true;end;assert blocked;
+  insert into public.hazard_maps(id,workspace_id,title,storage_path,width,height,created_by) values(ma,ws,'Site A',ws||'/'||ma||'/'||gen_random_uuid()||'.png',1000,600,u),(mb,other_ws,'Site B',other_ws||'/'||mb||'/'||gen_random_uuid()||'.png',1000,600,u);
+  insert into public.hazard_markers(workspace_id,map_id,x,y,storage_name,marker_type,created_by) values(ws,ma,0.1,0.2,'공용 게이트','gate',u) returning id into common;
+  insert into public.hazard_markers(workspace_id,map_id,x,y,storage_name,contractor_id,access_code,created_by) values(ws,ma,0.3,0.4,'Other company storage',cb,'SECRET-OTHER',u);
+  result:=public.save_contractor_hazard_marker(tok,ca,ma,null,'save','{"x":0.4,"y":0.5,"storage_name":"A storage","marker_type":"hazard","items":[{"name":"신나","quantity":"20 L"}],"access_code":"own-code","contractor_id":"00000000-0000-0000-0000-000000000000"}'::jsonb);
+  mid:=(result->>'id')::uuid; assert (result->>'contractor_id')::uuid=ca;
+  assert exists(select 1 from public.hazard_markers where id=mid and contractor_id=ca and storage_name='A storage'),'portal changes missing from admin table';
+  result:=public.get_contractor_hazard_maps(tok,ca,ma);
+  assert jsonb_array_length(result->'maps')=1;
+  assert jsonb_array_length(result->'markers')=2;
+  assert result::text not like '%SECRET-OTHER%';
+  assert not exists(select 1 from jsonb_array_elements(result->'markers') m where m->>'storage_name'='Other company storage');
+  result:=public.save_contractor_hazard_marker(tok,ca,ma,mid,'move','{"x":0.8,"y":0.7}'); assert (result->>'x')::float8=0.8;
+  blocked:=false;begin perform public.save_contractor_hazard_marker(tok,ca,ma,common,'move','{"x":0.8,"y":0.7}');exception when others then blocked:=true;end;assert blocked,'common landmark writable';
+  blocked:=false;begin perform public.get_contractor_hazard_maps(tok,ca,mb);exception when others then blocked:=true;end;assert blocked,'cross-site map exposed';
+  blocked:=false;begin perform public.get_contractor_hazard_maps(license_tok,ca,ma);exception when others then blocked:=true;end;assert blocked,'license-only link read hazard map';
+  blocked:=false;begin perform public.save_contractor_hazard_marker(tok,ca,ma,mid,'move','{"x":2,"y":0.7}');exception when others then blocked:=true;end;assert blocked;
+  perform public.save_contractor_hazard_marker(tok,ca,ma,mid,'delete');assert not exists(select 1 from public.hazard_markers where id=mid);
+  result:=public.save_contractor_worker(tok,ca,'save',null,'테스트 근로자','1234','형틀목공','2026-10-27');
+  worker_id:=(result->0->>'id')::uuid;
+  assert jsonb_array_length(result)=1;
+  assert (select workspace_id=ws and contractor_id=ca from public.contractor_workers where id=worker_id);
+  blocked:=false;begin perform public.get_contractor_workers(tok,cb);exception when others then blocked:=true;end;assert blocked;
+  blocked:=false;begin perform public.save_contractor_worker(tok,ca,'save',null,'테스트 근로자','1234');exception when others then blocked:=true;end;assert blocked,'duplicate worker allowed';
+  blocked:=false;begin perform public.save_contractor_worker(tok,ca,'save',null,'잘못된 전화','1234567890');exception when others then blocked:=true;end;assert blocked;
+  result:=public.save_contractor_worker(tok,ca,'save',worker_id,'테스트 수정','5678','철근공','2026-10-26');
+  assert result->0->>'name'='테스트 수정';
+  result:=public.save_contractor_worker(tok,ca,'delete',worker_id);assert jsonb_array_length(result)=0;
+  assert not has_table_privilege('anon','public.contractor_workers','select');
+  update public.upload_tokens set expires_at=now()-interval '1 second' where token=tok;
+  blocked:=false;begin perform public.get_contractor_workspace(tok,ca);exception when others then blocked:=true;end;assert blocked;
+  assert not has_table_privilege('anon','public.contractor_contacts','select');
+  assert not has_table_privilege('anon','public.hazard_markers','update');
+end;
+$test$;
+set local role anon;
+do $anon$
+begin
+  begin
+    if exists(select 1 from public.public_upload_links) then raise exception 'anonymous public link enumeration'; end if;
+  exception when insufficient_privilege then null; end;
+  begin
+    if exists(select 1 from public.upload_tokens) then raise exception 'anonymous individual link enumeration'; end if;
+  exception when insufficient_privilege then null; end;
+end;
+$anon$;
+rollback;
