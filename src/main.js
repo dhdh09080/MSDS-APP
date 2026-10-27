@@ -7697,10 +7697,10 @@ window.handleManualLicenseUpload = async function (e) {
   e.target.disabled = true;
   try {
     const ext = file.name.split('.').pop();
-    const path = `${currentWS.id}/${conId}_${Date.now()}.${ext}`;
+    const path = `${currentWS.id}/${conId}_${Date.now()}_${crypto.randomUUID()}.${ext}`;
     const { error: upErr } = await supabase.storage
       .from('business-licenses')
-      .upload(path, file, { contentType: file.type, upsert: true });
+      .upload(path, file, { contentType: file.type, upsert: false });
     if (upErr) {
       toast('업로드 실패: ' + upErr.message, 'error');
       e.target.value = '';

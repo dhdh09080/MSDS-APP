@@ -434,7 +434,7 @@ window.startUpload = async function () {
         .from('msds-pdfs')
         .upload(path, blob, {
           contentType: item.mediaType,
-          upsert: true,
+          upsert: false,
         });
       if (stErr)
         throw new Error('원본 파일 업로드 실패: ' + stErr.message);
@@ -639,10 +639,11 @@ window.handleLicenseFileSelect = async function (e) {
 
   try {
     const ext = file.name.split('.').pop();
-    const path = `${wsData.id}/${contractorData.id}_${Date.now()}.${ext}`;
+    const path = `${wsData.id}/${contractorData.id}_${Date.now()}_${crypto.randomUUID()}.${ext}`;
+    // This is a unique new object: requiring overwrite privileges rejects anonymous uploads.
     const { error: upErr } = await supabase.storage
       .from('business-licenses')
-      .upload(path, file, { contentType: file.type, upsert: true });
+      .upload(path, file, { contentType: file.type, upsert: false });
     if (upErr) throw upErr;
 
     const { error: dbErr } = await supabase.rpc('register_contractor_license', {
