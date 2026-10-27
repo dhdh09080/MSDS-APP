@@ -27,14 +27,13 @@ async def main():
   await context.route('https://pmx.gsenc.com/**',pmx_api)
   await context.route('https://*.supabase.co/**',backend)
   page=await context.new_page();page.on('request',lambda req:app_requests.append(req.url) if req.url.startswith(BASE) else None)
-  await page.goto(BASE+'/?preview=pmx');await page.locator('#pmxSetupBtn').wait_for()
+  await page.goto(BASE+'/?preview=pmx');await page.locator('#pmxSyncBtn').wait_for()
   assert '현장코드:' not in await page.locator('#pmxDashboard').inner_text()
   assert '확장 프로그램' not in await page.locator('#pmxDashboard').inner_text()
-  await page.locator('#pmxSetupBtn').click();await page.locator('#pmxSyncGuide').screenshot(path=str(OUT/'pmx-bookmark-guide.png'),animations='disabled')
+  await page.locator('#pmxSyncBtn').click();await page.locator('#pmxSyncGuide').screenshot(path=str(OUT/'pmx-bookmark-guide.png'),animations='disabled')
   favorite=await page.locator('#pmxBookmark').get_attribute('href');assert favorite.startswith('javascript:')
-  await page.locator('#pmxGuideClose').click()
   async with page.expect_popup() as opened:
-   await page.locator('#pmxSyncBtn').click()
+   await page.locator('#pmxGuideOpen').click()
   pmx=await opened.value;await pmx.wait_for_load_state()
   assert await pmx.evaluate('window.opener===null')
   # Fake app commands and the retired extension bridge must not cause reads or writes.
@@ -56,13 +55,14 @@ async def main():
   assert 'private-employee' not in await pmx.locator('#pmxReview').inner_text()
   await pmx.locator('#pmxReview').screenshot(path=str(OUT/'pmx-bookmark-review.png'),animations='disabled')
   await pmx.locator('#pmxReviewConfirm').click()
-  await pmx.wait_for_function("!document.querySelector('#pmxDashboard').innerText.includes('아직 동기화하지 않았습니다')")
+  await pmx.wait_for_function("document.querySelector('#pmxUpdated time') !== null")
   assert len(writes)==1 and len(reads)==1
   await pmx.locator('#pmxDashboard').screenshot(path=str(OUT/'pmx-bookmark-dashboard.png'),animations='disabled')
   await pmx.set_viewport_size({'width':1440,'height':1440})
   await pmx.evaluate("document.querySelectorAll('#appScreen *').forEach(e=>{if(e.scrollTop)e.scrollTop=0});window.scrollTo(0,0)")
   await pmx.screenshot(path=str(OUT/'pmx-bookmark-full.png'),animations='disabled')
   # File input is equally inert until confirmation, and changed scope rejects the save.
+  await pmx.locator('#pmxMore > summary').click()
   await pmx.locator('#pmxSetupBtn').click()
   snapshot={'version':1,'source':'pmx-bookmark','fetchedAt':await pmx.evaluate('new Date().toISOString()'),'projects':[row]}
   await pmx.locator('#pmxSnapshotFile').set_input_files({'name':'pmx.json','mimeType':'application/json','buffer':json.dumps(snapshot).encode()})
@@ -72,6 +72,7 @@ async def main():
   # Extra credential fields are rejected rather than displayed or stored.
   bad={**snapshot,'projects':[{**row,'Cookie':'must-not-import'}]}
   await pmx.goto(BASE+'/?preview=pmx')
+  await pmx.locator('#pmxMore > summary').click()
   await pmx.locator('#pmxSetupBtn').click()
   await pmx.locator('#pmxSnapshotFile').set_input_files({'name':'bad.json','mimeType':'application/json','buffer':json.dumps(bad).encode()})
   assert await pmx.locator('#pmxReview').count()==0

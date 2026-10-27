@@ -32,3 +32,56 @@
 .pmx-manual-dates{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 .pmx-manual-dates input{width:100%;min-width:0}
 .pmx-guide-steps{padding-left:20px;font-size:12px;line-height:1.8;margin:16px 0}.pmx-guide-steps li{margin-bottom:10px}.pmx-picker h2{font-size:18px;margin:0 0 16px}.pmx-picker>p{font-size:12px;line-height:1.7}.pmx-review-data{max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);margin:14px 0}.pmx-review-data article{padding:12px 14px;border-bottom:1px solid var(--border);font-size:12px}.pmx-review-data article:last-child{border-bottom:0}.pmx-review-data p{font-size:11px;line-height:1.7;color:var(--text2);margin:8px 0 0}#pmxBookmark{cursor:grab}#pmxBookmarkCode{width:100%;height:64px;font:10px/1.5 monospace;margin-top:10px;resize:vertical}#pmxSyncGuide input[type=file]{width:100%;font-size:11px;margin:8px 0}.pmx-picker .form-note{margin:12px 0;line-height:1.7}
+/* Compact dashboard: one primary action; setup and import stay in the overflow menu. */
+#pmxDashboard.pmx-compact{position:relative;padding:22px 24px}
+.pmx-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
+.pmx-card-header h2{margin:0;font-size:14px;line-height:1.5;font-weight:650;letter-spacing:-.3px}
+.pmx-card-dates{display:flex;gap:7px;flex-wrap:wrap;margin:5px 0 0;font-size:11px;line-height:1.6;color:var(--text3)}
+.pmx-header-actions{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.pmx-main-action{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;min-height:34px}
+.pmx-main-action svg{width:14px;height:14px}
+.pmx-more{position:relative}
+.pmx-more>summary{list-style:none;width:34px;height:34px;display:grid;place-items:center;cursor:pointer;border:1px solid transparent;border-radius:7px;color:var(--text2)}
+.pmx-more>summary::-webkit-details-marker{display:none}
+.pmx-more>summary svg{width:20px;height:20px}
+.pmx-more>summary:hover,.pmx-more[open]>summary{background:var(--surface2);border-color:var(--border)}
+.pmx-more>summary:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.pmx-more-items{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:178px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);box-shadow:var(--shadow-md)}
+.pmx-more-items button,.pmx-more-items a{display:block;width:100%;padding:10px 11px;text-align:left;background:none;border:0;border-radius:5px;font:inherit;font-size:12px;color:var(--text2);text-decoration:none;cursor:pointer;white-space:nowrap}
+.pmx-more-items button:hover,.pmx-more-items a:hover{background:var(--surface2);color:var(--text)}
+.pmx-progress-overview{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.pmx-progress-overview>span{font-size:11px;color:var(--text3)}
+.pmx-progress-overview strong{font-size:30px;line-height:1.1;font-weight:650;letter-spacing:-1.1px;font-variant-numeric:tabular-nums;color:var(--text)}
+.pmx-progress-overview small{font-size:16px;margin-left:3px;font-weight:500;letter-spacing:-.3px;color:var(--text2)}
+.pmx-no-value{color:var(--text3)}
+.pmx-meter,.pmx-meter-empty{display:block;width:100%;height:6px;appearance:none;border:0;border-radius:99px;overflow:hidden;background:var(--surface2);accent-color:var(--primary)}
+.pmx-meter::-webkit-progress-bar{background:var(--surface2);border-radius:99px}
+.pmx-meter::-webkit-progress-value{background:var(--primary);border-radius:99px}
+.pmx-meter::-moz-progress-bar{background:var(--primary);border-radius:99px}
+.pmx-care-brief{margin:18px 0 16px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2)}
+.pmx-care-title{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text)}
+.pmx-care-title b{font-weight:600}
+.pmx-care-dot{width:5px;height:5px;border-radius:50%;background:var(--text2);flex-shrink:0}
+.pmx-care-brief>p{font-size:12px;line-height:1.7;color:var(--text2);margin:6px 0 0}
+.pmx-card-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.pmx-updated{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3);line-height:1.5}
+.pmx-freshness-dot{width:4px;height:4px;border-radius:50%;background:var(--text3)}
+.pmx-freshness-dot.is-stale{background:var(--border2)}
+.pmx-care-details{font-size:10px;color:var(--text3);margin-left:auto}
+.pmx-care-details>summary{cursor:pointer;text-align:right;list-style:none;display:flex;align-items:center;justify-content:flex-end;gap:5px;min-height:24px}
+.pmx-care-details>summary::-webkit-details-marker{display:none}
+.pmx-care-details>summary:after{content:'⌄';display:inline-block;font-size:13px}
+.pmx-care-details[open]{flex:1 0 100%}
+.pmx-care-details[open]>summary:after{transform:rotate(180deg)}
+.pmx-care-details>div{border-top:1px solid var(--border);padding-top:10px;margin-top:6px;font-size:11px;line-height:1.7;color:var(--text2)}
+.pmx-care-details p{margin:0 0 6px}
+.pmx-feedback{font-size:11px;line-height:1.7;margin:12px 0 0;color:var(--danger)}
+@media(max-width:640px){#pmxDashboard.pmx-compact{padding:18px}.pmx-card-header{gap:8px;margin-bottom:16px}.pmx-card-header h2{font-size:13px}.pmx-card-dates{max-width:135px;font-size:10px;gap:3px;line-height:1.5}.pmx-header-actions{gap:3px}.pmx-main-action{font-size:11px;padding:8px 10px;min-height:40px}.pmx-more>summary{width:36px;height:40px}.pmx-progress-overview strong{font-size:28px}.pmx-care-brief{padding:12px;margin:16px 0 12px}.pmx-care-brief>p{font-size:11px}.pmx-card-footer{gap:6px}.pmx-care-details>summary{min-height:32px}}
+.pmx-card-body{display:grid;grid-template-columns:minmax(220px,.85fr) minmax(0,1.15fr);align-items:center;gap:28px;margin-bottom:16px}
+.pmx-card-body .pmx-care-brief{margin:0;padding:12px 14px}
+.pmx-progress-block{min-width:0}
+@media(max-width:640px){.pmx-card-body{grid-template-columns:minmax(0,1fr);gap:16px;margin-bottom:10px}.pmx-card-body .pmx-care-brief{padding:12px}}
+.pmx-more>summary{padding:0;gap:0;font-size:12px;font-weight:500}
+.pmx-more>summary::before,.pmx-care-details>summary::before{content:none;display:none}
+.pmx-care-details>summary{padding:0;font-size:10px;font-weight:500;color:var(--text3)}
+.pmx-card-dates>span{white-space:nowrap}.pmx-card-dates>i{font-style:normal}@media(max-width:640px){.pmx-card-dates>i{display:none}}

@@ -21,10 +21,10 @@ async def main():
   await page.route('https://*.supabase.co/**',api)
   await page.goto('http://localhost:3000/?preview=pmx')
   panel=page.locator('#pmxDashboard')
-  await panel.get_by_role('button',name='PMX 열고 동기화').wait_for()
-  assert await panel.get_by_role('link',name='PMX 접속 ↗').get_attribute('href')=='https://pmx.gsenc.com/com/'
+  await panel.get_by_role('button',name='정보 가져오기').wait_for()
+  assert await panel.locator('#pmxMore').get_attribute('open') is None
   assert '60.5%' in await panel.inner_text()
-  assert '아직 동기화하지 않았습니다' in await panel.inner_text()
+  assert '아직 업데이트 전' in await panel.inner_text()
   await page.evaluate('openCreateWorkspace()')
   name=page.locator('#wsNameInput')
   await name.fill('프레스 티어')
@@ -62,12 +62,13 @@ async def main():
    {'prjCd':'000012','prjNm':'동기화 테스트 현장','bizFldNm':'주택','cstrnStrtYmd':None,'cstrnEndYmd':None,'actlTProgrt':73.2},
    {'prjCd':'000021','prjNm':'울산 발전소','bizFldNm':'플랜트','cstrnStrtYmd':None,'cstrnEndYmd':None,'actlTProgrt':None},
    {'prjCd':'000031','prjNm':'신규 도로 현장','bizFldNm':'인프라','cstrnStrtYmd':None,'cstrnEndYmd':None,'actlTProgrt':None}]}
+  await page.locator('#pmxMore > summary').click()
   await page.locator('#pmxSetupBtn').click()
   await page.locator('#pmxSnapshotFile').set_input_files({'name':'pmx-projects.json','mimeType':'application/json','buffer':json.dumps(snapshot).encode()})
   assert '60.5%' in await panel.inner_text(),'import must wait for explicit review'
   await page.locator('#pmxReviewConfirm').click()
   await page.wait_for_function("document.querySelector('#pmxDashboard').innerText.includes('73.2%')")
-  assert '아직 동기화하지 않았습니다' not in await panel.inner_text()
+  assert '아직 업데이트 전' not in await panel.inner_text()
   await page.evaluate('openCreateWorkspace()')
   await name.fill('플랜트')
   await page.locator('#pmxCreateOptions').get_by_role('option',name='울산 발전소 플랜트 · 000021').click()

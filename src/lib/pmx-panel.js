@@ -14,22 +14,36 @@ export function createPmxPanel({client,getWorkspace,getUser,canManage,onUpdate,t
     const el=document.getElementById('pmxDashboard'); if(!el) return;
     const ws=getWorkspace(); if(!ws) {el.innerHTML='';return;}
     const care=estimatedCare(ws.pmx_progress, ws.pmx_category);
-    const stamp=ws.pmx_synced_at ? new Date(ws.pmx_synced_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}) : '아직 동기화하지 않았습니다';
+    const manager=canManage(), linked=Boolean(ws.pmx_prj_cd), hasProgress=ws.pmx_progress != null;
+    const stamp=ws.pmx_synced_at ? new Date(ws.pmx_synced_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}) : '';
     const stale=ws.pmx_synced_at && kstDay(ws.pmx_synced_at)!==kstDay();
-    el.innerHTML=`<div class="gs-section-head"><h2>현장 공정 · PMX 동기화</h2><a class="btn btn-outline btn-sm" href="${PMX_URL}" target="_blank" rel="noopener noreferrer">PMX 접속 ↗</a></div>
-      <p class="form-note">동기화하려면 <a href="${PMX_URL}" target="_blank" rel="noopener noreferrer">PMX에 접속</a>하고 로그인해주세요. 즐겨찾기의 ‘보건관리로 보내기’를 누르면 정보를 전달할 수 있습니다.</p>
-      <div class="pmx-meta">착공일: ${escape(ws.pmx_start_date || '정보 없음')} · 준공일: ${escape(ws.pmx_end_date || '정보 없음')}</div>
-      <div class="pmx-progress"><label for="pmxProgress">공정률 <b>${ws.pmx_progress == null ? '정보 없음' : `${escape(ws.pmx_progress)}%`}</b></label>${ws.pmx_progress == null ? '' : `<progress id="pmxProgress" max="100" value="${Number(ws.pmx_progress)}">${Number(ws.pmx_progress)}%</progress>`}</div>
-      <div class="pmx-care"><b>${escape(care.stage)}</b><p>${escape(care.care)}</p><small>공정률 구간에 따른 일반적인 예상입니다. 실제 공정은 현장 작업계획으로 확인해주세요.</small></div>
-      <p class="form-note">마지막 갱신: ${escape(stamp)}${stale ? ' · 오늘 갱신이 필요합니다' : ''}<br>PMX에서 정보를 보낸 뒤 내용을 확인하고 반영하면 갱신됩니다.</p>
-      <div class="pmx-actions">${canManage() ? `<button type="button" class="btn btn-primary btn-sm" id="pmxSyncBtn" ${busy?'disabled':''}>${busy?'동기화 중…':'PMX 열고 동기화'}</button>${!ws.pmx_prj_cd ? '<button type="button" class="btn btn-secondary btn-sm" id="pmxLinkBtn">PMX 현장 연결</button>' : ''}`:''}${canManage() ? '<button type="button" class="btn btn-outline btn-sm" id="pmxSetupBtn">즐겨찾기 설정</button><button type="button" class="btn btn-outline btn-sm" id="pmxFileBtn">파일 가져오기</button>' : ''}</div>
-      <p class="form-note">처음 한 번 ‘즐겨찾기 설정’에서 보내기 버튼을 등록해주세요. PMX 보안 설정에 따라 실행이 제한될 수 있습니다.</p>
-      <p class="form-note" role="status">${escape(status)}</p>`;
-    el.querySelector('#pmxSyncBtn')?.addEventListener('click',sync);
-    el.querySelector('#pmxSetupBtn')?.addEventListener('click',openSyncGuide);
-    el.querySelector('#pmxFileBtn')?.addEventListener('click',()=>{openSyncGuide();document.getElementById('pmxSnapshotFile').click();});
-    el.querySelector('#pmxLinkBtn')?.addEventListener('click',()=>openPicker(true));
+    const shortStamp=ws.pmx_synced_at ? (kstDay(ws.pmx_synced_at)===kstDay()?'오늘 ':new Date(ws.pmx_synced_at).toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric'})+' ') + new Date(ws.pmx_synced_at).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
+    const careParts=care.care.split('. '), lead=careParts.shift();
+    const refreshIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.5-1L20 9M4 15l2.4 3A7 7 0 0 0 17.9 17"/></svg>';
+    const feedback=status && (status.startsWith('저장 실패') || status.includes('없습니다')) ? status : '';
+    el.classList.add('pmx-compact');
+    el.innerHTML=`<header class="pmx-card-header"><div><h2>현장 공정</h2><p class="pmx-card-dates"><span>착공 ${escape(ws.pmx_start_date || '정보 없음')}</span><i aria-hidden="true">·</i><span>준공 ${escape(ws.pmx_end_date || '정보 없음')}</span></p></div>
+      ${manager ? `<div class="pmx-header-actions"><button type="button" class="btn btn-primary btn-sm pmx-main-action" id="${linked?'pmxSyncBtn':'pmxLinkBtn'}" ${busy || applying?'disabled':''}>${refreshIcon}${linked?'정보 가져오기':'현장 연결'}</button>
+      <details class="pmx-more" id="pmxMore"><summary aria-label="현장 공정 더보기" title="더보기"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></summary><div class="pmx-more-items">
+      <button type="button" id="pmxSetupBtn">즐겨찾기 설정</button><button type="button" id="pmxFileBtn">파일 가져오기</button><button type="button" id="${linked?'pmxLinkBtn':'pmxSyncBtn'}">${linked?'연결 현장 변경':'PMX에서 목록 가져오기'}</button><a href="${PMX_URL}" target="_blank" rel="noopener noreferrer">PMX 사이트 열기 ↗</a></div></details></div>` : ''}</header>
+      <div class="pmx-card-body"><div class="pmx-progress-block"><div class="pmx-progress-overview"><span>전체 공정률</span><strong>${hasProgress?escape(ws.pmx_progress)+'<small>%</small>':'<span class="pmx-no-value">—</span>'}</strong></div>
+      ${hasProgress ? `<progress id="pmxProgress" class="pmx-meter" max="100" value="${Number(ws.pmx_progress)}" aria-label="전체 공정률">${Number(ws.pmx_progress)}%</progress>` : '<div class="pmx-meter-empty" aria-label="공정률 정보 없음"></div>'}
+      </div><section class="pmx-care-brief" aria-label="공정별 보건관리"><div class="pmx-care-title"><span class="pmx-care-dot" aria-hidden="true"></span><b>${hasProgress?escape(care.stage):(manager?'현장 정보를 연결해주세요':'현장 정보 준비 중')}</b></div><p>${hasProgress?escape(lead)+(careParts.length?'.':''):(manager?'현장을 연결하고 정보를 가져오면 공정률과 보건관리 안내를 확인할 수 있습니다.':'담당자가 현장 정보를 반영하면 공정률과 보건관리 안내를 확인할 수 있습니다.')}</p></section></div>
+      <footer class="pmx-card-footer"><span class="pmx-updated" id="pmxUpdated">${stamp?`<span class="pmx-freshness-dot${stale?' is-stale':''}" aria-hidden="true"></span><time datetime="${escape(ws.pmx_synced_at)}" title="${escape(stamp)}">${escape(shortStamp)} 업데이트</time>`:'아직 업데이트 전'}</span>
+      <details class="pmx-care-details"><summary>관리 안내</summary><div>${careParts.length?`<p>${escape(careParts.join('. '))}</p>`:''}<p>공정률에 따른 일반적인 예상입니다. 실제 작업계획과 함께 확인해주세요.</p><p>PMX에서 보낸 정보를 확인하고 반영하면 업데이트됩니다.</p></div></details></footer>
+      ${feedback?`<p class="pmx-feedback" role="status">${escape(feedback)}</p>`:''}`;
+    const menu=el.querySelector('#pmxMore');
+    const act=(id,handler)=>el.querySelector('#'+id)?.addEventListener('click',()=>{if(menu)menu.open=false;handler();});
+    act('pmxSyncBtn',sync);
+    act('pmxSetupBtn',openSyncGuide);
+    act('pmxFileBtn',()=>{openSyncGuide();document.getElementById('pmxSnapshotFile').click();});
+    act('pmxLinkBtn',()=>openPicker(true));
+    menu?.querySelector('a')?.addEventListener('click',()=>menu.open=false);
+    menu?.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();menu.open=false;menu.querySelector('summary').focus();}});
+    menu?.addEventListener('focusout',event=>{if(event.relatedTarget && !menu.contains(event.relatedTarget))menu.open=false;});
   }
+  document.addEventListener('pointerdown',event=>{const menu=document.getElementById('pmxMore');if(menu?.open && !menu.contains(event.target))menu.open=false;});
+
   let selected = null, manual = false, createSearch, linkSearch;
   function manualFields(id, requireCode = false) {
     return `<div class="pmx-manual-fields"><b>목록에 없는 현장 직접 추가</b>
@@ -113,12 +127,12 @@ export function createPmxPanel({client,getWorkspace,getUser,canManage,onUpdate,t
     if(ws.pmx_synced_at && new Date(ws.pmx_synced_at)>=new Date(lastResponse.fetchedAt))return;
     const p=projects.find(p=>p.prjCd===ws.pmx_prj_cd);
     if(!p) {status='PMX 응답에 이 현장코드가 없습니다. 마지막 데이터를 유지합니다.';render();return;}
-    applying=true;
+    applying=true;render();
     try {
       const {data,error}=await client.rpc('sync_pmx_project',{p_workspace:ws.id,p_project:p,p_fetched_at:lastResponse.fetchedAt});
       if(error)throw error;
       if(getWorkspace()?.id!==ws.id || getUser()?.id!==account)return;
-      onUpdate(data);status='PMX 현장 정보를 반영했습니다.';
+      onUpdate(data);status='';toast('현장 정보를 업데이트했습니다.','success');
     } catch(error) {status='저장 실패: '+error.message;} finally {applying=false;render();}
   }
   function clearIncoming() {
@@ -163,7 +177,8 @@ export function createPmxPanel({client,getWorkspace,getUser,canManage,onUpdate,t
         approvedAccount=account;approvedWorkspace=save?workspace:null;
         projects=validated.projects;lastResponse=validated;
         clearIncoming();dialog.close();refreshSearches();
-        status='PMX 현장 목록을 반영했습니다.';
+        status='';
+        if(!save)toast('현장 목록을 가져왔습니다.','success');
         await applyLatest();render();
       } catch(error){toast(error.message,'error');button.disabled=false;}
     };
@@ -179,7 +194,7 @@ export function createPmxPanel({client,getWorkspace,getUser,canManage,onUpdate,t
         <details class="pmx-help"><summary>드래그로 등록되지 않을 때</summary><p>즐겨찾기를 새로 만들고 이름은 ‘보건관리로 보내기’, 주소는 아래 복사한 내용으로 저장해주세요.</p><button type="button" class="btn btn-secondary btn-sm" id="pmxBookmarkCopy">즐겨찾기 주소 복사</button><textarea class="form-input" id="pmxBookmarkCode" readonly aria-label="즐겨찾기 주소"></textarea></details>
         <p class="form-note">PMX 보안 설정에서 즐겨찾기 실행을 제한하면 동작하지 않을 수 있습니다. 보안 설정을 해제하지 말고 사내 담당자에게 확인해주세요.</p>
         <label class="form-label" for="pmxSnapshotFile">파일로 받은 경우</label><input class="form-input" id="pmxSnapshotFile" type="file" accept=".json,application/json"><p class="form-note">PMX에서 내려받은 현장 정보 JSON 파일을 선택하면 내용을 확인할 수 있습니다.</p>
-        <div class="pmx-actions"><a class="btn btn-primary" href="${PMX_URL}" target="_blank" rel="noopener noreferrer">PMX 열기 ↗</a><button type="button" class="btn btn-secondary" id="pmxGuideClose">닫기</button></div>`;
+        <div class="pmx-actions"><a class="btn btn-primary" id="pmxGuideOpen" href="${PMX_URL}" target="_blank" rel="noopener noreferrer">PMX 열기 ↗</a><button type="button" class="btn btn-secondary" id="pmxGuideClose">닫기</button></div>`;
       const code=makePmxBookmarklet(location.origin),link=dialog.querySelector('#pmxBookmark');
       link.href=code;dialog.querySelector('#pmxBookmarkCode').value=code;
       link.onclick=event=>{event.preventDefault();toast('버튼을 즐겨찾기 모음으로 끌어다 놓은 뒤 PMX에서 눌러주세요.');};
@@ -188,6 +203,10 @@ export function createPmxPanel({client,getWorkspace,getUser,canManage,onUpdate,t
         catch {dialog.querySelector('#pmxBookmarkCode').select();toast('즐겨찾기 주소를 선택했습니다. 복사해주세요.');}
       };
       dialog.querySelector('#pmxGuideClose').onclick=()=>dialog.close();
+      dialog.querySelector('#pmxGuideOpen').onclick=()=>{
+        try {localStorage.setItem('gs_pmx_bookmark_ready_'+getUser()?.id,'1');}catch{}
+        dialog.close();
+      };
       dialog.querySelector('#pmxSnapshotFile').onchange=async event=>{
         const file=event.target.files?.[0];event.target.value='';if(!file)return;
         try {if(file.size>PMX_MAX_SNAPSHOT_BYTES)throw new Error('파일 크기가 너무 큽니다.');const data=parsePmxSnapshot(await file.text());dialog.close();incoming=data;checkIncoming();}
@@ -197,10 +216,12 @@ export function createPmxPanel({client,getWorkspace,getUser,canManage,onUpdate,t
     if(!dialog.open)dialog.showModal();
   }
   function sync() {
-    openSyncGuide();
-    // Do not retain the opened PMX window or establish an opener/message bridge.
+    let ready=false;
+    try {ready=localStorage.getItem('gs_pmx_bookmark_ready_'+getUser()?.id)==='1';}catch{}
+    if(!ready){openSyncGuide();return;}
+    // Open a separate tab without retaining a PMX window handle.
     window.open(PMX_URL,'_blank','noopener,noreferrer');
-    status='PMX에서 ‘보건관리로 보내기’ 즐겨찾기를 누른 뒤 돌아와 내용을 확인해주세요.';render();
+    toast('PMX에서 ‘보건관리로 보내기’ 즐겨찾기를 눌러주세요.');
   }
   mountCreateSearch();
   return {render,openPicker,applyLatest,sync,resetSelection,checkIncoming,resetData,selectedFields:()=>{
