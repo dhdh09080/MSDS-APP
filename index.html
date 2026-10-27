@@ -314,7 +314,7 @@
 <span class="gs-shortcut-icon">◇</span>
 <div>
 <b>협력사 관리</b>
-<small>서류와 업로드 링크</small>
+<small>협력사 정보와 서류 현황</small>
 </div>
 <span>↗</span>
 </button>
@@ -554,146 +554,6 @@
       </div>
     </div>
   </div>
-</div>
-<!-- ═══ 협력사 링크 ═══ -->
-<div class="page" id="page-upload-link">
-<div class="page-header">
-<div>
-<div class="page-title">협력사 업로드 링크</div>
-<div class="page-subtitle">
-                  협력사가 로그인 없이 MSDS를 직접 올릴 수 있습니다
-                </div>
-</div>
-</div>
-<div class="content-scroll">
-<div class="card" style="margin-bottom: 16px">
-<div class="card-title">
-<span class="card-title-icon">📋</span>
-                  사용 방법
-                </div>
-<ol style="
-                    font-size: 13px;
-                    color: var(--text2);
-                    line-height: 2;
-                    padding-left: 20px;
-                  ">
-<li>협력사를 선택하고 링크를 발급하세요</li>
-<li>링크를 카카오톡/문자로 협력사 담당자에게 전송하세요</li>
-<li>
-                    협력사가 링크를 열면 공종 선택 후 PDF/이미지를 올릴 수
-                    있어요
-                  </li>
-<li>업로드 완료 시 MSDS 대장에 자동으로 등록됩니다</li>
-</ol>
-</div>
-<div class="card" style="margin-bottom: 16px">
-<div class="card-title">
-<span class="card-title-icon">📢</span>
-                  전체 협력사용 공용 링크
-                </div>
-<div class="form-note" style="margin-bottom: 14px">
-                  단체 카카오톡방 등에 한 번만 공유하면, 협력사가 직접 자기
-                  회사를 선택(또는 직접 입력)해서 업로드할 수 있는 링크입니다.
-                  현장당 1개만 발급됩니다.
-                </div>
-<div id="publicLinkEmptyState">
-<div style="margin-bottom: 12px">
-<label class="legal-check" style="margin-bottom: 8px">
-<input checked="" id="publicLinkAllowMsds" type="checkbox"/>
-                      MSDS 업로드 허용
-                    </label>
-<label class="legal-check">
-<input checked="" id="publicLinkAllowLicense" type="checkbox"/>
-                      사업자등록증 업로드 허용
-                    </label>
-</div>
-<button class="btn btn-primary" onclick="generatePublicUploadLink()">
-                    📢 공용 링크 발급
-                  </button>
-</div>
-<div id="publicLinkActiveState" style="display: none">
-<div class="token-card">
-<div style="flex: 1; min-width: 0">
-<div style="
-                          font-size: 13px;
-                          font-weight: 700;
-                          color: var(--text);
-                          margin-bottom: 4px;
-                        ">
-                        📢 전체 협력사용 링크
-                      </div>
-<div class="token-url" id="publicLinkUrl"></div>
-<div class="token-meta" id="publicLinkMeta"></div>
-</div>
-<div style="
-                        display: flex;
-                        flex-direction: column;
-                        gap: 6px;
-                        flex-shrink: 0;
-                      ">
-<button class="btn btn-primary btn-sm" onclick="copyPublicLink()">
-                        복사
-                      </button>
-<button class="btn btn-danger btn-sm" onclick="revokePublicLink()">
-                        삭제
-                      </button>
-</div>
-</div>
-<div style="margin-top: 12px">
-<label class="legal-check" style="margin-bottom: 8px">
-<input id="publicLinkAllowMsdsEdit" onchange="updatePublicLinkSettings()" type="checkbox"/>
-                      MSDS 업로드 허용
-                    </label>
-<label class="legal-check">
-<input id="publicLinkAllowLicenseEdit" onchange="updatePublicLinkSettings()" type="checkbox"/>
-                      사업자등록증 업로드 허용
-                    </label>
-</div>
-</div>
-</div>
-<div class="card">
-<div class="card-title">
-<span class="card-title-icon">🔗</span>
-                  협력사별 링크 발급
-                </div>
-<div style="flex: 1; min-width: 180px">
-<div class="contractor-search-row">
-<input class="form-input" id="linkContractorSearch" oninput="searchContractorSelect('linkContractor')" onkeydown="
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          searchContractorSelect('linkContractor');
-                        }
-                      " placeholder="협력사명 검색"/>
-<button class="btn btn-secondary btn-sm" onclick="searchContractorSelect('linkContractor')" type="button">
-                      검색
-                    </button>
-</div>
-</div>
-<div style="
-                    display: flex;
-                    gap: 10px;
-                    margin-bottom: 16px;
-                    flex-wrap: wrap;
-                  ">
-<select class="form-input" id="linkContractor" style="flex: 1; min-width: 180px">
-<option value="">협력사 선택</option>
-</select>
-<button class="btn btn-primary" onclick="generateUploadLink()">
-                    링크 발급
-                  </button>
-</div>
-<div id="tokenList">
-<div style="
-                      font-size: 13px;
-                      color: var(--text3);
-                      text-align: center;
-                      padding: 20px;
-                    ">
-                    발급된 링크가 없습니다
-                  </div>
-</div>
-</div>
-</div>
 </div>
 <!-- ═══ 작업환경측정 ═══ -->
 <div class="page" id="page-measure">
@@ -1731,12 +1591,6 @@
 <div class="stat-label">전체 협력사</div>
 <div class="stat-value primary" id="conStatTotal">0</div>
 </button>
-<button class="stat-card contractor-stat-card" id="conStatLicense" onclick="setContractorFilter('missing-license')">
-<div class="stat-label">등록증 미제출</div>
-<div class="stat-value danger" id="conStatMissingLicense">
-                    0
-                  </div>
-</button>
 <button class="stat-card contractor-stat-card" id="conStatMsds" onclick="setContractorFilter('missing-msds')">
 <div class="stat-label">MSDS 미수령</div>
 <div class="stat-value warn" id="conStatMissingMsds">0</div>
@@ -1767,7 +1621,6 @@
 </div>
 <select class="form-input" id="conMgrFilter" onchange="setContractorFilter(this.value)">
 <option value="all">전체 상태</option>
-<option value="missing-license">사업자등록증 미제출</option>
 <option value="missing-msds">MSDS 미수령</option>
 </select>
 </div>
@@ -1776,8 +1629,7 @@
 <div>
 <strong>새 협력사 등록</strong>
 <span>
-                        등록하면 바로 아래 목록에 추가되어 공종·등록증·업로드
-                        링크를 이어서 관리할 수 있습니다.
+                        등록하면 바로 아래 목록에서 협력사 정보와 공종을 관리할 수 있습니다.
                       </span>
 </div>
 <button aria-label="등록 폼 닫기" class="icon-btn" onclick="toggleNewContractorForm(false)">
@@ -1807,13 +1659,16 @@
 <button class="btn btn-outline btn-sm" onclick="downloadAllLicenses()">
                       📦 전체 다운로드
                     </button>
-<input accept=".pdf,.jpg,.jpeg,.png" id="manualLicenseInput" onchange="handleManualLicenseUpload(event)" style="display: none" type="file"/>
+<input id="manualLicenseContractor" type="hidden"/><input accept=".pdf,.jpg,.jpeg,.png" id="manualLicenseInput" onchange="handleManualLicenseUpload(event)" style="display: none" type="file"/>
 </div>
 </div>
 <div class="form-note" style="margin-bottom: 12px">
-                  미제출 협력사를 선택해 바로 업로드하거나 협력사 업로드 링크를
-                  보낼 수 있습니다.
+                  미제출 협력사의 등록증을 업로드하고 제출 파일을 확인합니다. 협력사 직접 제출은 전체 협력사 리스트에서 진행합니다.
                 </div>
+<div class="contractor-toolbar" style="margin-bottom:16px">
+<input class="form-input" id="businessLicenseSearch" type="search" aria-label="사업자등록증 협력사 검색" placeholder="협력사명 검색" oninput="renderBusinessLicenseStatus()"/>
+<select class="form-input" id="businessLicenseFilter" aria-label="사업자등록증 제출 상태" onchange="renderBusinessLicenseStatus()"><option value="missing">미제출 협력사</option><option value="submitted">제출 완료</option><option value="all">전체 협력사</option></select>
+</div>
 <div id="businessLicenseStatus" style="margin-bottom: 10px; font-size: 14px; font-weight: 700"></div>
 <div id="businessLicenseList"></div>
 </div>
@@ -2055,14 +1910,13 @@
 <div>
 <div class="page-title">협력사 MSDS 요청 목록</div>
 <div class="page-subtitle">
-                  발급한 요청 링크와 업로드 결과를 함께 확인합니다
+                  협력사별 MSDS 요청 이력과 제출 결과를 확인합니다
                 </div>
 </div>
 <button class="btn btn-primary" onclick="
-                  showPage('contractors');
-                  switchContractorTab('links');
+                  focusSiteContractorDirectory();
                 ">
-                + MSDS 요청
+                전체 협력사 리스트
               </button>
 </div>
 <div class="content-scroll">
