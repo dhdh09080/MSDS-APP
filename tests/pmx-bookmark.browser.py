@@ -59,6 +59,9 @@ async def main():
   await pmx.wait_for_function("!document.querySelector('#pmxDashboard').innerText.includes('아직 동기화하지 않았습니다')")
   assert len(writes)==1 and len(reads)==1
   await pmx.locator('#pmxDashboard').screenshot(path=str(OUT/'pmx-bookmark-dashboard.png'),animations='disabled')
+  await pmx.set_viewport_size({'width':1440,'height':1440})
+  await pmx.evaluate("document.querySelectorAll('#appScreen *').forEach(e=>{if(e.scrollTop)e.scrollTop=0});window.scrollTo(0,0)")
+  await pmx.screenshot(path=str(OUT/'pmx-bookmark-full.png'),animations='disabled')
   # File input is equally inert until confirmation, and changed scope rejects the save.
   await pmx.locator('#pmxSetupBtn').click()
   snapshot={'version':1,'source':'pmx-bookmark','fetchedAt':await pmx.evaluate('new Date().toISOString()'),'projects':[row]}
