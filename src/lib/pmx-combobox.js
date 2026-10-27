@@ -1,15 +1,15 @@
 import {searchProjects} from './pmx.js';
 
 // Keep focus on the text input so keyboard and pointer selection share the same state.
-export function mountProjectCombobox({input, dropdown, getProjects, onChange, onSelect, onManual}) {
+export function mountProjectCombobox({input, dropdown, getProjects, onChange, onSelect, emptyMessage = '검색 결과가 없습니다.'}) {
   const list = dropdown.querySelector('[role="listbox"]');
-  const add = dropdown.querySelector('[data-manual-add]');
-  let matches = [], active = -1, expanded = false;
+  let matches = [], active = -1, expanded = false, blurTimer;
   input.setAttribute('role', 'combobox');
   input.setAttribute('aria-autocomplete', 'list');
   input.setAttribute('aria-controls', list.id);
   input.setAttribute('aria-expanded', 'false');
   function hide() {
+    clearTimeout(blurTimer);
     expanded = false; dropdown.hidden = true;
     input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant');
   }
@@ -35,17 +35,20 @@ export function mountProjectCombobox({input, dropdown, getProjects, onChange, on
     });
     if (!matches.length) {
       const empty = document.createElement('p'); empty.className = 'pmx-search-empty'; empty.setAttribute('role', 'status');
-      empty.textContent = '검색 결과가 없습니다. 아래에서 현장을 직접 추가할 수 있습니다.'; list.append(empty);
+      empty.textContent = emptyMessage; list.append(empty);
     }
-    add.textContent = input.value.trim() ? `+ “${input.value.trim()}” 현장 직접 추가` : '+ 목록에 없는 현장 직접 추가';
     highlight();
   }
-  function show() {expanded = true; dropdown.hidden = false; input.setAttribute('aria-expanded', 'true'); refresh();}
-  add.addEventListener('click', () => {hide(); onManual(input.value.trim());});
+  function show() {clearTimeout(blurTimer);expanded = true; dropdown.hidden = false; input.setAttribute('aria-expanded', 'true'); refresh();}
   dropdown.addEventListener('pointerdown', e => e.preventDefault());
   input.addEventListener('input', () => {onChange?.(); show();});
   input.addEventListener('focus', show);
-  input.addEventListener('blur', event => {if (!dropdown.contains(event.relatedTarget)) hide();});
+  input.addEventListener('blur', event => {
+    if (!dropdown.contains(event.relatedTarget)) {
+      // Let the pending click finish before collapsing an in-flow list changes modal geometry.
+      blurTimer=setTimeout(hide,160);
+    }
+  });
   dropdown.addEventListener('focusout', event => {
     if (event.relatedTarget !== input && !dropdown.contains(event.relatedTarget)) hide();
   });
@@ -62,7 +65,6 @@ export function mountProjectCombobox({input, dropdown, getProjects, onChange, on
     if (e.key === 'Enter' && expanded) {
       e.preventDefault(); hide();
       if (matches[active]) onSelect(matches[active]);
-      else if (!matches.length && input.value.trim()) onManual(input.value.trim());
     }
   });
   return {refresh, hide, show};

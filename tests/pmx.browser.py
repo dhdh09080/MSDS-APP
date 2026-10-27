@@ -30,7 +30,7 @@ async def main():
   await name.fill('프레스 티어')
   await page.locator('#pmxCreateOptions').get_by_role('option',name='프레스티어자이(경기) 주택 · 180080').click()
   assert await name.input_value()=='프레스티어자이(경기)'
-  assert '180080' in await page.locator('#pmxSelectedProject').inner_text()
+  assert await page.locator('#pmxManualCode').input_value()=='180080'
   await name.fill('목록에 없는 발전소')
   await page.evaluate('createWorkspace()')
   assert not created,'typing must invalidate the previously selected code'
@@ -41,8 +41,7 @@ async def main():
   # Select explicit manual creation, retaining leading zeros in a known code.
   await name.fill('목록에 없는 발전소')
   await name.press('Tab')
-  assert await page.locator('#pmxCreateDropdown [data-manual-add]').evaluate('(el)=>el===document.activeElement')
-  await page.keyboard.press('Enter')
+  assert await page.locator('#pmxManualCategory').evaluate('(el)=>el===document.activeElement')
   await page.locator('#pmxManualCategory').select_option('플랜트')
   await page.locator('#pmxManualCode').fill('000099')
   await page.locator('#pmxManualStart').fill('2026-01-01')
@@ -54,7 +53,6 @@ async def main():
   # A genuinely unknown code is kept null, never filled with a generated app code.
   await page.evaluate('openCreateWorkspace()')
   await name.fill('신규 교량 현장')
-  await page.locator('#pmxCreateDropdown [data-manual-add]').click()
   await page.locator('#pmxManualCategory').select_option('인프라')
   await page.evaluate('createWorkspace()')
   assert created[-1]['pmx_prj_cd'] is None and created[-1]['pmx_category']=='인프라'
@@ -72,13 +70,12 @@ async def main():
   await page.evaluate('openCreateWorkspace()')
   await name.fill('플랜트')
   await page.locator('#pmxCreateOptions').get_by_role('option',name='울산 발전소 플랜트 · 000021').click()
-  assert '000021' in await page.locator('#pmxSelectedProject').inner_text()
+  assert await page.locator('#pmxManualCode').input_value()=='000021'
   await name.fill('인프라')
   await page.locator('#pmxCreateOptions').get_by_role('option',name='신규 도로 현장 인프라 · 000031').click()
-  assert '000031' in await page.locator('#pmxSelectedProject').inner_text()
+  assert await page.locator('#pmxManualCode').input_value()=='000031'
   await page.set_viewport_size({'width':390,'height':844})
   await name.fill('모바일 현장')
-  await page.locator('#pmxCreateDropdown [data-manual-add]').click()
   assert await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
   assert not errors,errors
   print('PMX browser: inline search, keyboard selection, stale-code prevention, plant/infra creation, optional code, all-category synced search and mobile layout passed')

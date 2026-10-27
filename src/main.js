@@ -1068,6 +1068,7 @@ function renderWorkspaceList() {
 }
 
 window.createWorkspace = async function () {
+  if (!document.getElementById('createWSModal').classList.contains('open')) return;
   const name = document.getElementById('wsNameInput').value.trim();
   if (!name) {
     toast('현장명을 입력하세요', 'error');
@@ -1075,7 +1076,6 @@ window.createWorkspace = async function () {
   }
   let projectFields;
   try {projectFields = pmxPanel.selectedFields();} catch(error) {return toast(error.message, 'error');}
-  if (!projectFields) return toast('검색 결과를 선택하거나 ‘현장 직접 추가’를 눌러주세요.', 'error');
   const code = generateCode();
   const { data: ws, error } = await supabase
     .from('workspaces')

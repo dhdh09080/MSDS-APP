@@ -44,20 +44,20 @@ export function createPmxPanel({client,getWorkspace,getUser,canManage,onUpdate,t
   }
   document.addEventListener('pointerdown',event=>{const menu=document.getElementById('pmxMore');if(menu?.open && !menu.contains(event.target))menu.open=false;});
 
-  let selected = null, manual = false, createSearch, linkSearch;
-  function manualFields(id, requireCode = false) {
-    return `<div class="pmx-manual-fields"><b>목록에 없는 현장 직접 추가</b>
+  let selected = null, createSearch, linkSearch;
+  function creationFields(id) {
+    return `<div class="pmx-manual-fields"><b>현장 정보</b>
       <label for="${id}Category">분류 <span class="required">*</span></label><select class="form-input" id="${id}Category"><option value="">분류 선택</option><option>주택</option><option>플랜트</option><option>인프라</option><option>기타</option></select>
-      <label for="${id}Code">현장코드${requireCode ? ' *' : ' (선택)'}</label><input class="form-input" id="${id}Code" placeholder="알고 있는 PMX 현장코드" maxlength="32" autocomplete="off">
+      <label for="${id}Code">현장코드 (선택)</label><input class="form-input" id="${id}Code" placeholder="알고 있는 PMX 현장코드" maxlength="32" autocomplete="off">
       <div class="pmx-manual-dates"><div><label for="${id}Start">착공일 (선택)</label><input class="form-input" type="date" id="${id}Start"></div><div><label for="${id}End">준공일 (선택)</label><input class="form-input" type="date" id="${id}End"></div></div>
-      <p class="form-note">${requireCode ? 'PMX 연결에는 현장코드가 필요합니다.' : '현장코드 없이도 추가할 수 있습니다. PMX 자동 동기화는 현장코드를 연결한 뒤 사용할 수 있습니다.'}</p></div>`;
+      <p class="form-note">현장코드를 모르면 비워두세요. 나중에 PMX 현장을 연결할 수 있습니다.</p></div>`;
   }
   function readManual(name, id) {
     return manualProject({name,code:document.getElementById(id+'Code').value,category:document.getElementById(id+'Category').value,start:document.getElementById(id+'Start').value,end:document.getElementById(id+'End').value});
   }
   function catalogNote() {
-    if (!lastResponse) return '현재 제공된 목록은 주택 현장입니다. 목록에 없는 플랜트·인프라 현장은 직접 추가할 수 있습니다.';
-    return lastResponse.notice || 'PMX에서 가져온 최신 현장 목록입니다. 검색 결과가 없으면 직접 추가할 수 있습니다.';
+    if (!lastResponse) return '현재 제공된 PMX 목록은 주택 현장입니다. 최신 목록은 PMX에서 가져와 확인할 수 있습니다.';
+    return lastResponse.notice || 'PMX에서 가져온 최신 현장 목록입니다.';
   }
   function refreshSearches() {
     createSearch?.refresh(); linkSearch?.refresh();
@@ -68,21 +68,29 @@ export function createPmxPanel({client,getWorkspace,getUser,canManage,onUpdate,t
   function mountCreateSearch() {
     const input=document.getElementById('wsNameInput');if(!input)return;
     const form=document.getElementById('pmxCreateManual');
-    form.innerHTML=manualFields('pmxManual');
+    form.innerHTML=creationFields('pmxManual');form.hidden=false;
     createSearch=mountProjectCombobox({input,dropdown:document.getElementById('pmxCreateDropdown'),getProjects:()=>projects,
-      onChange:()=>{selected=null;document.getElementById('pmxSelectedProject').textContent=manual?'직접 추가할 현장 정보를 입력해주세요.':'';},
-      onSelect:p=>{
-        selected=p;manual=false;form.hidden=true;input.value=p.prjNm;
-        document.getElementById('pmxSelectedProject').textContent=`${p.bizFldNm} · 현장코드 ${p.prjCd} · ${p.cstrnStrtYmd || '착공일 없음'} ~ ${p.cstrnEndYmd || '준공일 없음'}`;
+      emptyMessage:'일치하는 PMX 현장이 없습니다. 아래 정보를 입력하고 ‘현장 추가’를 눌러주세요.',
+      onChange:()=>{
+        if(selected)form.querySelectorAll('input,select').forEach(el=>el.value='');
+        selected=null;document.getElementById('pmxSelectedProject').textContent='';
       },
-      onManual:()=>{selected=null;manual=true;form.hidden=false;document.getElementById('pmxSelectedProject').textContent='직접 추가할 현장 정보를 입력해주세요.';document.getElementById('pmxManualCategory').focus();}
+      onSelect:p=>{
+        selected=p;input.value=p.prjNm;
+        document.getElementById('pmxManualCategory').value=p.bizFldNm;
+        document.getElementById('pmxManualCode').value=p.prjCd;
+        document.getElementById('pmxManualStart').value=p.cstrnStrtYmd || '';
+        document.getElementById('pmxManualEnd').value=p.cstrnEndYmd || '';
+        document.getElementById('pmxSelectedProject').textContent='PMX 현장 정보를 불러왔습니다. 확인 후 현장을 추가해주세요.';
+      }
     });
+    form.addEventListener('input',()=>{selected=null;document.getElementById('pmxSelectedProject').textContent='입력한 정보로 새 현장을 추가합니다.';});
   }
   function resetSelection() {
-    selected=null;manual=false;createSearch?.hide();
+    selected=null;createSearch?.hide();
     document.getElementById('wsNameInput').value='';
     document.getElementById('pmxSelectedProject').textContent='';
-    const form=document.getElementById('pmxCreateManual');form.hidden=true;
+    const form=document.getElementById('pmxCreateManual');form.hidden=false;
     form.querySelectorAll('input,select').forEach(el=>el.value='');
   }
   async function linkProject(project, dialog) {
@@ -99,24 +107,19 @@ export function createPmxPanel({client,getWorkspace,getUser,canManage,onUpdate,t
     let dialog=document.getElementById('pmxPicker');
     if(!dialog) {
       dialog=document.createElement('dialog');dialog.id='pmxPicker';dialog.className='pmx-picker';
-      dialog.innerHTML='<h2>PMX 현장 연결</h2><label for="pmxProjectSearch">현장명·코드 검색</label><div class="pmx-combobox"><input class="form-input" id="pmxProjectSearch" placeholder="현장명 또는 현장코드를 입력하세요" autocomplete="off"><div class="pmx-dropdown" id="pmxLinkDropdown" hidden><div id="pmxLinkOptions" role="listbox" aria-label="연결할 현장 검색 결과"></div><button type="button" data-manual-add></button></div></div><p class="form-note" id="pmxPickerNote"></p><div id="pmxLinkManual" hidden>'+manualFields('pmxLinkManual',true)+'<button class="btn btn-primary" id="pmxManualLinkBtn" type="button">입력한 현장코드 연결</button></div><div class="pmx-actions"><button type="button" class="btn btn-secondary" id="pmxPickerSync">최신 목록 동기화</button><button type="button" class="btn btn-secondary" id="pmxPickerClose">닫기</button></div>';
+      dialog.innerHTML='<h2>PMX 현장 연결</h2><label for="pmxProjectSearch">현장명·코드 검색</label><div class="pmx-combobox"><input class="form-input" id="pmxProjectSearch" placeholder="현장명 또는 현장코드를 입력하세요" autocomplete="off"><div class="pmx-dropdown" id="pmxLinkDropdown" hidden><div id="pmxLinkOptions" role="listbox" aria-label="연결할 현장 검색 결과"></div></div></div><p class="form-note" id="pmxPickerNote"></p><div class="pmx-actions"><button type="button" class="btn btn-secondary" id="pmxPickerSync">최신 목록 동기화</button><button type="button" class="btn btn-secondary" id="pmxPickerClose">닫기</button></div>';
       document.body.append(dialog);
       const input=dialog.querySelector('#pmxProjectSearch');
       linkSearch=mountProjectCombobox({input,dropdown:dialog.querySelector('#pmxLinkDropdown'),getProjects:()=>projects,
         onSelect:project=>linkProject(project,dialog).catch(error=>toast(error.message,'error')),
-        onManual:()=>{document.getElementById('pmxLinkManual').hidden=false;document.getElementById('pmxLinkManualCategory').focus();}
+        emptyMessage:'검색 결과가 없습니다. PMX에서 최신 목록을 가져온 뒤 다시 검색해주세요.'
       });
-      dialog.querySelector('#pmxManualLinkBtn').onclick=()=>{
-        try {linkProject(readManual(input.value,'pmxLinkManual'),dialog).catch(error=>toast(error.message,'error'));}
-        catch(error){toast(error.message,'error');}
-      };
       dialog.querySelector('#pmxPickerClose').onclick=()=>dialog.close();
       dialog.querySelector('#pmxPickerSync').onclick=async()=>{
         const btn=dialog.querySelector('#pmxPickerSync');btn.disabled=true;
         try {await sync();refreshSearches();} finally {btn.disabled=false;}
       };
     }
-    document.getElementById('pmxLinkManual').hidden=true;
     document.getElementById('pmxProjectSearch').value='';
     refreshSearches();dialog.showModal();
   }
@@ -226,7 +229,6 @@ export function createPmxPanel({client,getWorkspace,getUser,canManage,onUpdate,t
   mountCreateSearch();
   return {render,openPicker,applyLatest,sync,resetSelection,checkIncoming,resetData,selectedFields:()=>{
     const name=document.getElementById('wsNameInput').value.trim();
-    if(manual)return fields(readManual(name,'pmxManual'));
-    return selected && selected.prjNm===name ? fields(selected) : null;
+    return selected && selected.prjNm===name ? fields(selected) : fields(readManual(name,'pmxManual'));
   }};
 }

@@ -2392,11 +2392,11 @@
 </label>
 <div class="pmx-combobox">
 <input class="form-input" id="wsNameInput" aria-label="현장명 검색" placeholder="현장명 또는 현장코드를 입력하세요" autocomplete="off"/>
-<div class="pmx-dropdown" id="pmxCreateDropdown" hidden><div id="pmxCreateOptions" role="listbox" aria-label="현장 검색 결과"></div><button type="button" data-manual-add></button></div>
+<div class="pmx-dropdown" id="pmxCreateDropdown" hidden><div id="pmxCreateOptions" role="listbox" aria-label="현장 검색 결과"></div></div>
 </div>
 <p class="form-note" id="pmxSelectedProject" aria-live="polite"></p>
-<div id="pmxCreateManual" hidden></div>
-<p class="form-note" id="pmxCreateCatalogNote">현재 제공된 목록은 주택 현장입니다. 목록에 없는 플랜트·인프라 현장은 직접 추가할 수 있습니다.</p>
+<div id="pmxCreateManual"></div>
+<p class="form-note" id="pmxCreateCatalogNote">PMX 목록에 없는 현장도 이 창에서 정보를 입력해 추가할 수 있습니다.</p>
 <button type="button" class="btn btn-outline btn-sm" onclick="syncPmxCatalog()">PMX 최신 목록 동기화</button>
 </div>
 </div>
@@ -2405,7 +2405,7 @@
             취소
           </button>
 <button class="btn btn-primary" onclick="createWorkspace()">
-            생성
+            현장 추가
           </button>
 </div>
 </div>
