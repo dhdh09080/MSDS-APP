@@ -30,6 +30,9 @@ async def main():
    if 'get_public_reupload_requests' in req.url:return await route.fulfill(json=[])
    return await route.fulfill(status=400,json=dict(message='unexpected request'))
   await page.route('**/*.supabase.co/**',api)
+  async def back_to_directory():
+   if page.viewport_size['width']<=768:await page.locator('#cwMenuToggle').click()
+   await page.locator('#cwDirectoryLink').click();await page.locator('#directoryContent:not([hidden])').wait_for()
   await page.goto(BASE+'/contractors.html?dtoken=directory-fixture-token');await page.locator('#directoryContent:not([hidden])').wait_for()
   assert await page.title()=='서울 신축현장 전체 협력사 리스트'
   assert await page.locator('#directoryList tr').count()==2
@@ -44,15 +47,15 @@ async def main():
    assert not await page.locator('#licensePanel').is_visible()
    assert name in await page.title()
    assert 'panel=upload' in page.url
-   await page.locator('#directoryBackLink').click();await page.locator('#directoryContent:not([hidden])').wait_for()
+   await back_to_directory()
   await page.get_by_role('link',name='새봄전기 사업자등록증 등록하기',exact=True).click()
   await page.locator('#portalView:not([hidden])').wait_for()
   assert await page.locator('#licensePanel').is_visible()
-  assert await page.locator('#licenseTab').get_attribute('aria-selected')=='true'
+  assert await page.locator('#licenseTab').get_attribute('aria-current')=='page'
   assert not await page.locator('#uploadPanel').is_visible()
   assert '새봄전기' in await page.title()
   await page.screenshot(path=str(OUT/'license-registration.png'),full_page=True)
-  await page.locator('#directoryBackLink').click();await page.locator('#directoryContent:not([hidden])').wait_for()
+  await back_to_directory()
 
   await page.select_option('#directoryFilter','license');assert await page.locator('#directoryList tr').count()==1
   assert '새봄전기' in await page.locator('#directoryList').inner_text()
@@ -68,8 +71,8 @@ async def main():
    await page.set_viewport_size(dict(width=width,height=844));assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
    if width==390:await page.screenshot(path=str(OUT/'mobile.png'),full_page=True)
   await page.get_by_role('link',name='안전건설',exact=True).click();await page.locator('#portalView:not([hidden])').wait_for()
-  assert await page.title()=='서울 신축현장 안전건설 관리페이지';assert await page.locator('#directoryBackLink').is_visible()
-  await page.locator('#directoryBackLink').click();await page.locator('#directoryContent:not([hidden])').wait_for()
+  assert await page.title()=='서울 신축현장 안전건설 관리페이지';assert await page.locator('#cwDirectoryLink').count()==1
+  await back_to_directory()
   await page.goto(BASE+'/contractors.html?dtoken=invalid');await page.locator('#directoryError:not([hidden])').wait_for();assert not await page.locator('#directoryContent').is_visible()
   assert not errors,errors
   await browser.close();print('PASS: directory statuses, license registration link, MSDS add links for submitted/missing companies, correct company/panel, search/filter, contact edit, self registration, duplicates, individual navigation/back, mobile 360/390/768, invalid token, no JS errors')

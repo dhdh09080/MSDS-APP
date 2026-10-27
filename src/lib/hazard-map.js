@@ -26,12 +26,13 @@ export function relativePoint(clientX, clientY, rect) {
 
 // Each async operation belongs to one workspace and selection. Late responses
 // cannot restore a previous site's photo, form, or markers after navigation.
-export function createHazardMap({ supabase, getWorkspace, getUser, getContractors = () => [], toast }) {
+export function createHazardMap({ supabase, getWorkspace, getUser, getContractors = () => [], toast, repository = null, contractorId = null }) {
   let root, workspaceId = null, revision = 0;
   let maps = [], markers = [], selectedId = null, imageUrl = '';
   let draft = null, movingId = null, busy = false, loading = false, errorText = '';
   let uploadTargetId = null, drag = null, suppressClickUntil = 0;
   const current = () => maps.find(map => map.id === selectedId);
+  const editable = marker => !repository || (marker.contractor_id === contractorId && isStorage(markerType(marker)));
   const context = () => ({ workspaceId, revision });
   const isCurrent = ctx => ctx.workspaceId === workspaceId && ctx.workspaceId === getWorkspace()?.id && ctx.revision === revision;
 
@@ -81,6 +82,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
           <p class="hm-form-error" role="alert"></p><button type="submit" class="btn btn-primary">저장하기</button>
         </form>
       </dialog>`;
+    if (repository) root.querySelector('#hmUpload').hidden = true;
     root.querySelector('#hmMapSelect').addEventListener('change', e => selectMap(e.target.value));
     root.querySelector('#hmRefresh').addEventListener('click', () => show());
     root.querySelector('#hmUpload').addEventListener('click', () => openUpload());
@@ -120,7 +122,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
   function renderPin(marker, i) {
     const type = markerType(marker);
     const label = isStorage(type) ? `${TYPES[type].short} ${i + 1}` : marker.storage_name;
-    return `<button type="button" class="hm-pin hm-type-${type} ${marker.id === movingId ? 'is-selected' : ''}" style="left:${marker.x * 100}%;top:${marker.y * 100}%" data-action="edit" data-id="${escape(marker.id)}" title="${escape(marker.storage_name)} · 드래그하여 이동" aria-label="${i + 1}번 ${TYPES[type].label} ${escape(marker.storage_name)} 정보 수정">${icon(type)}<span>${escape(label)}</span></button>`;
+    return `<button type="button" class="hm-pin hm-type-${type} ${marker.id === movingId ? 'is-selected' : ''}" style="left:${marker.x * 100}%;top:${marker.y * 100}%" data-action="${editable(marker) ? 'edit' : 'view'}" data-id="${escape(marker.id)}" title="${escape(marker.storage_name)}${editable(marker) ? ' · 드래그하여 이동' : ' · 공용 위치'}" aria-label="${i + 1}번 ${TYPES[type].label} ${escape(marker.storage_name)} ${editable(marker) ? '정보 수정' : '공용 위치'}">${icon(type)}<span>${escape(label)}</span></button>`;
   }
 
   function renderCard(marker, i) {
@@ -130,7 +132,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
       ${isStorage(type) ? `<dl><div><dt>협력사</dt><dd>${escape(contractor?.name || (marker.contractor_id ? '목록에서 확인할 수 없는 협력사' : '미선택'))}</dd></div><div><dt>비밀번호</dt><dd>${escape(marker.access_code || '미입력')}</dd></div></dl>
       ${items.length ? `<table class="hm-items-table"><caption class="hm-sr-only">물질별 수량</caption><thead><tr><th scope="col">물질</th><th scope="col">수량</th></tr></thead><tbody>${items.map(item => `<tr><td>${escape(item.name)}</td><td>${escape(item.quantity || '미입력')}</td></tr>`).join('')}</tbody></table>` : '<p class="hm-hint">등록된 물질 없음</p>'}` : ''}
       ${marker.content ? `<p class="hm-content">${escape(marker.content)}</p>` : ''}
-      <div class="hm-actions"><button type="button" class="btn btn-outline btn-sm" data-action="edit" data-id="${escape(marker.id)}">정보 수정</button><button type="button" class="btn btn-outline btn-sm" data-action="move" data-id="${escape(marker.id)}">위치 이동</button><button type="button" class="btn btn-outline btn-sm" data-action="delete" data-id="${escape(marker.id)}">삭제</button></div></article>`;
+      ${editable(marker) ? `<div class="hm-actions"><button type="button" class="btn btn-outline btn-sm" data-action="edit" data-id="${escape(marker.id)}">정보 수정</button><button type="button" class="btn btn-outline btn-sm" data-action="move" data-id="${escape(marker.id)}">위치 이동</button><button type="button" class="btn btn-outline btn-sm" data-action="delete" data-id="${escape(marker.id)}">삭제</button></div>` : '<p class="hm-hint">현장 공용 위치</p>'}</article>`;
   }
 
   function render() {
@@ -146,7 +148,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     if (errorText) { body.innerHTML = '<div class="hm-empty"><p>위치도를 불러오지 못했습니다.</p><p>새로고침으로 다시 시도해 주세요.</p></div>'; return; }
     if (loading) { body.innerHTML = '<div class="hm-empty" aria-busy="true">사진과 저장소 정보를 불러오고 있습니다…</div>'; return; }
     if (!current()) {
-      body.innerHTML = '<div class="hm-empty"><span class="hm-empty-icon" aria-hidden="true">📍</span><h2>사진 위에 표시하는 현장 위치도</h2><p>전경 사진 업로드 → 위치 클릭 → 스티커 정보 입력</p><p>물질별 수량과 협력사, 관리사항을 한곳에서 확인하세요.</p><button type="button" class="btn btn-primary" data-action="upload">첫 전경 사진 업로드</button></div>';
+      body.innerHTML = repository ? '<div class="hm-empty"><h2>등록된 위치도가 없습니다</h2><p>현장 담당자가 전경 사진을 등록하면 우리 협력사의 저장소 위치를 표시할 수 있습니다.</p></div>' : '<div class="hm-empty"><span class="hm-empty-icon" aria-hidden="true">📍</span><h2>사진 위에 표시하는 현장 위치도</h2><p>전경 사진 업로드 → 위치 클릭 → 스티커 정보 입력</p><p>물질별 수량과 협력사, 관리사항을 한곳에서 확인하세요.</p><button type="button" class="btn btn-primary" data-action="upload">첫 전경 사진 업로드</button></div>';
       return;
     }
     body.innerHTML = `<div class="hm-layout">
@@ -160,6 +162,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
       <section class="hm-list" aria-labelledby="hmListTitle"><h2 id="hmListTitle">스티커 목록 <span>${markers.length}</span></h2>
         ${markers.length ? markers.map(renderCard).join('') : '<div class="hm-list-empty">아직 등록된 스티커가 없습니다.<br>사진에서 표시할 위치를 클릭해 주세요.</div>'}
       </section></div>`;
+    if (repository) root.querySelectorAll('[data-action="replace-photo"],[data-action="delete-map"]').forEach(button => { button.hidden = true; });
     const photo = root.querySelector('#hmPhoto');
     if (photo) photo.addEventListener('error', () => {
       if (!photo.isConnected || root?.querySelector('#hmPhoto') !== photo) return;
@@ -183,7 +186,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     const ctx = context();
     loading = true; errorText = ''; movingId = null; render();
     try {
-      const { data, error } = await supabase.from('hazard_maps').select('*').eq('workspace_id', workspaceId).order('created_at', { ascending: false });
+      const { data, error } = await (repository ? repository.listMaps() : supabase.from('hazard_maps').select('*').eq('workspace_id', workspaceId).order('created_at', { ascending: false }));
       if (error) throw error;
       if (!isCurrent(ctx)) return;
       maps = data || [];
@@ -203,8 +206,8 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     try {
       const map = current();
       const [rows, signed] = await Promise.all([
-        supabase.from('hazard_markers').select('*').eq('workspace_id', workspaceId).eq('map_id', map.id).order('created_at').order('id'),
-        supabase.storage.from(BUCKET).createSignedUrl(map.storage_path, 3600),
+        repository ? repository.listMarkers(map.id) : supabase.from('hazard_markers').select('*').eq('workspace_id', workspaceId).eq('map_id', map.id).order('created_at').order('id'),
+        repository ? repository.image(map.id) : supabase.storage.from(BUCKET).createSignedUrl(map.storage_path, 3600),
       ]);
       if (rows.error) throw rows.error;
       if (signed.error) throw signed.error;
@@ -217,7 +220,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
   }
 
   function openEditor(marker) {
-    if (busy || loading || !current()) return;
+    if (busy || loading || !current() || (marker.id && !editable(marker))) return;
     draft = { ...marker };
     const form = root.querySelector('#hmMarkerForm');
     form.reset();
@@ -226,7 +229,11 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     const companies = getContractors();
     const unavailable = marker.contractor_id && !companies.some(row => row.id === marker.contractor_id);
     form.elements.contractor_id.innerHTML = '<option value="">협력사 선택</option>' + companies.map(row => `<option value="${escape(row.id)}">${escape(row.name)}</option>`).join('') + (unavailable ? `<option value="${escape(marker.contractor_id)}">목록에서 확인할 수 없는 협력사 (다시 선택해 주세요)</option>` : '');
-    form.elements.contractor_id.value = marker.contractor_id || '';
+    form.elements.contractor_id.value = repository ? contractorId : marker.contractor_id || '';
+    if (repository) {
+      form.elements.contractor_id.closest('label').hidden = true;
+      for (const option of form.elements.marker_type.options) option.hidden = !isStorage(option.value);
+    }
     root.querySelector('#hmContractorHint').textContent = companies.length ? '협력사 관리에 등록된 현장 협력사를 선택하세요.' : '등록된 협력사가 없습니다. 협력사 관리에서 등록한 뒤 선택할 수 있습니다.';
     root.querySelector('#hmItemRows').innerHTML = '';
     const items = markerItems(marker);
@@ -247,7 +254,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
   }
 
   function openUpload(replace = false) {
-    if (busy || loading) return;
+    if (repository || busy || loading) return;
     const form = root.querySelector('#hmUploadForm');
     form.reset(); form.querySelector('.hm-form-error').textContent = '';
     uploadTargetId = replace ? selectedId : null;
@@ -271,7 +278,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     const ctx = context();
     setBusy(true);
     try {
-      const { data, error } = await supabase.from('hazard_markers').update(point).eq('id', id).eq('workspace_id', workspaceId).eq('map_id', selectedId).select().single();
+      const { data, error } = await (repository ? repository.move(id, selectedId, point) : supabase.from('hazard_markers').update(point).eq('id', id).eq('workspace_id', workspaceId).eq('map_id', selectedId).select().single());
       if (error) throw error;
       if (!isCurrent(ctx)) return;
       markers = markers.map(marker => marker.id === id ? data : marker);
@@ -284,7 +291,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     const pin = e.target.closest('.hm-pin');
     if (!pin || busy || loading || drag || !e.isPrimary || e.button !== 0) return;
     const marker = markers.find(row => row.id === pin.dataset.id);
-    if (!marker || !root.querySelector('#hmPhoto')?.naturalWidth) return;
+    if (!marker || !editable(marker) || !root.querySelector('#hmPhoto')?.naturalWidth) return;
     e.preventDefault();
     suppressClickUntil = 0;
     pin.focus({ preventScroll: true });
@@ -338,7 +345,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
         case 'add': openEditor({ x: 0.5, y: 0.5 }); break;
         case 'replace-photo': openUpload(true); break;
         case 'edit': if (marker) openEditor(marker); break;
-        case 'move': movingId = marker?.id || null; render(); root.querySelector('#hmStage')?.focus(); break;
+        case 'move': if (marker && !editable(marker)) return; movingId = marker?.id || null; render(); root.querySelector('#hmStage')?.focus(); break;
         case 'cancel-move': movingId = null; render(); break;
         case 'delete': if (marker) deleteMarker(marker); break;
         case 'delete-map': deleteMap(); break;
@@ -364,10 +371,10 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     const id = draft.id;
     setBusy(true);
     try {
-      const query = id
+      const query = repository ? null : id
         ? supabase.from('hazard_markers').update(values).eq('id', id).eq('workspace_id', workspaceId).eq('map_id', selectedId)
         : supabase.from('hazard_markers').insert({ ...values, map_id: selectedId, workspace_id: workspaceId, x: draft.x, y: draft.y, created_by: getUser().id });
-      const { data, error } = await query.select().single();
+      const { data, error } = repository ? await repository.save(id, selectedId, { ...values, x: draft.x, y: draft.y }) : await query.select().single();
       if (error) throw error;
       if (!isCurrent(ctx)) return;
       if (id) markers = markers.map(marker => marker.id === id ? data : marker);
@@ -427,11 +434,11 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
   }
 
   async function deleteMarker(marker) {
-    if (!confirm(`“${marker.storage_name}” 스티커를 삭제하시겠습니까?`)) return;
+    if (!editable(marker) || !confirm(`“${marker.storage_name}” 스티커를 삭제하시겠습니까?`)) return;
     const ctx = context();
     setBusy(true);
     try {
-      const { data, error } = await supabase.from('hazard_markers').delete().eq('id', marker.id).eq('workspace_id', workspaceId).eq('map_id', selectedId).select('id').single();
+      const { data, error } = await (repository ? repository.remove(marker.id, selectedId) : supabase.from('hazard_markers').delete().eq('id', marker.id).eq('workspace_id', workspaceId).eq('map_id', selectedId).select('id').single());
       if (error || !data) throw error || new Error('이미 삭제되었거나 삭제 권한이 없습니다.');
       if (!isCurrent(ctx)) return;
       markers = markers.filter(row => row.id !== marker.id);
@@ -443,7 +450,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
 
   async function deleteMap() {
     const map = current();
-    if (!map || !confirm(`“${map.title}” 사진과 스티커 ${markers.length}개를 모두 삭제하시겠습니까? 사진만 바꾸려면 ‘사진 변경’을 이용하세요.`)) return;
+    if (repository || !map || !confirm(`“${map.title}” 사진과 스티커 ${markers.length}개를 모두 삭제하시겠습니까? 사진만 바꾸려면 ‘사진 변경’을 이용하세요.`)) return;
     const ctx = context();
     setBusy(true);
     try {

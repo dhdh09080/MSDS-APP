@@ -1,3 +1,4 @@
+import { createContractorWorkspace } from './contractor-workspace.js';
 import { createClient } from '@supabase/supabase-js';
 import './contractor-portal.css';
 import { createWarningRenderer } from './lib/warning-print.js';
@@ -22,6 +23,7 @@ let publicLinkData = null,
 let currentUploadToken = '';
 
 let portalRecords = [];
+const workspace = createContractorWorkspace({supabase,getContext:()=>({workspace:wsData,contractor:contractorData,token:currentUploadToken}),navigate:panel=>window.switchPortalPanel(panel),toast:(...args)=>toast(...args)});
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function portalRequest(contractorId = null) {
   const { data, error } = await supabase.rpc('get_contractor_portal', {
@@ -73,30 +75,23 @@ async function proceedToUploadView(data) {
     document.querySelectorAll('[data-msds]').forEach(el => el.hidden = !allowMsds);
     document.getElementById('licenseTab').hidden = !allowLicense;
     renderWorkTypes(); renderLicenseCard(); renderPortalRecords();
+    workspace.mount({allowMsds,allowLicense});
     const requestedPanel = new URLSearchParams(location.search).get('panel');
     const canOpenRequestedPanel = (requestedPanel === 'license' && allowLicense)
-      || (['records', 'upload', 'warnings'].includes(requestedPanel) && allowMsds);
-    window.switchPortalPanel(canOpenRequestedPanel ? requestedPanel : allowMsds ? 'records' : 'license');
+      || (['records', 'upload', 'warnings', 'hazard'].includes(requestedPanel) && allowMsds)
+      || ['dashboard','contacts','workers','worker-changes'].includes(requestedPanel);
+    window.switchPortalPanel(canOpenRequestedPanel ? requestedPanel : 'dashboard');
     if (allowMsds) loadReuploadRequests();
   } catch (err) { showError(err.message); }
   finally { document.getElementById('loadingView').style.display = 'none'; }
 }
 window.switchPortalPanel = function (panel) {
+  if (!['dashboard','contacts','records','upload','warnings','license','hazard','workers','worker-changes'].includes(panel)) panel = 'dashboard';
+  if (publicLinkData && ((['records','upload','warnings','hazard'].includes(panel) && !publicLinkData.allow_msds) || (panel === 'license' && !publicLinkData.allow_license))) panel = 'dashboard';
   document.querySelectorAll('[data-portal-panel]').forEach(el => el.hidden = el.dataset.portalPanel !== panel);
-  document.querySelectorAll('[data-portal-tab]').forEach(el => {
-    const active = el.dataset.portalTab === panel;
-    el.setAttribute('aria-selected', String(active));
-    el.tabIndex = active ? 0 : -1;
-  });
+  workspace.activate(panel);
   if (panel === 'warnings') renderPortalRecords();
 };
-document.getElementById('portalTabs').addEventListener('keydown', event => {
-  if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
-  const tabs = [...document.querySelectorAll('[data-portal-tab]')].filter(el => !el.hidden);
-  let i = tabs.indexOf(document.activeElement);
-  i = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (i + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-  event.preventDefault(); tabs[i].click(); tabs[i].focus();
-});
 async function refreshPortalRecords() {
   try {
     const data = await portalRequest(contractorData.id);
