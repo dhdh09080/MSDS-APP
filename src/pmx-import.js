@@ -5,6 +5,9 @@ import './gs-design.css';
 const fragment = location.hash;
 history.replaceState(null, '', location.pathname);
 try {
+  window.opener = null;
+  window.name = '';
+  if (window.opener !== null) throw new Error('새 탭에서 보건관리 사이트를 열고 다시 가져와주세요.');
   if (!fragment.startsWith('#snapshot=')) throw new Error('전달된 PMX 정보가 없습니다.');
   const snapshot = parsePmxSnapshot(decodeURIComponent(fragment.slice('#snapshot='.length)));
   // Only inert, validated project data survives; no PMX WindowProxy or auth state.
