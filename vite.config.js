@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => {
           main: resolve(__dirname, 'index.html'),
           upload: resolve(__dirname, 'upload.html'),
           contractors: resolve(__dirname, 'contractors.html'),
+          pmxImport: resolve(__dirname, 'pmx-import.html'),
         }
       }
     },

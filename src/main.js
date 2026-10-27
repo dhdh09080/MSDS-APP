@@ -1,3 +1,4 @@
+import { createPmxPanel } from './lib/pmx-panel.js';
 import { mountBinderWorkbench } from './lib/binder-workbench.js';
 import { loadPosterFont } from './lib/weather-poster-fonts.js';
 import { createHazardMap } from './lib/hazard-map.js';
@@ -96,6 +97,22 @@ let announcements = [],
   announcementCurrentId = null;
 let announcementsLoadedAt = 0,
   announcementsWorkspaceId = null;
+
+const pmxPanel = createPmxPanel({client:supabase,getWorkspace:()=>currentWS,getUser:()=>user,canManage:()=>canManageTeam(),toast,onUpdate:(data)=>{
+  Object.assign(currentWS,data);
+  const cached=workspaces.find(w=>w.id===data.id);if(cached)Object.assign(cached,data);
+  document.getElementById('sidebarWSName').textContent=data.name;
+  document.getElementById('homeTitle').textContent=data.name;
+  document.getElementById('wsNameEdit').value=data.name;
+}});
+window.openPmxPicker = () => pmxPanel.openPicker();
+window.syncPmxCatalog = () => pmxPanel.sync();
+window.openCreateWorkspace = () => {
+  pmxPanel.resetSelection();openModal('createWSModal');
+  requestAnimationFrame(()=>document.getElementById('wsNameInput').focus());
+};
+window.refreshWorkspaceList = () => loadWorkspaces();
+window.refreshWorkspaceTeam = () => loadMembers();
 
 const hazardMap = createHazardMap({ supabase, getWorkspace: () => currentWS, getUser: () => user, getContractors: () => contractors, toast });
 
@@ -208,7 +225,8 @@ function showDevFeaturePreview(page) {
     latitude: 37.5663,
     longitude: 127.0541,
   };
-  profile = { name: '현장 관리자' };
+  if (page === 'pmx') Object.assign(currentWS,{owner_id:user.id,workspace_members:[{role:'admin'}],pmx_prj_cd:'000012',pmx_category:'주택',pmx_start_date:'2024-07-01',pmx_end_date:'2027-10-01',pmx_progress:60.5});
+  profile = { name: '현장 담당자' };
   contractors = [
     { id: 'con-1', name: '대한건설' },
     { id: 'con-2', name: '한빛전기' },
@@ -840,6 +858,7 @@ window.handlePasswordUpdate = async function () {
 };
 
 window.handleLogout = async function () {
+  pmxPanel.resetData();
   await supabase.auth.signOut();
   user = null;
   profile = null;
@@ -985,6 +1004,7 @@ async function showWorkspaces(autoEnter = false) {
       (workspaces.length === 1 ? workspaces[0] : null);
     if (target) await enterWorkspace(target.id);
   }
+  pmxPanel.checkIncoming();
 }
 
 async function loadWorkspaces() {
@@ -1037,7 +1057,7 @@ function renderWorkspaceList() {
       <div class="ws-card-icon">🏗️</div>
       <div class="ws-card-info">
         <div class="ws-card-name">${escapeHtml(ws.name)}</div>
-        <div class="ws-card-meta">코드: ${escapeHtml(ws.code)} · ${isOwner ? '관리자' : role === 'admin' ? '관리자' : '멤버'}${unavailable ? ` · ${ADMIN_STATUS_LABEL[ws.status]}` : ''}</div>
+        <div class="ws-card-meta">현장코드: ${escapeHtml(ws.pmx_prj_cd || '미연결')} · ${isOwner || role === 'admin' ? '담당자' : '일반 직원'}${unavailable ? ` · ${ADMIN_STATUS_LABEL[ws.status]}` : ''}</div>
       </div>
       <div class="ws-card-badge">${unavailable ? '접근 중지' : '입장 →'}</div>
     </button>`;
@@ -1051,10 +1071,13 @@ window.createWorkspace = async function () {
     toast('현장명을 입력하세요', 'error');
     return;
   }
+  let projectFields;
+  try {projectFields = pmxPanel.selectedFields();} catch(error) {return toast(error.message, 'error');}
+  if (!projectFields) return toast('검색 결과를 선택하거나 ‘현장 직접 추가’를 눌러주세요.', 'error');
   const code = generateCode();
   const { data: ws, error } = await supabase
     .from('workspaces')
-    .insert({ name, code, owner_id: user.id })
+    .insert({ name, code, owner_id: user.id, ...projectFields })
     .select()
     .single();
   if (error) {
@@ -1065,7 +1088,7 @@ window.createWorkspace = async function () {
     .from('workspace_members')
     .insert({ workspace_id: ws.id, user_id: user.id, role: 'admin' });
   closeModal('createWSModal');
-  document.getElementById('wsNameInput').value = '';
+  pmxPanel.resetSelection();
   await loadWorkspaces();
   toast(name + ' 현장이 추가됐습니다', 'success');
 };
@@ -1157,6 +1180,7 @@ window.enterAdminConsole = async function () {
 
 window.goWorkspaces = function () {
   hazardMap.reset();
+  currentWS = null;
   adminStandalone = false;
   document.body.classList.remove('admin-standalone');
   document.getElementById('appScreen').style.display = 'none';
@@ -3238,8 +3262,8 @@ async function teamRpc(name, args) {
 }
 
 function canManageTeam() {
-  return currentWS?.owner_id === user?.id ||
-    members.some((m) => m.user_id === user?.id && m.role === 'admin');
+  return Boolean(user && currentWS) && (currentWS.owner_id === user.id || currentWS.workspace_members?.[0]?.role === 'admin' ||
+    members.some((m) => m.user_id === user?.id && m.role === 'admin'));
 }
 
 async function loadMembers() {
@@ -3253,6 +3277,7 @@ async function loadMembers() {
     members = team || [];
     pendingInvites = links || [];
     renderMemberList();
+    await loadJoinRequests();
   } catch (error) {
     if (currentWS?.id !== workspaceId) return;
     document.getElementById('memberList').textContent = '팀원 정보를 불러오지 못했습니다. ' + error.message;
@@ -3265,13 +3290,15 @@ function renderMemberList() {
   if (!el) return;
   const canManage = canManageTeam();
   document.getElementById('createTeamInviteBtn').hidden = !canManage;
+  pmxPanel.render();
   const memberHtml = members.map((m) => {
     const email = m.user?.email || '이메일 없음';
     const name = m.user?.raw_user_meta_data?.name || email.split('@')[0];
     const isMe = m.user_id === user.id, isOwner = currentWS.owner_id === m.user_id;
     return `<div class="member-item"><div class="member-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</div>
       <div class="member-info"><div class="member-name">${escapeHtml(name)}${isMe ? ' (나)' : ''}</div><div class="member-email">${escapeHtml(email)}</div></div>
-      <span class="member-role ${m.role === 'admin' ? 'admin' : 'member'}">${isOwner ? '소유자' : m.role === 'admin' ? '관리자' : '멤버'}</span>
+      <span class="member-role ${m.role === 'admin' ? 'admin' : 'member'}">${isOwner || m.role === 'admin' ? '담당자' : '일반 직원'}</span>
+      ${!isMe && currentWS.owner_id === user.id ? `<button class="btn btn-outline btn-sm" onclick="transferWorkspaceManager('${m.user_id}')">담당자 이전</button>` : ''}
       ${!isMe && !isOwner && canManage ? `<button class="btn btn-danger btn-sm" onclick="removeMember('${m.id}')">제거</button>` : ''}</div>`;
   }).join('');
   const inviteHtml = pendingInvites.map((inv) => {
@@ -3279,7 +3306,7 @@ function renderMemberList() {
     const status = inv.revoked_at ? '취소됨' : inv.accepted_at ? '사용 완료' : active ? '참여 대기' : '만료됨';
     const expiry = new Date(inv.expires_at).toLocaleDateString('ko-KR');
     return `<div class="member-item"><div class="member-avatar">↗</div><div class="member-info">
-      <div class="member-name">${inv.role === 'admin' ? '관리자' : '멤버'} 초대 링크 · ${status}</div>
+      <div class="member-name">일반 직원 가입 신청 링크 · ${status}</div>
       <div class="member-email">${expiry}까지 · 1명 참여 가능</div></div>
       ${canManage && active ? `<button class="btn btn-danger btn-sm" onclick="cancelInvite('${inv.id}')">링크 취소</button>` : ''}</div>`;
   }).join('');
@@ -3287,7 +3314,7 @@ function renderMemberList() {
 }
 
 window.openTeamInvite = function () {
-  if (!canManageTeam()) return toast('현장 관리자만 초대 링크를 만들 수 있습니다.', 'error');
+  if (!canManageTeam()) return toast('담당자만 초대 링크를 만들 수 있습니다.', 'error');
   createdTeamInvite = null;
   document.getElementById('teamInviteResult').hidden = true;
   document.getElementById('teamInviteUrl').value = '';
@@ -3297,7 +3324,7 @@ window.openTeamInvite = function () {
 };
 
 window.handleInvite = async function () {
-  if (!canManageTeam()) return toast('현장 관리자만 초대 링크를 만들 수 있습니다.', 'error');
+  if (!canManageTeam()) return toast('담당자만 초대 링크를 만들 수 있습니다.', 'error');
   const btn = document.getElementById('inviteBtn'), msg = document.getElementById('inviteMsg');
   const workspaceId = currentWS.id;
   btn.disabled = true; msg.textContent = ''; btn.textContent = '생성 중...';
@@ -3356,7 +3383,7 @@ function renderTeamInviteNotice() {
 function ensureTeamInviteModal() {
   if (document.getElementById('acceptTeamInviteModal')) return;
   const modal = document.createElement('div'); modal.id = 'acceptTeamInviteModal'; modal.className = 'modal-backdrop';
-  modal.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="acceptTeamInviteTitle" style="max-width:440px"><div class="modal-header"><div class="modal-title" id="acceptTeamInviteTitle">현장 초대 확인</div><button class="modal-close" onclick="closeModal('acceptTeamInviteModal')" aria-label="닫기">✕</button></div><div class="modal-body"><div id="teamInviteDetails"></div><div class="auth-msg" id="teamInviteAcceptMsg" role="status"></div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="dismissTeamInvite()">참여하지 않기</button><button class="btn btn-primary" id="acceptTeamInviteBtn" onclick="acceptTeamInvite()" disabled>이 현장에 참여</button></div></div>`;
+  modal.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="acceptTeamInviteTitle" style="max-width:440px"><div class="modal-header"><div class="modal-title" id="acceptTeamInviteTitle">현장 초대 확인</div><button class="modal-close" onclick="closeModal('acceptTeamInviteModal')" aria-label="닫기">✕</button></div><div class="modal-body"><div id="teamInviteDetails"></div><div class="auth-msg" id="teamInviteAcceptMsg" role="status"></div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="dismissTeamInvite()">참여하지 않기</button><button class="btn btn-primary" id="acceptTeamInviteBtn" onclick="acceptTeamInvite()" disabled>가입 신청</button></div></div>`;
   document.body.append(modal);
 }
 
@@ -3370,7 +3397,7 @@ window.reviewTeamInvite = async function () {
   try {
     const preview = await teamRpc('preview_workspace_invite_link', { p_token: requestedToken });
     if (pendingTeamInvite !== requestedToken) return;
-    details.innerHTML = `<h3>${escapeHtml(preview.workspaceName)}</h3><p>참여 권한: <b>${preview.role === 'admin' ? '현장 관리자' : '멤버'}</b></p><p class="form-note">${escapeHtml(user.email)} 계정으로 참여합니다. 현장과 권한을 확인한 뒤 참여해주세요.</p>`;
+    details.innerHTML = `<h3>${escapeHtml(preview.workspaceName)}</h3><p>참여 권한: <b>일반 직원 · 담당자 승인 필요</b></p><p class="form-note">${escapeHtml(user.email)} 계정으로 가입을 신청합니다. 담당자가 승인한 뒤 현장에 참여할 수 있습니다.</p>`;
     btn.disabled = false;
   } catch (error) { if (pendingTeamInvite === requestedToken) details.textContent = error.message; }
 };
@@ -3389,15 +3416,43 @@ window.acceptTeamInvite = async function () {
     const result = await teamRpc('accept_workspace_invite_link', { p_token: pendingTeamInvite });
     window.dismissTeamInvite();
     await loadWorkspaces();
-    toast(result.alreadyMember ? '이미 참여 중인 현장입니다.' : '현장에 참여했습니다.', 'success');
-    await enterWorkspace(result.workspaceId);
+    toast(result.alreadyMember ? '이미 참여 중인 현장입니다.' : '가입 신청을 보냈습니다. 담당자 승인 후 현장 목록을 새로고침해주세요.', 'success');
+    if (!result.pendingApproval) await enterWorkspace(result.workspaceId);
   } catch (error) { msg.className = 'auth-msg error'; msg.textContent = error.message; }
-  finally { btn.disabled = false; btn.textContent = '이 현장에 참여'; }
+  finally { btn.disabled = false; btn.textContent = '가입 신청'; }
+};
+
+async function loadJoinRequests() {
+  const target=document.getElementById('joinRequestList');
+  if(!target)return;
+  target.innerHTML='';
+  if(!canManageTeam())return;
+  const id=currentWS.id;
+  const {data,error}=await supabase.rpc('list_workspace_join_requests',{p_workspace:id});
+  if(currentWS?.id!==id)return;
+  if(error){target.textContent='가입 신청을 불러오지 못했습니다: '+error.message;return;}
+  target.innerHTML='<h3>가입 승인 대기</h3>'+(data?.length ? data.map(r=>`<div class="member-item"><div class="member-info">${escapeHtml(r.email)}</div><button class="btn btn-primary btn-sm" onclick="reviewWorkspaceJoin('${r.id}',true)">승인</button><button class="btn btn-secondary btn-sm" onclick="reviewWorkspaceJoin('${r.id}',false)">거절</button></div>`).join('') : '<p class="form-note">대기 중인 가입 신청이 없습니다.</p>');
+}
+window.reviewWorkspaceJoin=async(id,approve)=>{
+  if(!canManageTeam())return;
+  try{await teamRpc('review_workspace_join',{p_id:id,p_approve:approve});await loadMembers();toast(approve?'가입을 승인했습니다.':'가입을 거절했습니다.');}
+  catch(e){toast(e.message,'error');}
+};
+window.transferWorkspaceManager=async(nextUser)=>{
+  if(currentWS?.owner_id!==user?.id)return;
+  if(!confirm('이 직원에게 담당자 권한을 이전하시겠습니까? 이전 후 내 권한은 일반 직원으로 변경됩니다.'))return;
+  const id=currentWS.id;
+  try {
+    await teamRpc('transfer_workspace_manager',{p_workspace:id,p_user:nextUser});
+    await loadWorkspaces();await enterWorkspace(id);toast('담당자를 이전했습니다.','success');
+  } catch(e){toast(e.message,'error');}
 };
 
 window.removeMember = async function (memberId) {
+  if (!canManageTeam()) return toast('담당자 권한이 필요합니다.', 'error');
   if (!confirm('팀원을 제거하시겠습니까?')) return;
-  await supabase.from('workspace_members').delete().eq('id', memberId);
+  const {error} = await supabase.from('workspace_members').delete().eq('id', memberId);
+  if(error)return toast(error.message,'error');
   await loadMembers();
   toast('제거됐습니다');
 };
@@ -11200,6 +11255,8 @@ function gsWeatherLabel(code) {
   return '맑음';
 }
 function renderGsHome() {
+  pmxPanel.render();
+  pmxPanel.applyLatest();
   const name =
     profile?.name ||
     user?.user_metadata?.name ||

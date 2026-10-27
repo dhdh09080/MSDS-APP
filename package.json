@@ -23,6 +23,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.11",
     "vite": "^5.4.0"
   }
 }

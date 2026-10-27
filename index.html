@@ -128,7 +128,7 @@
 <div class="ws-greeting-sub">
             관리할 현장을 선택하거나 새 현장을 추가하세요.
           </div>
-<div class="ws-section-title">내 현장 목록</div>
+<div class="ws-section-title">내 현장 목록 <button class="btn btn-outline btn-sm" type="button" onclick="refreshWorkspaceList()">승인 결과 새로고침</button></div>
 <div class="ws-list" id="wsList">
 <div style="text-align: center; padding: 40px; color: var(--text3)">
 <div class="spinner" style="margin: 0 auto 12px"></div>
@@ -136,7 +136,7 @@
             </div>
 </div>
 <div style="height: 16px"></div>
-<button class="ws-add-btn" onclick="openModal('createWSModal')" type="button">
+<button class="ws-add-btn" onclick="openCreateWorkspace()" type="button">
             + 새 현장 추가하기
           </button>
 </div>
@@ -163,6 +163,7 @@
 <span class="nav-icon">🏠</span>
               홈
             </button>
+<button class="nav-item" onclick="showPage('settings');document.getElementById('joinRequestList').scrollIntoView({behavior:'smooth'})" type="button"><span class="nav-icon">👥</span>팀원 관리</button>
 <button class="nav-item" id="nav-announcements" onclick="showPage('announcements')" type="button">
 <span class="nav-icon">📢</span>
               공지사항
@@ -293,6 +294,7 @@
 <div id="gsSeasonChecks"></div>
 </section>
 </div>
+<section class="card" id="pmxDashboard" aria-label="현장 공정 및 PMX 동기화"></section>
 <section class="gs-shortcuts">
 <button onclick="showPage('health')">
 <span class="gs-shortcut-icon">＋</span>
@@ -2018,6 +2020,8 @@
 <span class="card-title-icon">👥</span>
                   팀원 관리
                 </div>
+<button type="button" class="btn btn-outline btn-sm" onclick="refreshWorkspaceTeam()">가입 신청 새로고침</button>
+<div id="joinRequestList" aria-live="polite"></div>
 <div id="memberList" style="margin-bottom: 16px">
 <div style="color: var(--text3); font-size: 13px">
                     로딩 중...
@@ -2532,7 +2536,14 @@
               현장명
               <span class="required">*</span>
 </label>
-<input class="form-input" id="wsNameInput" placeholder="예) 성동자이리버뷰 신축공사"/>
+<div class="pmx-combobox">
+<input class="form-input" id="wsNameInput" aria-label="현장명 검색" placeholder="현장명 또는 현장코드를 입력하세요" autocomplete="off"/>
+<div class="pmx-dropdown" id="pmxCreateDropdown" hidden><div id="pmxCreateOptions" role="listbox" aria-label="현장 검색 결과"></div><button type="button" data-manual-add></button></div>
+</div>
+<p class="form-note" id="pmxSelectedProject" aria-live="polite"></p>
+<div id="pmxCreateManual" hidden></div>
+<p class="form-note" id="pmxCreateCatalogNote">현재 제공된 목록은 주택 현장입니다. 목록에 없는 플랜트·인프라 현장은 직접 추가할 수 있습니다.</p>
+<button type="button" class="btn btn-outline btn-sm" onclick="syncPmxCatalog()">PMX 최신 목록 동기화</button>
 </div>
 </div>
 <div class="modal-footer">
@@ -3444,21 +3455,20 @@
 <div class="modal-body">
 <div class="form-note" style="margin-bottom: 14px">
             링크를 복사해 초대할 팀원에게 직접 전달하세요. 상대방이 로그인하거나
-            회원가입한 뒤 참여를 확인하면 이 현장에 합류합니다.
+            회원가입한 뒤 가입을 신청하고, 담당자의 승인을 받으면 현장에 합류합니다.
             링크는 7일간 유효하며 한 명만 사용할 수 있습니다.
           </div>
 <div class="form-field">
 <label class="form-label">권한</label>
 <select class="form-input" id="inviteRole">
-<option value="member">멤버 — 조회 및 등록</option>
-<option value="admin">관리자 — 모든 권한</option>
+<option value="member">일반 직원 — 담당자 승인 후 참여</option>
 </select>
 </div>
 <div class="team-invite-result" id="teamInviteResult" hidden>
 <label class="form-label" for="teamInviteUrl">생성된 초대 링크</label>
 <input class="form-input" id="teamInviteUrl" readonly type="text"/>
 <button class="btn btn-secondary btn-sm" onclick="copyTeamInvite()" type="button">링크 복사</button>
-<p class="form-note">링크를 가진 사람이 표시된 권한으로 참여할 수 있습니다. 초대할 팀원에게만 전달하세요. 이 창을 떠나면 링크 원문은 다시 표시되지 않습니다.</p>
+<p class="form-note">링크를 가진 사람이 가입을 신청할 수 있으며 담당자 승인 후 참여합니다. 초대할 팀원에게만 전달하세요. 이 창을 떠나면 링크 원문은 다시 표시되지 않습니다.</p>
 </div>
 <div class="auth-msg" id="inviteMsg" style="margin-top: 10px"></div>
 </div>

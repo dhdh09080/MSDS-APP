@@ -1,0 +1,570 @@
+[
+  {
+    "bizFldNm": "주택",
+    "prjCd": "180080",
+    "prjNm": "프레스티어자이(경기)",
+    "cstrnStrtYmd": "20240701",
+    "cstrnEndYmd": "20271001",
+    "actlTProgrt": 60.5
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "151480",
+    "prjNm": "평촌자이퍼스니티(경기)",
+    "cstrnStrtYmd": "20240829",
+    "cstrnEndYmd": "20271231",
+    "actlTProgrt": 41.6
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "210250",
+    "prjNm": "동작센트럴자이(서울)",
+    "cstrnStrtYmd": "20240401",
+    "cstrnEndYmd": "20280131",
+    "actlTProgrt": 65.5
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "140310",
+    "prjNm": "마포자이힐스테이트라첼스(서울)",
+    "cstrnStrtYmd": "20231101",
+    "cstrnEndYmd": "20270331",
+    "actlTProgrt": 87.7
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "070120",
+    "prjNm": "성동자이리버뷰(서울)",
+    "cstrnStrtYmd": "20240101",
+    "cstrnEndYmd": "20270228",
+    "actlTProgrt": 89.7
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "240440",
+    "prjNm": "아산탕정자이센트럴시티(충남)",
+    "cstrnStrtYmd": "20250118",
+    "cstrnEndYmd": "20280229",
+    "actlTProgrt": 54.0
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "151482",
+    "prjNm": "평촌자이퍼스니티2단지(경기)",
+    "cstrnStrtYmd": "20240829",
+    "cstrnEndYmd": "20271231",
+    "actlTProgrt": 40.2
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "160420",
+    "prjNm": "철산역자이(경기)",
+    "cstrnStrtYmd": "20260101",
+    "cstrnEndYmd": "20290531",
+    "actlTProgrt": 17.0
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "210050",
+    "prjNm": "라프리체자이2단지(인천)",
+    "cstrnStrtYmd": "20210521",
+    "cstrnEndYmd": "20271231",
+    "actlTProgrt": 46.8
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "140570",
+    "prjNm": "라클라체자이드파인(서울)",
+    "cstrnStrtYmd": "20250630",
+    "cstrnEndYmd": "20281129",
+    "actlTProgrt": 18.9
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "240020",
+    "prjNm": "성성자이레이크파크(충남)",
+    "cstrnStrtYmd": "20241126",
+    "cstrnEndYmd": "20280225",
+    "actlTProgrt": 52.7
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "170320",
+    "prjNm": "상인센트럴자이(대구)",
+    "cstrnStrtYmd": "20241226",
+    "cstrnEndYmd": "20280425",
+    "actlTProgrt": 33.8
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "240070",
+    "prjNm": "송도자이풍경채그라노블5단지(인천)",
+    "cstrnStrtYmd": "20240601",
+    "cstrnEndYmd": "20280331",
+    "actlTProgrt": 49.3
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "250080",
+    "prjNm": "아산탕정자이메트로시티(충남)",
+    "cstrnStrtYmd": "20260201",
+    "cstrnEndYmd": "20290630",
+    "actlTProgrt": 10.0
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "210240",
+    "prjNm": "송도자이풍경채그라노블3단지(인천)",
+    "cstrnStrtYmd": "20240601",
+    "cstrnEndYmd": "20280331",
+    "actlTProgrt": 48.8
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "230700",
+    "prjNm": "영통자이센트럴파크(경기)",
+    "cstrnStrtYmd": "20240331",
+    "cstrnEndYmd": "20270228",
+    "actlTProgrt": 94.2
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "111730",
+    "prjNm": "광명자이힐스테이트SKVIEW(경기)",
+    "cstrnStrtYmd": "20230701",
+    "cstrnEndYmd": "20270630",
+    "actlTProgrt": 84.4
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "150750",
+    "prjNm": "청주센텀푸르지오자이(충북)",
+    "cstrnStrtYmd": "20250901",
+    "cstrnEndYmd": "20281231",
+    "actlTProgrt": 24.5
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "170430",
+    "prjNm": "문화자이SKVIEW(대전)",
+    "cstrnStrtYmd": "20240405",
+    "cstrnEndYmd": "20270831",
+    "actlTProgrt": 70.8
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "230660",
+    "prjNm": "이천자이더레브(경기)",
+    "cstrnStrtYmd": "20240501",
+    "cstrnEndYmd": "20270430",
+    "actlTProgrt": 82.3
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "220900",
+    "prjNm": "순천그랜드파크자이(전남)",
+    "cstrnStrtYmd": "20240708",
+    "cstrnEndYmd": "20270707",
+    "actlTProgrt": 65.5
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "200930",
+    "prjNm": "라프리체자이1단지(인천)",
+    "cstrnStrtYmd": "20210521",
+    "cstrnEndYmd": "20271031",
+    "actlTProgrt": 45.5
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "210880",
+    "prjNm": "검단아테라자이(인천)",
+    "cstrnStrtYmd": "20240604",
+    "cstrnEndYmd": "20270228",
+    "actlTProgrt": 88.0
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "221010",
+    "prjNm": "여주역자이헤리티지(경기)",
+    "cstrnStrtYmd": "20240507",
+    "cstrnEndYmd": "20270606",
+    "actlTProgrt": 79.2
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "210850",
+    "prjNm": "역삼센트럴자이(서울)",
+    "cstrnStrtYmd": "20250701",
+    "cstrnEndYmd": "20280831",
+    "actlTProgrt": 20.8
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "230590",
+    "prjNm": "영통역자이프라시엘(경기)",
+    "cstrnStrtYmd": "20240301",
+    "cstrnEndYmd": "20261231",
+    "actlTProgrt": 94.2
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "160422",
+    "prjNm": "철산역자이2단지(경기)",
+    "cstrnStrtYmd": "20260101",
+    "cstrnEndYmd": "20290531",
+    "actlTProgrt": 15.1
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "221070",
+    "prjNm": "공릉아파트건설공사(서울)",
+    "cstrnStrtYmd": "20220831",
+    "cstrnEndYmd": "20270331",
+    "actlTProgrt": 99.7
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "250180",
+    "prjNm": "북오산자이리버블시티(경기)",
+    "cstrnStrtYmd": "20260301",
+    "cstrnEndYmd": "20290331",
+    "actlTProgrt": 3.7
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "250230",
+    "prjNm": "수지자이에디시온(경기)",
+    "cstrnStrtYmd": "20260225",
+    "cstrnEndYmd": "20290224",
+    "actlTProgrt": 14.9
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "230640",
+    "prjNm": "도룡자이라피크(대전)",
+    "cstrnStrtYmd": "20251127",
+    "cstrnEndYmd": "20281226",
+    "actlTProgrt": 13.8
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "210950",
+    "prjNm": "달서자이제니크(대구)",
+    "cstrnStrtYmd": "20220602",
+    "cstrnEndYmd": "20270131",
+    "actlTProgrt": 92.7
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "171120",
+    "prjNm": "안양자이헤리티온(경기)",
+    "cstrnStrtYmd": "20251201",
+    "cstrnEndYmd": "20290930",
+    "actlTProgrt": 7.4
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "211030",
+    "prjNm": "위례A2-7블록아파트건설공사(경기)",
+    "cstrnStrtYmd": "20220831",
+    "cstrnEndYmd": "20261007",
+    "actlTProgrt": 99.0
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "150160",
+    "prjNm": "창원메가시티자이&위브(경남)",
+    "cstrnStrtYmd": "20250609",
+    "cstrnEndYmd": "20281231",
+    "actlTProgrt": 18.0
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "240360",
+    "prjNm": "양산자이파크팰리체(경남)",
+    "cstrnStrtYmd": "20250623",
+    "cstrnEndYmd": "20280722",
+    "actlTProgrt": 26.2
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "171000",
+    "prjNm": "백석시그니처자이(충남)",
+    "cstrnStrtYmd": "20260805",
+    "cstrnEndYmd": "20290930",
+    "actlTProgrt": 0.1
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "250840",
+    "prjNm": "북오산자이드포레(경기)",
+    "cstrnStrtYmd": "20260420",
+    "cstrnEndYmd": "20290719",
+    "actlTProgrt": 0.1
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "210520",
+    "prjNm": "송파가락프라자재건축사업(서울)",
+    "cstrnStrtYmd": "20260301",
+    "cstrnEndYmd": "20310131",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "211090",
+    "prjNm": "영주자이시그니처(경북)",
+    "cstrnStrtYmd": "20240101",
+    "cstrnEndYmd": "20261130",
+    "actlTProgrt": 98.8
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "201290",
+    "prjNm": "도안자이센텀리체2단지(대전)",
+    "cstrnStrtYmd": "20260610",
+    "cstrnEndYmd": "20291210",
+    "actlTProgrt": 0.2
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "092670",
+    "prjNm": "산곡역자이힐스테이트&하늘채(인천)",
+    "cstrnStrtYmd": "20260430",
+    "cstrnEndYmd": "20291130",
+    "actlTProgrt": 2.6
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "180100",
+    "prjNm": "중계본동주택재개발정비사업(서울)",
+    "cstrnStrtYmd": "20260820",
+    "cstrnEndYmd": "20300930",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "201300",
+    "prjNm": "도안자이센텀리체1단지(대전)",
+    "cstrnStrtYmd": "20260610",
+    "cstrnEndYmd": "20291010",
+    "actlTProgrt": 0.1
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "250660",
+    "prjNm": "창원자이더스카이(경남)",
+    "cstrnStrtYmd": "20260601",
+    "cstrnEndYmd": "20300430",
+    "actlTProgrt": 0.5
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "180890",
+    "prjNm": "청담건영아파트리모델링사업(서울)",
+    "cstrnStrtYmd": "20250925",
+    "cstrnEndYmd": "20290824",
+    "actlTProgrt": 18.1
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "240500",
+    "prjNm": "오산헤리티지자이1블록(경기)",
+    "cstrnStrtYmd": "20260828",
+    "cstrnEndYmd": "20290927",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "260250",
+    "prjNm": "오산헤리티지자이2블록(경기)",
+    "cstrnStrtYmd": "20260828",
+    "cstrnEndYmd": "20290927",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "220941",
+    "prjNm": "연제갤러리자이(부산)",
+    "cstrnStrtYmd": "20261001",
+    "cstrnEndYmd": "20300930",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "110220",
+    "prjNm": "구리역하이니티리버파크(경기)",
+    "cstrnStrtYmd": "20260325",
+    "cstrnEndYmd": "20291224",
+    "actlTProgrt": 0.9
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "110305",
+    "prjNm": "능곡2구역주택재개발정비사업사업비(경기)",
+    "cstrnStrtYmd": "20260701",
+    "cstrnEndYmd": "20290831",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "151570",
+    "prjNm": "구미원평2동주택재개발(경북)",
+    "cstrnStrtYmd": "20251201",
+    "cstrnEndYmd": "20300228",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "180340",
+    "prjNm": "방화5구역주택재건축정비사업(서울)",
+    "cstrnStrtYmd": "20260501",
+    "cstrnEndYmd": "20300831",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "180102",
+    "prjNm": "중계본동주택재개발정비사업1단지(서울)",
+    "cstrnStrtYmd": "20260601",
+    "cstrnEndYmd": "20300930",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "180104",
+    "prjNm": "중계본동주택재개발정비사업2단지(서울)",
+    "cstrnStrtYmd": "20260828",
+    "cstrnEndYmd": "20300930",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "190085",
+    "prjNm": "일원개포한신아파트재건축정비사업사업비(서울)",
+    "cstrnStrtYmd": "20260529",
+    "cstrnEndYmd": "20300630",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "260200",
+    "prjNm": "원주단구동2블록공동주택사업(강원)",
+    "cstrnStrtYmd": "20261001",
+    "cstrnEndYmd": "20291031",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "220860",
+    "prjNm": "아산탕정자이퍼스트시티(충남)",
+    "cstrnStrtYmd": "20250115",
+    "cstrnEndYmd": "20271231",
+    "actlTProgrt": 65.0
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "221020",
+    "prjNm": "가락상아1차아파트재건축사업(서울)",
+    "cstrnStrtYmd": "20260110",
+    "cstrnEndYmd": "20291231",
+    "actlTProgrt": 1.0
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "092080",
+    "prjNm": "메이플자이(서울)",
+    "cstrnStrtYmd": "20211028",
+    "cstrnEndYmd": "20260731",
+    "actlTProgrt": 100.0
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "180810",
+    "prjNm": "부산시민공원재정비촉진1구역사업(부산)",
+    "cstrnStrtYmd": "20241015",
+    "cstrnEndYmd": "20290815",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "190080",
+    "prjNm": "일원개포한신아파트재건축정비사업(서울)",
+    "cstrnStrtYmd": "20260228",
+    "cstrnEndYmd": "20300928",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "160930",
+    "prjNm": "수원영통2구역주택재건축(경기)",
+    "cstrnStrtYmd": "20240601",
+    "cstrnEndYmd": "20270531",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "180145",
+    "prjNm": "대전도마변동3구역주택재개발정비사업사업비(대전)",
+    "cstrnStrtYmd": "20250801",
+    "cstrnEndYmd": "20290228",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "170630",
+    "prjNm": "방배13구역단독주택재건축정비사업(서울)",
+    "cstrnStrtYmd": "20260930",
+    "cstrnEndYmd": "20301231",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "151575",
+    "prjNm": "구미원평2동주택재개발사업비(경북)",
+    "cstrnStrtYmd": "20151114",
+    "cstrnEndYmd": "20301031",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "150760",
+    "prjNm": "고현주공아파트주택재건축(경남)",
+    "cstrnStrtYmd": "20230701",
+    "cstrnEndYmd": "20301231",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "150260",
+    "prjNm": "산성역헤리스톤(경기)",
+    "cstrnStrtYmd": "20240527",
+    "cstrnEndYmd": "20271126",
+    "actlTProgrt": null
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "221040",
+    "prjNm": "복대자이더스카이(충북)",
+    "cstrnStrtYmd": "20230120",
+    "cstrnEndYmd": "20260727",
+    "actlTProgrt": 100.0
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "220150",
+    "prjNm": "이천자이더리체(경기)",
+    "cstrnStrtYmd": "20231101",
+    "cstrnEndYmd": "20260731",
+    "actlTProgrt": 100.0
+  },
+  {
+    "bizFldNm": "주택",
+    "prjCd": "171002",
+    "prjNm": "백석시그니처자이2공구",
+    "cstrnStrtYmd": "20260805",
+    "cstrnEndYmd": "20290930",
+    "actlTProgrt": null
+  }
+]
