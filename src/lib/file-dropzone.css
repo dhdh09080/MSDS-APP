@@ -1,0 +1,13 @@
+.upload-dropzone{position:relative;border:1.5px dashed var(--border,#ced5df);border-radius:9px;cursor:pointer;transition:background .15s,border-color .15s;max-width:100%}
+.upload-dropzone:hover,.upload-dragover{border-color:var(--primary,#7479c4)!important;background:var(--primary-light,#f1f3fa)!important}
+.upload-dropzone:focus-visible{outline:2px solid #7479c4;outline-offset:3px}
+.upload-dropzone--compact{flex-wrap:wrap;gap:4px 8px;white-space:normal!important;line-height:1.5;text-align:center}
+.upload-dropzone--compact::after{content:'클릭하여 선택 · 파일 드래그';display:block;font-size:10px;font-weight:400;line-height:1.5;opacity:.75;width:100%}
+.upload-dropzone--field{display:block;padding:20px;text-align:center;font-size:13px}
+.upload-dropzone--field strong{display:block;margin-bottom:6px}
+.upload-dropzone [data-upload-status]{display:block;margin-top:6px;font-size:12px;color:var(--text3,#7b7b85);overflow-wrap:anywhere}
+.license-missing-item.upload-dropzone{gap:12px;flex-wrap:wrap}
+.license-missing-item .upload-dropzone-hint{display:block;font-size:11px;font-weight:400;margin-top:4px;color:var(--text3,#7b7b85)}
+
+.upload-dropzone-hint{font-size:11px;color:var(--text3,#7b7b85)}
+#reuploadSection .upload-dropzone-hint{flex-basis:100%}

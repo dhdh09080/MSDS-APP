@@ -1,3 +1,4 @@
+import { installFileDropzones } from './lib/file-dropzone.js';
 import { mountBinderWorkbench } from './lib/binder-workbench.js';
 import { loadPosterFont } from './lib/weather-poster-fonts.js';
 import { createHazardMap } from './lib/hazard-map.js';
@@ -51,6 +52,8 @@ import {
 import { analyzeMeasurePdf } from './lib/measure-analysis.js';
 import { extractMeasurePages } from './lib/measure-pdf-text.js';
 import { parseLocalMeasureReport } from './lib/measure-local.js';
+
+installFileDropzones({onError: message => toast(message, 'error')});
 
 // ═══════════════════════════════════════════════
 // State
@@ -3022,6 +3025,7 @@ window.scrollToBusinessLicenses = function () {
 };
 
 window.uploadLicenseForContractor = function (id) {
+  if (document.getElementById('manualLicenseInput')?.disabled) return;
   let target = document.getElementById('manualLicenseContractor');
   if (!target) {
     target = document.createElement('input');
@@ -3623,7 +3627,7 @@ window.dropMsdsFiles = function (e) {
 window.handleMsdsFileSelect = function (e) {
   const ok = ['application/pdf', 'image/jpeg', 'image/png'];
   const files = [...e.target.files].filter((f) => ok.includes(f.type));
-  addMsdsFilesToQueue(files, null);
+  addMsdsFilesToQueue(files, null, files.some(file => file.webkitRelativePath));
   e.target.value = '';
 };
 
@@ -7649,7 +7653,7 @@ function renderBusinessLicenseStatus() {
   let html = '';
   const missingRows = missing.filter(c => matches(c.name));
   if (filter !== 'submitted' && missingRows.length) {
-    html += `<section style="margin-bottom:14px" aria-label="사업자등록증 미제출 협력사"><h3 style="font-size:13px;color:var(--danger);margin-bottom:8px">미제출 협력사</h3><div class="license-missing-list">${missingRows.map(c => `<div class="license-missing-item"><span>${escapeHtml(c.name)}</span><button class="btn btn-primary btn-sm" onclick="uploadLicenseForContractor('${c.id}')">등록증 업로드</button></div>`).join('')}</div></section>`;
+    html += `<section style="margin-bottom:14px" aria-label="사업자등록증 미제출 협력사"><h3 style="font-size:13px;color:var(--danger);margin-bottom:8px">미제출 협력사</h3><div class="license-missing-list">${missingRows.map(c => `<div class="license-missing-item upload-dropzone" data-upload-input="manualLicenseInput" data-upload-value-target="manualLicenseContractor" data-upload-value="${c.id}" role="button" tabindex="0" aria-label="${escapeHtml(c.name)} 사업자등록증 파일 선택 또는 드래그"><span>${escapeHtml(c.name)}<span class="upload-dropzone-hint">PDF · JPG · PNG · 클릭하여 선택하거나 파일을 놓아주세요</span></span><button class="btn btn-primary btn-sm" onclick="uploadLicenseForContractor('${c.id}')">등록증 업로드</button></div>`).join('')}</div></section>`;
   }
   const submittedRows = businessLicenses.filter(l => matches(l.contractor?.name || contractors.find(c => c.id === l.contractor_id)?.name));
   if (filter !== 'missing' && submittedRows.length) {
@@ -7678,7 +7682,11 @@ function renderLicenseAlert() {
 
 window.handleManualLicenseUpload = async function (e) {
   const file = e.target.files[0];
-  if (!file) return;
+  if (!file || e.target.disabled) return;
+  if (!/\.(pdf|jpe?g|png)$/i.test(file.name) || file.size > 20 * 1024 * 1024) {
+    e.target.value = '';
+    return toast('PDF, JPG, PNG 파일을 20MB 이하로 선택해주세요.', 'error');
+  }
   const conId = document.getElementById('manualLicenseContractor')?.value;
   if (!conId) {
     toast('업로드할 협력사를 먼저 선택하세요', 'error');
@@ -7686,37 +7694,42 @@ window.handleManualLicenseUpload = async function (e) {
     return;
   }
 
-  const ext = file.name.split('.').pop();
-  const path = `${currentWS.id}/${conId}_${Date.now()}.${ext}`;
-  const { error: upErr } = await supabase.storage
-    .from('business-licenses')
-    .upload(path, file, { contentType: file.type, upsert: true });
-  if (upErr) {
-    toast('업로드 실패: ' + upErr.message, 'error');
-    e.target.value = '';
-    return;
-  }
+  e.target.disabled = true;
+  try {
+    const ext = file.name.split('.').pop();
+    const path = `${currentWS.id}/${conId}_${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from('business-licenses')
+      .upload(path, file, { contentType: file.type, upsert: true });
+    if (upErr) {
+      toast('업로드 실패: ' + upErr.message, 'error');
+      e.target.value = '';
+      return;
+    }
 
-  const { error } = await supabase.from('business_licenses').upsert(
-    {
-      workspace_id: currentWS.id,
-      contractor_id: conId,
-      file_name: file.name,
-      file_path: path,
-      uploaded_by: 'manager',
-    },
-    { onConflict: 'contractor_id' },
-  );
-  if (error) {
-    await supabase.storage.from('business-licenses').remove([path]);
-    toast('저장 실패: ' + error.message, 'error');
-    e.target.value = '';
-    return;
-  }
+    const { error } = await supabase.from('business_licenses').upsert(
+      {
+        workspace_id: currentWS.id,
+        contractor_id: conId,
+        file_name: file.name,
+        file_path: path,
+        uploaded_by: 'manager',
+      },
+      { onConflict: 'contractor_id' },
+    );
+    if (error) {
+      await supabase.storage.from('business-licenses').remove([path]);
+      toast('저장 실패: ' + error.message, 'error');
+      e.target.value = '';
+      return;
+    }
 
-  e.target.value = '';
-  await loadBusinessLicenses();
-  toast('사업자등록증이 업로드됐습니다', 'success');
+    e.target.value = '';
+    await loadBusinessLicenses();
+    toast('사업자등록증이 업로드됐습니다', 'success');
+  } catch (error) {
+    toast('업로드 실패: ' + error.message, 'error');
+  } finally { e.target.disabled = false; e.target.value = ''; }
 };
 
 window.viewLicense = async function (id) {

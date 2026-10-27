@@ -658,13 +658,9 @@
               <b>선택한 공종:</b>
               <span id="selectedWorktypeLabel"></span>
             </div>
-            <div
+            <div data-upload-input="fileInput"
               id="uploadZone"
               class="upload-zone"
-              onclick="document.getElementById('fileInput').click()"
-              ondragover="onDragOver(event)"
-              ondrop="onDrop(event)"
-              ondragleave="onDragLeave(event)"
             >
               <div class="upload-icon">📂</div>
               <div class="upload-text">
@@ -785,14 +781,13 @@
             </div>
             <div id="licenseUploadZoneWrap">
               <div class="form-note" style="margin-bottom: 10px">
-                최초 1회만 제출하면 됩니다. 사업자등록증 사본(PDF 또는 사진)을
+                파일 선택 또는 드래그로 최초 1회 제출하면 됩니다. 사업자등록증 사본(PDF 또는 사진)을
                 올려주세요.
               </div>
-              <div
+              <div data-upload-input="licenseFileInput"
                 id="licenseUploadZone"
                 class="upload-zone"
                 style="padding: 24px 16px"
-                onclick="document.getElementById('licenseFileInput').click()"
               >
                 <input
                   type="file"

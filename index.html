@@ -678,7 +678,7 @@
                     (이전 업로드와 누적되지 않음).
                   </div>
 <input accept=".xlsx,.xls" id="placementExcelInput" onchange="handlePlacementExcel(event)" style="display: none" type="file"/>
-<button class="btn btn-primary" onclick="
+<button data-upload-input="placementExcelInput" class="upload-dropzone upload-dropzone--compact btn btn-primary" onclick="
                       document.getElementById('placementExcelInput').click()
                     ">
                     📤 엑셀 업로드
@@ -784,7 +784,7 @@
                     엑셀로 다운로드합니다.
                   </div>
 <input accept=".xlsx,.xls" id="sortingExcelInput" onchange="handleSortingExcel(event)" style="display: none" type="file"/>
-<button class="btn btn-primary" onclick="
+<button data-upload-input="sortingExcelInput" class="upload-dropzone upload-dropzone--compact btn btn-primary" onclick="
                       document.getElementById('sortingExcelInput').click()
                     ">
                     📤 엑셀 업로드
@@ -943,7 +943,7 @@
 </div>
 <div class="header-actions">
 <input class="filter-select" id="mpUploadMonth" style="padding: 8px 10px" title="업로드할 파일의 해당 월" type="month"/>
-<button class="btn btn-primary" onclick="document.getElementById('mpFileInput').click()">
+<button data-upload-input="mpFileInput" class="upload-dropzone upload-dropzone--compact btn btn-primary" onclick="document.getElementById('mpFileInput').click()">
                   📤 엑셀 업로드
                 </button>
 <input accept=".xlsx,.xls" id="mpFileInput" onchange="
@@ -1162,7 +1162,7 @@
 <button class="btn btn-outline btn-sm" id="vulExcelBtn" onclick="downloadVulSignSheet()" style="display: none">
                   📝 서명대지 엑셀
                 </button>
-<button class="btn btn-primary" onclick="document.getElementById('vulFileInput').click()">
+<button data-upload-input="vulFileInput" class="upload-dropzone upload-dropzone--compact btn btn-primary" onclick="document.getElementById('vulFileInput').click()">
                   📤 건강진단 목록 업로드
                 </button>
 <input accept=".xlsx,.xls" id="vulFileInput" onchange="
@@ -1217,7 +1217,7 @@
 <button class="btn btn-outline btn-sm" id="bpSheetBtn" onclick="downloadBpSheet()" style="display: none">
                   📝 측정 기록지 엑셀
                 </button>
-<button class="btn btn-primary" onclick="document.getElementById('bpFileInput').click()">
+<button data-upload-input="bpFileInput" class="upload-dropzone upload-dropzone--compact btn btn-primary" onclick="document.getElementById('bpFileInput').click()">
                   📤 건강진단 목록 업로드
                 </button>
 <input accept=".xlsx,.xls" id="bpFileInput" onchange="
@@ -1353,7 +1353,7 @@
                       "></span>
 </div>
 <div style="display: flex; gap: 6px">
-<button class="btn btn-outline btn-sm" onclick="document.getElementById('kgFileInput').click()">
+<button data-upload-input="kgFileInput" class="upload-dropzone upload-dropzone--compact btn btn-outline btn-sm" onclick="document.getElementById('kgFileInput').click()">
                       📤 목록 CSV 업로드
                     </button>
 <input accept=".csv,.xlsx,.xls" id="kgFileInput" onchange="
@@ -2454,7 +2454,7 @@
 <div class="form-note" style="margin-bottom: 10px">
               PDF · JPG · PNG 파일을 여러 개 올릴 수 있습니다. 폴더 업로드 시 협력사·공종을 자동으로 인식합니다.
             </div>
-<button class="upload-zone" id="msdsUploadZone" onclick="document.getElementById('pdfInput').click()" ondragleave="dragLeave(event, 'msdsUploadZone')" ondragover="dragOver(event, 'msdsUploadZone')" ondrop="dropMsdsFiles(event)" type="button">
+<button data-upload-input="pdfInput" class="upload-zone" id="msdsUploadZone" onclick="document.getElementById('pdfInput').click()" type="button">
 <div class="upload-icon">📂</div>
 <div class="upload-text">
                 파일 또는 폴더를 여기에 드래그하세요
@@ -2463,7 +2463,7 @@
 </button>
 <input accept=".pdf,.jpg,.jpeg,.png" hidden="" id="pdfInput" multiple="" onchange="handleMsdsFileSelect(event)" type="file"/>
 <div style="text-align: center; margin-bottom: 12px">
-<button class="btn btn-secondary btn-sm" onclick="document.getElementById('folderInput').click()">
+<button data-upload-input="folderInput" class="upload-dropzone upload-dropzone--compact btn btn-secondary btn-sm" onclick="document.getElementById('folderInput').click()">
                 📁 폴더째 업로드
               </button>
 <input directory="" id="folderInput" multiple="" onchange="handleFolderSelect(event)" style="display: none" type="file" webkitdirectory=""/>
@@ -2667,10 +2667,10 @@
 <button class="btn btn-primary btn-sm" id="msdsReanalyzeBtn" onclick="reanalyzeCurrentMsds()">
               ✨ 원본 다시 분석
             </button>
-<button class="btn btn-outline btn-sm" id="msdsRenewBtn" onclick="openMsdsRenewPicker()">
+<button class="btn btn-outline btn-sm upload-dropzone upload-dropzone--compact" data-upload-input="msdsRenewFileInput" id="msdsRenewBtn" onclick="openMsdsRenewPicker()">
               🔄 새 MSDS로 갱신
             </button>
-<button class="btn btn-outline btn-sm" onclick="openMsdsFileReplacePicker()">
+<button class="btn btn-outline btn-sm upload-dropzone upload-dropzone--compact" data-upload-input="msdsFileReplaceInput" onclick="openMsdsFileReplacePicker()">
               📎 파일만 교체
             </button>
 <input accept=".pdf,.jpg,.jpeg,.png" id="msdsRenewFileInput" onchange="handleMsdsRenewFile(event)" style="display: none" type="file"/>
@@ -3097,7 +3097,7 @@
             빠른 분석은 보고서의 측정값·판정·개선대책을 직접 추출합니다.
             지원되지 않는 양식이나 스캔본은 AI 정밀 분석을 선택하세요. AI 분석은 시간이 더 걸릴 수 있습니다.
           </div>
-<button class="upload-zone" id="measureUploadZone" onclick="document.getElementById('measureFileInput').click()" ondragleave="dragLeave(event, 'measureUploadZone')" ondragover="dragOver(event, 'measureUploadZone')" ondrop="dropMeasureFile(event)" type="button">
+<button data-upload-input="measureFileInput" class="upload-zone" id="measureUploadZone" onclick="document.getElementById('measureFileInput').click()" type="button">
 <div class="upload-icon">📄</div>
 <div class="upload-text">측정결과 PDF를 여기에 드래그하세요</div>
 <div class="upload-sub">PDF 파일만 가능</div>
@@ -3152,7 +3152,7 @@
             <br/>
             여러 명의 결과가 담긴 파일도 가능합니다.
           </div>
-<button class="upload-zone" id="healthUploadZone" onclick="document.getElementById('healthFileInput').click()" ondragleave="dragLeave(event, 'healthUploadZone')" ondragover="dragOver(event, 'healthUploadZone')" ondrop="dropHealthFiles(event)" type="button">
+<button data-upload-input="healthFileInput" class="upload-zone" id="healthUploadZone" onclick="document.getElementById('healthFileInput').click()" type="button">
 <div class="upload-icon">🏥</div>
 <div class="upload-text">건강진단 파일을 여기에 드래그하세요</div>
 <div class="upload-sub">PDF · JPG · PNG · 여러 파일 가능</div>
@@ -3236,7 +3236,7 @@
                 flex-wrap: wrap;
               ">
 <input accept=".xlsx,.xls" id="healthExcelInput" onchange="handleHealthExcel(event)" style="display: none" type="file"/>
-<button class="btn btn-secondary" onclick="document.getElementById('healthExcelInput').click()">
+<button data-upload-input="healthExcelInput" class="upload-dropzone upload-dropzone--compact btn btn-secondary" onclick="document.getElementById('healthExcelInput').click()">
                 📤 엑셀 양식 업로드
               </button>
 <span id="healthExcelName" style="font-size: 13px; color: var(--text2)"></span>
@@ -3414,7 +3414,7 @@
               날짜별로 나눠서 업로드해주세요.
             </div>
 </div>
-<label class="upload-zone" id="photoUploadDropZone" onkeydown="
+<label class="upload-zone" data-upload-input="photoUploadFileInput" id="photoUploadDropZone" onkeydown="
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 document.getElementById('photoUploadFileInput').click();
@@ -3435,7 +3435,7 @@
               여러 장 한번에 선택 가능
             </div>
 <div style="font-size: 12px; color: var(--text3); margin-top: 4px">
-              클릭하여 사진 선택 · 카카오톡 등에서 복사한 사진은
+              클릭하여 사진 선택 또는 파일 드래그 · 카카오톡 등에서 복사한 사진은
               <b>Ctrl+V</b>
               로 바로 붙여넣기
             </div>

@@ -1,3 +1,5 @@
+import { installFileDropzones } from './lib/file-dropzone.js';
+import { collectDroppedFiles } from './lib/upload-files.js';
 import { createContractorWorkspace } from './contractor-workspace.js';
 import { createClient } from '@supabase/supabase-js';
 import './contractor-portal.css';
@@ -232,7 +234,7 @@ window.onTradeDragOver = function (event) {
   event.preventDefault();
   if (!uploadInProgress) event.currentTarget.classList.add('drag');
 };
-window.onTradeDrop = function (event, index) {
+window.onTradeDrop = async function (event, index) {
   event.preventDefault();
   event.currentTarget.classList.remove('drag');
   if (uploadInProgress) return;
@@ -244,8 +246,12 @@ window.onTradeDrop = function (event, index) {
     if (item) item.workType = name;
     renderFileList();
   } else {
-    selectedWorkType = name;
-    addSupportedFiles([...event.dataTransfer.files], name);
+    try {
+      const files = await collectDroppedFiles(event.dataTransfer);
+      if (uploadInProgress) return;
+      selectedWorkType = name;
+      addSupportedFiles(files, name);
+    } catch (error) { toast('파일을 읽지 못했습니다. 다시 선택해주세요.', 'error'); }
   }
   renderWorkTypes();
 };
@@ -689,13 +695,13 @@ function renderReuploadSection() {
 ${reuploadItems
   .map(
     (item) => `
-  <div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+  <div ${['waiting','error'].includes(item.status) ? `class="upload-dropzone" data-upload-input="reuploadFile-${item.id}" role="button" tabindex="0"` : ''} style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:#fff;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:8px;">
     <span style="font-size:18px;">${{ waiting: '📄', uploading: '⏳', done: '✅', error: '❌' }[item.status]}</span>
     <div style="flex:1;min-width:0;">
       <div style="font-weight:700;font-size:13px;color:#1e293b;">${item.product_name} <span style="color:#94a3b8;font-weight:400;">v${item.version || 1}</span></div>
       <div style="font-size:12px;color:#b45309;">${item.status === 'done' ? '재업로드 접수 완료! 감사합니다' : item.status === 'uploading' ? '안전하게 접수 중...' : item.status === 'error' ? '오류: ' + (item.error || '다시 시도해주세요') : '사유: ' + (item.reupload_reason || '재업로드 필요')}</div>
     </div>
-    ${item.status === 'waiting' || item.status === 'error' ? `<button class="btn btn-primary" style="flex-shrink:0;padding:8px 14px;" onclick="pickReuploadFile('${item.id}')">파일 올리기</button>` : ''}
+    ${item.status === 'waiting' || item.status === 'error' ? `<button class="btn btn-primary" style="flex-shrink:0;padding:8px 14px;" onclick="pickReuploadFile('${item.id}')">파일 올리기</button><input type="file" id="reuploadFile-${item.id}" accept=".pdf,.jpg,.jpeg,.png" hidden onchange="onReuploadFileSelect(event,'${item.id}')"><span class="upload-dropzone-hint">파일 선택 또는 여기에 드래그</span>` : ''}
   </div>`,
   )
   .join('')}
@@ -703,14 +709,14 @@ ${reuploadItems
 }
 
 window.pickReuploadFile = function (recordId) {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.pdf,.jpg,.jpeg,.png';
-  input.onchange = (e) => {
-    const f = e.target.files[0];
-    if (f) doReupload(recordId, f);
-  };
+  const input = document.getElementById(`reuploadFile-${recordId}`);
+  if (!input || input.disabled) return;
+  input.value = '';
   input.click();
+};
+window.onReuploadFileSelect = function (event, recordId) {
+  const file = event.target.files[0];
+  if (file) doReupload(recordId, file);
 };
 
 async function doReupload(recordId, file) {
@@ -777,4 +783,5 @@ document.querySelectorAll('.upload-zone').forEach(zone => {
     if ((event.key === 'Enter' || event.key === ' ') && event.target === zone) { event.preventDefault(); zone.click(); }
   });
 });
+installFileDropzones({onError: message => toast(message, 'error')});
 init();
