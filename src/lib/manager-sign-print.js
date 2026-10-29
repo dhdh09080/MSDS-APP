@@ -22,7 +22,7 @@ export function managerSignSvg(data, { measure, characterUrl = '', placeholders 
   };
   const companyBottom = 220.812283, primaryBottom = 327.208189, deputyBottom = 433.604094;
   const nameX = 168.121575, phoneX = 376.824252, phraseX = 123.56748;
-  const phrase = value('phrase', '문구').replace(/\s*\/\s*/g, '\n');
+  const phrase = value('phrase', '문구');
   return `<svg xmlns="http://www.w3.org/2000/svg" class="manager-sign" viewBox="0 0 780 540" role="img" aria-label="관리책임자 표지">
     <rect width="780" height="540" fill="#fff"/>
     <rect width="780" height="104" fill="#223962"/>
@@ -54,6 +54,6 @@ export function buildManagerSignHtml(data, { fontCss = '', copies = 1, paper = '
     .manager-sheet{width:${paper === 'A3' ? 420 : 297}mm;height:${paper === 'A3' ? 297 : 210}mm;display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always}
     .manager-sheet:last-child{break-after:auto;page-break-after:auto}
     .manager-sign{display:block;width:${780 * scale}pt;height:${540 * scale}pt;flex-shrink:0;print-color-adjust:exact;-webkit-print-color-adjust:exact}
-    ${preview ? '@media screen{.manager-sheet{width:100vw;height:auto}.manager-sign{width:100%;height:auto}}' : ''}
+    ${preview ? '@media screen{.manager-sheet{width:100vw;height:100vh}.manager-sign{width:100%;height:100%}}' : ''}
     </style></head><body>${Array.from({ length: copies }, () => `<section class="manager-sheet">${svg}</section>`).join('')}</body></html>`;
 }

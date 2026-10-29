@@ -45,9 +45,9 @@ export async function mountManagerSignWorkbench(root, { workspace, userId, contr
     ${contractors.length ? '' : '<p>협력사 관리에서 협력사를 먼저 등록해주세요.</p>'}
     <fieldset class="manager-contacts"><legend>관리책임자 정</legend><label>성명<input id="manager-primaryName" class="form-input" maxlength="30" required autocomplete="off"></label><label>전화번호<input id="manager-primaryPhone" class="form-input" type="tel" maxlength="30" required autocomplete="off"></label></fieldset>
     <fieldset class="manager-contacts"><legend>관리책임자 부</legend><label>성명<input id="manager-deputyName" class="form-input" maxlength="30" required autocomplete="off"></label><label>전화번호<input id="manager-deputyPhone" class="form-input" type="tel" maxlength="30" required autocomplete="off"></label></fieldset>
-    <div class="manager-phrase-picker"><label>문구 검색 · 선택<input id="manager-phrase" class="form-input" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="managerPhraseOptions" placeholder="문구 검색 또는 새 문구 입력" maxlength="100" required autocomplete="off"></label>
+    <div class="manager-phrase-picker"><label>문구 검색 · 선택<textarea id="manager-phrase" class="form-input" rows="3" aria-autocomplete="list" aria-expanded="false" aria-controls="managerPhraseOptions" aria-describedby="managerPhraseHelp" placeholder="문구 검색 또는 새 문구 입력" maxlength="100" required autocomplete="off"></textarea></label>
     <div id="managerPhraseOptions" class="manager-phrase-options" role="listbox" aria-label="문구 목록" hidden><div id="managerPhraseMatches" role="presentation"></div><button id="managerPhraseAdd" class="manager-phrase-option manager-phrase-add" role="option" aria-selected="false" type="button" tabindex="-1" hidden></button></div></div>
-    <p>‘/’는 표지에서 줄바꿈으로 표시됩니다. 추가한 문구와 협력사별 입력 내용은 이 브라우저에 저장됩니다.</p>
+    <p id="managerPhraseHelp">Enter로 줄바꿈할 수 있고 ‘/’는 그대로 표시됩니다. 추가한 문구와 협력사별 입력 내용은 이 브라우저에 저장됩니다.</p>
     <div class="manager-actions"><label>인쇄 용지<select id="managerPaper" class="form-input"><option value="A4">A4 가로</option><option value="A3">A3 가로</option></select></label><label>인쇄 매수<input id="managerCopies" class="form-input" type="number" min="1" max="20" step="1" value="1" required></label></div><button id="managerSignPrint" type="submit" class="btn btn-primary" disabled>인쇄 / PDF 저장</button>
     <div id="managerSignError" class="manager-error" role="alert"></div><p id="managerStorageNotice" role="status">${esc(storageWarning)}</p>
     </form><section class="manager-preview-panel"><h3>인쇄 미리보기</h3><p><span id="managerPaperNotice"></span><br>긴 내용은 칸에 맞춰 글자가 작아집니다. 인쇄 배율은 100%로 설정해주세요.</p><div id="managerSignPreview">글꼴과 양식을 불러오는 중입니다…</div></section></div>`;
@@ -113,16 +113,20 @@ export async function mountManagerSignWorkbench(root, { workspace, userId, contr
     if (!event.currentTarget.contains(event.relatedTarget)) closePhrases();
   };
   el('manager-phrase').onkeydown = event => {
+    if (event.isComposing) return;
+    if (event.key === 'Enter') { closePhrases(); return; }
     if (event.key === 'Escape') { closePhrases(); return; }
-    if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
+    if (event.key === 'Tab' && activePhrase >= 0 && !el('managerPhraseOptions').hidden) {
+      el('managerPhraseOptions').querySelectorAll('[role="option"]')[activePhrase]?.click();
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
     if (el('managerPhraseOptions').hidden) {
-      if (event.key === 'Enter') return;
       showPhrases();
     }
     const options = [...el('managerPhraseOptions').querySelectorAll('[role="option"]')].filter(option => !option.hidden);
     if (!options.length) return;
     event.preventDefault();
-    if (event.key === 'Enter') { options[activePhrase < 0 ? options.length - 1 : activePhrase].click(); return; }
     activePhrase = (activePhrase + (event.key === 'ArrowDown' ? 1 : activePhrase < 0 ? 0 : -1) + options.length) % options.length;
     options.forEach((option, i) => option.setAttribute('aria-selected', String(i === activePhrase)));
     el('manager-phrase').setAttribute('aria-activedescendant', options[activePhrase].id);

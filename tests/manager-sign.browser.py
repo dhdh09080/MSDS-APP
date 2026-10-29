@@ -23,7 +23,7 @@ async def main():
   await page.fill('#manager-phrase','정리')
   assert await page.locator('#managerPhraseMatches [role="option"]').count()==1
   await page.locator('#manager-phrase').press('ArrowDown')
-  await page.locator('#manager-phrase').press('Enter')
+  await page.locator('#manager-phrase').press('Tab')
   assert await page.input_value('#manager-phrase')=='내부 정리 철저'
   await page.fill('#manager-phrase','추가 문구/안전 제일')
   await page.locator('#manager-phrase').press('Escape')
@@ -39,6 +39,24 @@ async def main():
   frame=page.frame_locator('#managerSignPreview iframe')
   await frame.locator('svg').wait_for();await frame.locator('svg').screenshot(path='/tmp/manager-sign.png')
   assert '010-1234-5678' in await frame.locator('svg').text_content()
+  assert await frame.locator('text').last.locator('tspan').all_text_contents()==['화기주의/주변 흡연금지']
+  for width in [1600,2200]:
+   await page.set_viewport_size({'width':width,'height':1100})
+   sizes=await page.locator('.manager-workbench').evaluate('(root)=>[...root.children].map(e=>e.getBoundingClientRect().height)')
+   assert abs(sizes[0]-sizes[1])<1,sizes
+  await page.fill('#manager-phrase','화기주의/주변 흡연금지')
+  await page.locator('#manager-phrase').press('End')
+  await page.locator('#manager-phrase').press('Enter')
+  await page.locator('#manager-phrase').press('Escape')
+  await page.locator('#manager-phrase').press('b')
+  assert await page.input_value('#manager-phrase')=='화기주의/주변 흡연금지\nb'
+  await page.fill('#manager-phrase','화기주의/주변 흡연금지\n내부 정리 철저')
+  await page.click('#managerPhraseAdd')
+  await page.reload();await page.wait_for_selector('#managerSignPrint:not([disabled])')
+  assert await page.input_value('#manager-phrase')=='화기주의/주변 흡연금지\n내부 정리 철저'
+  frame=page.frame_locator('#managerSignPreview iframe')
+  await frame.locator('svg').wait_for()
+  assert await frame.locator('text').last.locator('tspan').all_text_contents()==['화기주의/주변 흡연금지','내부 정리 철저']
   await page.fill('#managerCopies','2')
   import fitz
   for paper,width_mm,height_mm in [('A4',297,210),('A3',420,297)]:
