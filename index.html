@@ -221,6 +221,7 @@
               날씨
             </button>
 <button class="nav-item" id="nav-binders" onclick="showPage('binders')" type="button"><span class="nav-icon">📑</span>바인더 표지</button>
+<button class="nav-item" id="nav-manager-signs" onclick="showPage('manager-signs')" type="button"><span class="nav-icon">📋</span>관리책임자 표지</button>
 <button class="nav-item" id="nav-photos" onclick="showPage('photos')" type="button">
 <span class="nav-icon">📷</span>
               사진 클라우드
@@ -255,6 +256,7 @@
 <!-- 메인 콘텐츠 -->
 <div class="main" id="mainContent">
 <div class="page" id="page-binders"><div class="page-header"><div><div class="page-title">바인더 표지</div><div class="page-subtitle">문서 선택 · 지정 폭 자동 적용 · A4 인쇄</div></div></div><div class="content-scroll" id="binderWorkbench"></div></div>
+<div class="page" id="page-manager-signs"><div class="page-header"><div><div class="page-title">관리책임자 표지</div><div class="page-subtitle">협력사 선택 · 정·부 연락처 입력 · A3·A4 가로 인쇄</div></div></div><div class="content-scroll" id="managerSignWorkbench"></div></div>
 <!-- ═══ 홈 ═══ -->
 <div class="page active" id="page-home">
 <div class="page-header">
@@ -2067,6 +2069,7 @@
 <span class="more-item-label">날씨</span>
 </button>
 <button class="more-item" type="button" onclick="showPage('binders');closeModal('moreSheet')"><span class="more-item-icon">📑</span><span class="more-item-label">바인더 표지</span></button>
+<button class="more-item" type="button" onclick="showPage('manager-signs');closeModal('moreSheet')"><span class="more-item-icon">📋</span><span class="more-item-label">관리책임자 표지</span></button>
 <button class="more-item" type="button" onclick="showPage('photos');closeModal('moreSheet')">
 <span class="more-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7h4l2-3h6l2 3h4v14H3ZM16 14a4 4 0 1 1-8 0 4 4 0 0 1 8 0"/></svg></span>
 <span class="more-item-label">사진 클라우드</span>

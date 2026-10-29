@@ -81,14 +81,14 @@ async function proceedToUploadView(data) {
     const requestedPanel = new URLSearchParams(location.search).get('panel');
     const canOpenRequestedPanel = (requestedPanel === 'license' && allowLicense)
       || (['records', 'upload', 'warnings', 'hazard'].includes(requestedPanel) && allowMsds)
-      || ['dashboard','contacts','workers','worker-changes'].includes(requestedPanel);
+      || ['dashboard','contacts','workers','worker-changes','manager-signs'].includes(requestedPanel);
     window.switchPortalPanel(canOpenRequestedPanel ? requestedPanel : 'dashboard');
     if (allowMsds) loadReuploadRequests();
   } catch (err) { showError(err.message); }
   finally { document.getElementById('loadingView').style.display = 'none'; }
 }
 window.switchPortalPanel = function (panel) {
-  if (!['dashboard','contacts','records','upload','warnings','license','hazard','workers','worker-changes'].includes(panel)) panel = 'dashboard';
+  if (!['dashboard','contacts','records','upload','warnings','license','hazard','workers','worker-changes','manager-signs'].includes(panel)) panel = 'dashboard';
   if (publicLinkData && ((['records','upload','warnings','hazard'].includes(panel) && !publicLinkData.allow_msds) || (panel === 'license' && !publicLinkData.allow_license))) panel = 'dashboard';
   document.querySelectorAll('[data-portal-panel]').forEach(el => el.hidden = el.dataset.portalPanel !== panel);
   workspace.activate(panel);

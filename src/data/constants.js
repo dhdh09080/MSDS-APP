@@ -18,6 +18,7 @@ export const PAGES = [
   'measure',
   'weather',
   'binders',
+  'manager-signs',
   'photos',
   'manpower',
   'admin',

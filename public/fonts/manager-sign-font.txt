@@ -1,0 +1,10 @@
+HY견고딕 (PostScript name: H2gtrE)
+Source: the user's hy견고딕-yoond1004.zip attachment.
+
+hy-kyeongothic.woff retains the supplied font's outlines and metrics.
+Its legacy cmap was recompiled with fontTools to resolve Chromium's
+"Range glyph reference too high" OTS validation error. The obsolete DSIG
+was removed and the result packaged as WOFF for browser and PDF use.
+
+The manager-sign-character.png illustration in public/templates was
+extracted from the user's 관리책임자 양식.pptx without modification.

@@ -1,6 +1,7 @@
 import { createPmxPanel } from './lib/pmx-panel.js';
 import { installFileDropzones } from './lib/file-dropzone.js';
 import { mountBinderWorkbench } from './lib/binder-workbench.js';
+import { mountManagerSignWorkbench } from './lib/manager-sign-workbench.js';
 import { loadPosterFont } from './lib/weather-poster-fonts.js';
 import { createHazardMap } from './lib/hazard-map.js';
 import { posterLocale, localizeAdvice, localizeAlert, posterDateTitle } from './lib/weather-poster-i18n.js';
@@ -1699,6 +1700,7 @@ window.showPage = function (id) {
     updateWarningPreview();
   }
   if (id === 'binders') mountBinderWorkbench(document.getElementById('binderWorkbench'), {workspace: currentWS, client: supabase, preview: Boolean(getDevPreviewPage())});
+  if (id === 'manager-signs') mountManagerSignWorkbench(document.getElementById('managerSignWorkbench'), {workspace: currentWS, userId: user?.id, contractors});
   if (id === 'health') switchHealthSub(activeHealthSub);
   if (id === 'photos') {
     renderPhotoFolderTree();
