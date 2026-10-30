@@ -10626,7 +10626,7 @@ function mountGsWorkspace() {
     'batchWorkType',
     'warnFilterContractor',
   ].forEach((id) => mountGsCombo(id));
-  let navIconIndex = 0;
+  const navIconPages = ['home', 'team', 'announcements', 'feedback', 'library', 'msds', 'warning', 'contractors', 'requests', 'health', 'vulnerable', 'bp', 'measure', 'weather', 'binders', 'manager-signs', 'photos', 'manpower', 'admin', 'settings'];
   document.querySelectorAll('.nav-item').forEach((el) => {
     el.tabIndex = 0;
     el.setAttribute('role', 'button');
@@ -10637,9 +10637,10 @@ function mountGsWorkspace() {
       }
     };
     const icon = el.querySelector('.nav-icon');
-    if (icon) icon.innerHTML = el.id === 'nav-hazard-map'
+    const menuPage = el.dataset.menuPage || el.id.replace(/^nav-/, '');
+    if (icon) icon.innerHTML = menuPage === 'hazard-map'
       ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>'
-      : gsIcon(navIconIndex++);
+      : gsIcon(Math.max(0, navIconPages.indexOf(menuPage)));
   });
   document.querySelectorAll('.more-item').forEach((el) => {
     if (el.getAttribute('onclick')?.includes("'calendar'")) el.remove();

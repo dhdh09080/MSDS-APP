@@ -1,19 +1,37 @@
-.menu-favorites { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
-.menu-favorites .nav-section { margin-top: 6px; }
-.menu-favorites-empty { margin: 8px 12px; font-size: 11px; line-height: 1.6; color: var(--text3); }
-.menu-favorite-row { display: flex; align-items: center; gap: 2px; min-width: 0; }
-.menu-favorite-row > .nav-item { flex: 1; min-width: 0; width: auto; text-align: left; }
-.menu-favorite-toggle { flex: 0 0 32px; width: 32px; min-height: 36px; border: 0; border-radius: 7px; background: transparent; color: var(--text3); font-size: 20px; cursor: pointer; }
+/* Shared single-line navigation for the sidebar and mobile menu sheet. */
+.sidebar-nav .nav-item, #moreSheet .nav-item {
+  display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 40px;
+  padding: 8px; white-space: nowrap; text-align: left; font-size: 12px;
+}
+.sidebar-nav .nav-item .nav-icon, #moreSheet .nav-item .nav-icon {
+  flex: 0 0 16px; width: 16px; margin: 0; font-size: 15px;
+}
+.menu-item-label { flex: 1; min-width: 0; white-space: nowrap; }
+.sidebar-nav .nav-badge { flex-shrink: 0; margin-left: auto; padding: 2px 5px; }
+.menu-home { width: 100%; margin-bottom: 10px; }
+.menu-tabs { display: flex; gap: 3px; padding: 3px; margin: 0 0 14px; background: #ebebf0; border-radius: 8px; }
+.menu-tabs button { flex: 1; min-width: 0; min-height: 36px; padding: 6px; border: 0; border-radius: 6px; background: transparent; color: var(--text2); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.menu-tabs button[aria-selected="true"] { background: #fff; color: var(--text); font-weight: 650; box-shadow: 0 1px 3px #17172310; }
+.menu-group .nav-section { margin: 18px 8px 6px; }
+.menu-group:first-child .nav-section { margin-top: 0; }
+.menu-favorites-empty { margin: 14px 8px; font-size: 12px; line-height: 1.7; color: var(--text3); }
+.menu-browse { margin: 0 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 7px; background: white; color: var(--text2); cursor: pointer; }
+.menu-favorite-row { display: flex; align-items: center; gap: 0; min-width: 0; }
+.menu-favorite-row > .nav-item { flex: 1; min-width: 0; width: auto; }
+.menu-favorite-toggle { flex: 0 0 28px; width: 28px; min-height: 40px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--text3); font-size: 20px; cursor: pointer; }
 .menu-favorite-toggle:hover { background: #ebebef; }
 .menu-favorite-toggle[aria-pressed="true"] { color: #9a6d20; }
-.menu-favorite-toggle:focus-visible { outline: 2px solid #7479c4; outline-offset: 1px; }
-.menu-favorite-tile { position: relative; min-width: 0; }
-#moreSheet .menu-favorite-tile > .more-item { width: 100%; height: 100%; padding-top: 32px; }
-.menu-favorite-tile > .menu-favorite-toggle { position: absolute; top: 0; right: 0; min-height: 32px; }
-#moreSheet .menu-favorites .nav-item { display: flex; align-items: center; border: 0; background: transparent; }
-#moreSheet .menu-favorites .nav-item.active { background: #e7e7ef; }
-body.admin-standalone .menu-favorites, body.admin-standalone .menu-favorite-row { display: none; }
+.menu-tabs button:focus-visible, .menu-favorite-toggle:focus-visible, .menu-browse:focus-visible { outline: 2px solid #7479c4; outline-offset: 1px; }
+#moreSheet .nav-item { width: 100%; border: 0; border-radius: 7px; background: transparent; color: var(--text2); }
+#moreSheet .nav-item.active { background: #e7e7ef; color: var(--text); }
+#moreSheet #moreAdminItem { flex-direction: row; justify-content: flex-start; gap: 7px; min-height: 44px; padding: 8px; border: 0; }
+#moreSheet #moreAdminItem .more-item-icon { width: 16px; height: 16px; margin: 0; }
+#moreSheet #moreAdminItem .more-item-icon svg { width: 16px; height: 16px; }
+#moreSheet #moreAdminItem .more-item-label { white-space: nowrap; }
+body.admin-standalone .sidebar-nav .menu-tabs, body.admin-standalone .sidebar-nav .menu-favorites { display: none; }
+body.admin-standalone .sidebar-nav .menu-all-panel[hidden] { display: block !important; }
 @media (max-width: 768px) {
-  .menu-favorite-toggle { flex-basis: 44px; width: 44px; min-height: 44px; }
-  #moreSheet .menu-favorite-tile > .more-item { padding-top: 40px; }
+  #moreSheet .menu-favorite-toggle { flex-basis: 44px; width: 44px; min-height: 44px; }
+  #moreSheet .nav-item { min-height: 44px; font-size: 13px; }
+  #moreSheet .menu-tabs button { min-height: 44px; }
 }
