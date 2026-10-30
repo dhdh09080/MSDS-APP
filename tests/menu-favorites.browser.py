@@ -8,9 +8,9 @@ KEY = 'fms_menu_favorites:preview-user:preview-workspace'
 GROUPS = ['시스템', 'MSDS', '건강관리', '현장 관리', '자료 서식']
 PAGES = [
     ['announcements', 'team', 'feedback', 'settings', 'admin'],
-    ['msds', 'warning', 'hazard-map', 'requests'],
-    ['health', 'vulnerable', 'bp', 'measure'],
-    ['contractors', 'manpower', 'photos', 'weather'],
+    ['msds', 'warning', 'hazard-map'],
+    ['health', 'measure'],
+    ['contractors', 'weather'],
     ['library', 'binders', 'manager-signs'],
 ]
 
@@ -28,7 +28,7 @@ async def main():
         assert await page.locator('#sidebar-menu-panel-all .nav-section').all_text_contents() == GROUPS
         assert await page.locator('.sidebar-nav > #nav-home').count() == 1
         for index, ids in enumerate(PAGES):
-            actual = await page.locator('#sidebar-menu-panel-all .menu-group').nth(index).locator('.nav-item').evaluate_all('(els) => els.map(el => el.id.replace("nav-", ""))')
+            actual = await page.locator('#sidebar-menu-panel-all .menu-group').nth(index).locator('.nav-item:not([hidden])').evaluate_all('(els) => els.map(el => el.id.replace("nav-", ""))')
             assert actual == ids, actual
         assert not await page.locator('#nav-admin').is_visible()
         assert not await page.locator('#sidebar-menu-panel-favorites').is_visible()
@@ -62,10 +62,19 @@ async def main():
         await page.reload()
         await star.wait_for()
         assert await star.get_attribute('aria-pressed') == 'false'
-        await page.evaluate('(key) => localStorage.setItem(key, JSON.stringify(["warning", "warning", "admin", "home", "unknown"]))', KEY)
+        await page.evaluate('(key) => localStorage.setItem(key, JSON.stringify(["warning", "warning", "admin", "home", "unknown", "requests", "vulnerable", "bp", "manpower", "photos"]))', KEY)
         await page.reload()
         await star.wait_for()
         assert await page.locator('#sidebar-menu-panel-favorites .nav-item').count() == 1
+        for hidden_id in ['requests', 'vulnerable', 'bp', 'manpower', 'photos']:
+            assert not await page.locator('#nav-' + hidden_id).is_visible()
+            assert await page.locator('#page-' + hidden_id).count() == 1
+            assert await page.locator('[data-favorite-id="' + hidden_id + '"]').count() == 0
+        # Editing a visible favorite must preserve temporarily hidden saved preferences.
+        await star.click()
+        saved = await page.evaluate('(key) => JSON.parse(localStorage.getItem(key))', KEY)
+        assert all(hidden_id in saved for hidden_id in ['requests', 'vulnerable', 'bp', 'manpower', 'photos'])
+        await star.click()
         # A 378 count (the reported regression) and the longest labels must fit fully.
         await page.evaluate('''() => {
           const badge = document.getElementById('navBadgeMsds');
@@ -85,7 +94,7 @@ async def main():
         await page.set_viewport_size({'width': 390, 'height': 844})
         await page.evaluate("openModal('moreSheet')")
         assert await page.locator('#mobile-menu-panel-all .nav-section').all_text_contents() == GROUPS
-        assert await page.locator('#mobile-menu-panel-all .menu-favorite-row').count() == 19
+        assert await page.locator('#mobile-menu-panel-all .menu-favorite-row').count() == 14
         assert not await page.locator('#moreAdminItem').is_visible()
         await assert_labels_fit('#moreSheet')
         mobile_star = page.locator('#mobile-menu-panel-all [data-favorite-id="warning"]')

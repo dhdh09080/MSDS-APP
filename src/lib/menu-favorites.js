@@ -1,5 +1,8 @@
 import './menu-favorites.css';
 
+// Temporarily hidden from navigation; keep pages and saved preferences for later restoration.
+export const HIDDEN_MENU_PAGES = new Set(['requests', 'vulnerable', 'bp', 'manpower', 'photos']);
+
 export const MENU_GROUPS = [
   { label: '시스템', pages: ['announcements', 'team', 'feedback', 'settings', 'admin'] },
   { label: 'MSDS', pages: ['msds', 'warning', 'hazard-map', 'requests'] },
@@ -35,7 +38,8 @@ export function installMenuFavorites({ getContext, onError }) {
     const id = button.id.replace(/^nav-/, '');
     return [id, { id, button, label: label.textContent }];
   }));
-  const allowed = [...entries.keys()].filter(id => !['home', 'admin'].includes(id));
+  const savedIds = [...entries.keys()].filter(id => !['home', 'admin'].includes(id));
+  const allowed = savedIds.filter(id => !HIDDEN_MENU_PAGES.has(id));
   const oldMobile = new Map([...mobile.querySelectorAll('.more-item')].map(button => [
     button.getAttribute('onclick')?.match(/showPage\('([^']+)'\)/)?.[1], button,
   ]));
@@ -68,7 +72,7 @@ export function installMenuFavorites({ getContext, onError }) {
     refresh();
     if (!key) return;
     try {
-      const selected = readFavorites(localStorage, key, allowed);
+      const selected = readFavorites(localStorage, key, savedIds);
       const next = selected.includes(id) ? selected.filter(value => value !== id) : [...selected, id];
       localStorage.setItem(key, JSON.stringify(next));
     } catch {
@@ -162,6 +166,11 @@ export function installMenuFavorites({ getContext, onError }) {
       section.append(heading);
       group.pages.forEach(id => {
         const entry = entries.get(id);
+        if (HIDDEN_MENU_PAGES.has(id)) {
+          entry.button.hidden = true;
+          if (!index) section.append(entry.button);
+          return;
+        }
         // Keep original admin controls so existing permission visibility still applies.
         if (id === 'admin') section.append(index ? oldMobile.get(id) : entry.button);
         else section.append(makeRow(entry, index ? makeLink(entry) : entry.button));
