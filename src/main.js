@@ -1,3 +1,4 @@
+import { installMenuFavorites } from './lib/menu-favorites.js';
 import { createPmxPanel } from './lib/pmx-panel.js';
 import { installFileDropzones } from './lib/file-dropzone.js';
 import { mountBinderWorkbench } from './lib/binder-workbench.js';
@@ -1672,6 +1673,11 @@ window.deleteAiKey = async function (provider) {
 // ═══════════════════════════════════════════════
 // (PAGES, MOBILE_TABS → src/data/constants.js 로 이동)
 
+const menuFavorites = installMenuFavorites({
+  getContext: () => ({ userId: user?.id, workspaceId: currentWS?.id }),
+  onError: message => toast(message, 'error'),
+});
+
 window.showPage = function (id) {
   const linksRequested = id === 'upload-link';
   if (id === 'calendar') id = 'home';
@@ -1685,6 +1691,7 @@ window.showPage = function (id) {
     document.getElementById('page-' + p)?.classList.toggle('active', p === id);
     document.getElementById('nav-' + p)?.classList.toggle('active', p === id);
   });
+  menuFavorites.refresh();
   MOBILE_TABS.forEach((t) => {
     document.getElementById('mtab-' + t)?.classList.toggle('active', t === id);
   });
