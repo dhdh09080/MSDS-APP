@@ -1,6 +1,8 @@
 import './hazard-map.css';
 import { createLocationPhotos } from './location-photos.js';
 import { createMarkerPhotoDraft } from './marker-photo-draft.js';
+import { createMapImageViewer } from './map-image-viewer.js';
+import { createMapEditorViewport } from './map-editor-viewport.js';
 import { REVIEW_STATES, reviewState, emptyFilters, filterHazardMarkers, actionSummary } from './hazard-map-filters.js';
 
 const BUCKET = 'hazard-map-photos';
@@ -8,6 +10,7 @@ const MAX_BYTES = 20 * 1024 * 1024;
 const IMAGE_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const TYPES = {
+  memo: { label: '메모', short: '메모', icon: 'M4 3h16v13l-5 5H4ZM15 21v-5h5M8 8h8M8 12h6' },
   locker: { label: '락카 보관함', short: '락카', icon: 'M5 3h14v18H5ZM5 10h14M9 6h6M9 14v3' },
   hazard: { label: '위험물 저장소', short: '위험', icon: 'm12 3 10 18H2ZM12 9v5M12 17v1' },
   fuel: { label: '유류 저장소', short: '유류', icon: 'M4 21V3h11v18M4 10h11M2 21h15M15 7h3l3 4v6a2 2 0 0 1-4 0v-4M18 4l3 3v4' },
@@ -18,6 +21,7 @@ const TYPES = {
 };
 const markerType = marker => Object.hasOwn(TYPES, marker.marker_type) ? marker.marker_type : 'hazard';
 const isStorage = type => ['locker', 'hazard', 'fuel', 'warehouse'].includes(type);
+const editableType = type => isStorage(type) || type === 'memo';
 const icon = type => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${TYPES[type].icon}"/></svg>`;
 const markerItems = marker => Array.isArray(marker.items) ? marker.items : marker.material || marker.quantity ? [{ name: marker.material || '(기존 물질명 미입력)', quantity: marker.quantity || '' }] : [];
 
@@ -38,13 +42,21 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
   let uploadTargetId = null, drag = null, suppressClickUntil = 0;
   let filters = emptyFilters(), viewMode = 'all', highlightedId = null;
   const current = () => maps.find(map => map.id === selectedId);
-  const editable = marker => !repository || (marker.contractor_id === contractorId && isStorage(markerType(marker)));
+  const editable = marker => !repository || (marker.contractor_id === contractorId && editableType(markerType(marker)));
+  const editorViewport=createMapEditorViewport({
+    isEnabled:()=>!busy&&!loading,
+    onGestureStart:()=>{if(drag){const old=releaseDrag();old.element.style.left=`${old.x*100}%`;old.element.style.top=`${old.y*100}%`;old.element.classList.remove('is-dragging');}},
+    onTap:(x,y)=>{const photo=root?.querySelector('#hmPhoto');if(photo)placePoint(relativePoint(x,y,photo.getBoundingClientRect()));},
+  });
+  const imageViewer=createMapImageViewer();
   const photoDraft = createMarkerPhotoDraft({supabase,repository,getUser});
   const photos = createLocationPhotos({ supabase, getWorkspace, getUser, repository, canReview, toast, onChange: async id => { await show(); return markers.find(row => row.id === id); } });
   const context = () => ({ workspaceId, revision });
   const isCurrent = ctx => ctx.workspaceId === workspaceId && ctx.workspaceId === getWorkspace()?.id && ctx.revision === revision;
 
   function reset() {
+    editorViewport.reset();
+    imageViewer.reset();
     photoDraft.reset();
     photos.reset();
     cancelDrag();
@@ -91,8 +103,8 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
           <p class="hm-hint">선택한 사진 위치에 저장됩니다.</p>
           <label>스티커 종류<select class="form-input" name="marker_type">${Object.entries(TYPES).map(([key, type]) => `<option value="${key}">${type.label}</option>`).join('')}</select></label>
           <p id="hmTypeHelp" class="hm-hint"></p>
-          <label>이름 / 위치 <span aria-hidden="true">*</span><input class="form-input" name="storage_name" required maxlength="120" placeholder="예: 동측 위험물 저장소 / 101동 / 정문" /></label>
-          <div>
+          <label id="hmMarkerNameField">이름 / 위치 <span aria-hidden="true">*</span><input class="form-input" name="storage_name" required maxlength="120" placeholder="예: 동측 위험물 저장소 / 101동 / 정문" /></label>
+          <div id="hmMarkerContractorField">
             <label>담당 협력사<select class="form-input" name="contractor_id" aria-describedby="hmContractorHint"></select></label>
             <p class="hm-hint" id="hmContractorHint"></p>
           </div>
@@ -151,8 +163,8 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
 
   function renderPin(marker, i) {
     const type = markerType(marker);
-    const label = marker.storage_name;
-    return `<button type="button" class="hm-pin hm-type-${type} ${marker.id === movingId || marker.id === highlightedId ? 'is-selected' : ''}" style="left:${marker.x * 100}%;top:${marker.y * 100}%;transform:translate(${marker.x < .25 ? 0 : marker.x > .75 ? -100 : -50}%,${marker.y < .2 ? 0 : marker.y > .8 ? -100 : -50}%)" data-action="${editable(marker) ? 'edit' : marker.contractor_id === contractorId ? 'photos' : 'view'}" data-id="${escape(marker.id)}" title="${escape(marker.storage_name)}${editable(marker) ? ' · 드래그하여 이동' : marker.contractor_id === contractorId ? ' · 조치 사진 관리' : ' · 공용 위치'}" aria-label="${i + 1}번 ${TYPES[type].label} ${escape(marker.storage_name)} ${editable(marker) ? '정보 수정' : marker.contractor_id === contractorId ? '조치 사진 관리' : '공용 위치'}">${icon(type)}<span>${escape(label)}</span></button>`;
+    const label = type === 'memo' ? '메모' : marker.storage_name;
+    return `<button type="button" class="hm-pin hm-type-${type} ${marker.id === movingId || marker.id === highlightedId ? 'is-selected' : ''}" style="left:${marker.x * 100}%;top:${marker.y * 100}%;transform:scale(var(--hm-pin-scale,1)) translate(${marker.x < .25 ? 0 : marker.x > .75 ? -100 : -50}%,${marker.y < .2 ? 0 : marker.y > .8 ? -100 : -50}%)" data-action="${editable(marker) ? 'edit' : marker.contractor_id === contractorId ? 'photos' : 'view'}" data-id="${escape(marker.id)}" title="${escape(marker.storage_name)}${editable(marker) ? ' · 드래그하여 이동' : marker.contractor_id === contractorId ? ' · 조치 사진 관리' : ' · 공용 위치'}" aria-label="${i + 1}번 ${TYPES[type].label} ${escape(marker.storage_name)} ${editable(marker) ? '정보 수정' : marker.contractor_id === contractorId ? '조치 사진 관리' : '공용 위치'}">${icon(type)}<span>${escape(label)}</span></button>`;
   }
 
   function renderCard(marker, i) {
@@ -164,8 +176,8 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
       ${!isStorage(type) && marker.contractor_id ? `<p class="hm-hint">담당 협력사: ${escape(contractor?.name || '지정 업체')}</p>` : ''}
       ${reviewState(marker)!=='none' ? `<p class="hm-review-status hm-badge-${reviewState(marker)}">${REVIEW_STATES[reviewState(marker)].label}${marker.reviewed_at ? ` · ${escape(new Date(marker.reviewed_at).toLocaleString('ko-KR'))}` : ''}</p>` : ''}
       ${marker.review_note ? `<p class="hm-review-note"><b>관리자 의견</b> ${escape(marker.review_note)}</p>` : ''}
-      ${marker.content ? `<p class="hm-content">${escape(marker.content)}</p>` : ''}
-      ${!repository || marker.contractor_id === contractorId ? `<p class="hm-next-step">${repository && reviewState(marker)==='pending' ? '사진 제출 완료 · 관리자의 확인을 기다려 주세요' : REVIEW_STATES[reviewState(marker)].hint}</p><button type="button" class="btn btn-outline hm-photo-button" data-action="photos" data-id="${escape(marker.id)}">📷 사진 / 조치 관리</button>` : ''}
+      ${marker.content ? type === 'memo' ? `<details class="hm-memo-content"><summary>메모 내용 보기</summary><p class="hm-content">${escape(marker.content)}</p></details>` : `<p class="hm-content">${escape(marker.content)}</p>` : ''}
+      ${type !== 'memo' && (!repository || marker.contractor_id === contractorId) ? `<p class="hm-next-step">${repository && reviewState(marker)==='pending' ? '사진 제출 완료 · 관리자의 확인을 기다려 주세요' : REVIEW_STATES[reviewState(marker)].hint}</p><button type="button" class="btn btn-outline hm-photo-button" data-action="photos" data-id="${escape(marker.id)}">📷 사진 / 조치 관리</button>` : ''}
       <button type="button" class="btn btn-outline btn-sm hm-locate" data-action="locate" data-id="${escape(marker.id)}">도면에서 위치 보기</button>
       ${editable(marker) ? `<div class="hm-actions"><button type="button" class="btn btn-outline btn-sm" data-action="edit" data-id="${escape(marker.id)}">정보 수정</button><button type="button" class="btn btn-outline btn-sm" data-action="move" data-id="${escape(marker.id)}">위치 이동</button><button type="button" class="btn btn-outline btn-sm" data-action="delete" data-id="${escape(marker.id)}">삭제</button></div>` : `<p class="hm-hint">${marker.contractor_id === contractorId ? '위치 정보는 현장 관리자가 수정합니다. 사진을 기록하거나 조치를 요청할 수 있습니다.' : '현장 공용 위치'}</p>`}</article>`;
   }
@@ -208,17 +220,18 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     }
     body.innerHTML = `<div class="hm-layout ${viewMode === 'list' ? 'hm-list-view' : ''}">
       <section class="hm-photo-card" aria-label="현장 위치도 사진" ${viewMode === 'list' ? 'hidden' : ''}>
-        <div class="hm-card-heading"><div><h2>${escape(current().title)}</h2><span>스티커 ${markers.length}개</span></div><div class="hm-actions"><button type="button" class="btn btn-outline btn-sm" data-action="add">+ 스티커 추가</button><button type="button" class="btn btn-outline btn-sm" data-action="replace-photo">사진 변경 (스티커 유지)</button><button type="button" class="btn btn-outline btn-sm" data-action="delete-map">위치도 삭제</button></div></div>
+        <div class="hm-card-heading"><div><h2>${escape(current().title)}</h2><span>스티커 ${markers.length}개</span></div><div class="hm-actions"><button type="button" class="btn btn-outline btn-sm" data-action="zoom-photo">⤢ 확대 보기</button><button type="button" class="btn btn-outline btn-sm" data-action="add">+ 스티커 추가</button><button type="button" class="btn btn-outline btn-sm" data-action="replace-photo">사진 변경 (스티커 유지)</button><button type="button" class="btn btn-outline btn-sm" data-action="delete-map">위치도 삭제</button></div></div>
         <div class="hm-legend" aria-label="스티커 종류">${Object.entries(TYPES).map(([key, type]) => `<span class="hm-legend-item"><span class="hm-legend-icon hm-type-${key}">${icon(key)}</span>${type.label}</span>`).join('')}</div>
         ${movingId ? '<div class="hm-move-banner">이동할 위치를 클릭하세요.<button type="button" class="btn btn-outline btn-sm" data-action="cancel-move">이동 취소</button></div>' : ''}
-        ${imageUrl ? `<div class="hm-photo-padding"><div class="hm-stage ${movingId ? 'is-moving' : ''}" id="hmStage" tabindex="0" role="group" aria-label="현장 위치도. 클릭하여 위치 선택. 키보드는 Enter로 중앙에 등록 후 위치 이동." aria-describedby="hmStatus"><img id="hmPhoto" src="${escape(imageUrl)}" width="${Number(current().width)}" height="${Number(current().height)}" alt="${escape(current().title)} 현장 전경" draggable="false" />${visible.map(marker=>renderPin(marker,markers.indexOf(marker))).join('')}</div></div>` : '<p class="hm-empty">사진을 표시할 수 없습니다. 새로고침을 눌러 주세요.</p>'}
-        <p class="hm-photo-caption">스티커를 누르면 정보 수정, 드래그하면 위치 이동. 사진을 변경해도 스티커와 입력 정보는 유지됩니다.</p>
+        ${imageUrl ? `<div class="hm-photo-padding"><div class="hm-editor-tools" role="group" aria-label="편집 도면 확대"><button type="button" class="btn btn-outline" data-editor-zoom="out" aria-label="편집 도면 축소">−</button><span data-editor-zoom-value role="status" aria-live="polite">100%</span><button type="button" class="btn btn-outline" data-editor-zoom="in" aria-label="편집 도면 확대">＋</button><button type="button" class="btn btn-outline" data-editor-zoom="fit">화면 맞춤</button></div><div class="hm-editor-viewport"><div class="hm-stage ${movingId ? 'is-moving' : ''}" id="hmStage" tabindex="0" role="group" aria-label="현장 위치도. 클릭하여 위치 선택. 키보드는 Enter로 중앙에 등록 후 위치 이동." aria-describedby="hmStatus"><img id="hmPhoto" src="${escape(imageUrl)}" width="${Number(current().width)}" height="${Number(current().height)}" alt="${escape(current().title)} 현장 전경" draggable="false" />${visible.map(marker=>renderPin(marker,markers.indexOf(marker))).join('')}</div></div></div>` : '<p class="hm-empty">사진을 표시할 수 없습니다. 새로고침을 눌러 주세요.</p>'}
+        <p class="hm-photo-caption">도면 위에서 휠로 확대·축소, 확대 후 빈 곳을 드래그하거나 휠 버튼을 누른 채 이동하세요. 휴대폰은 두 손가락으로 확대·이동합니다. 확대 상태에서도 빈 곳을 누르면 스티커를 추가하고, 스티커를 끌어 위치를 옮길 수 있습니다.</p>
       </section>
       <section class="hm-list" aria-labelledby="hmListTitle"><h2 id="hmListTitle">위치별 관리 목록 <span>${listMarkers.length}</span></h2>
         ${listMarkers.length ? listMarkers.map(marker=>renderCard(marker,markers.indexOf(marker))).join('') : markers.length ? '<div class="hm-list-empty"><b>조건에 맞는 위치가 없습니다.</b><p>다른 분류·상태를 선택하거나 검색 조건을 초기화해 주세요.</p><button type="button" class="btn btn-outline" data-action="clear-filters">모든 위치 보기</button></div>' : '<div class="hm-list-empty">아직 등록된 스티커가 없습니다.<br>사진에서 표시할 위치를 클릭해 주세요.</div>'}
       </section></div>`;
     if (repository) root.querySelectorAll('[data-action="replace-photo"],[data-action="delete-map"]').forEach(button => { button.hidden = true; });
     const photo = root.querySelector('#hmPhoto');
+    if(photo)editorViewport.mount(root.querySelector('.hm-photo-padding'),`${current().id}:${current().storage_path}`);
     if (photo) photo.addEventListener('error', () => {
       if (!photo.isConnected || root?.querySelector('#hmPhoto') !== photo) return;
       root.querySelector('#hmStatus').textContent = '사진을 표시할 수 없습니다. 새로고침을 눌러 주세요.';
@@ -255,7 +268,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     if (busy) return;
     revision++;
     const ctx = context();
-    if (selectedId !== (id || null)) filters = emptyFilters();
+    if (selectedId !== (id || null)) { filters = emptyFilters(); imageViewer.reset(); }
     selectedId = id || null; markers = []; imageUrl = ''; movingId = null; draft = null; errorText = '';
     loading = Boolean(current()); render();
     if (!current()) return;
@@ -283,14 +296,14 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     photoDraft.reset();
     form.querySelector('button[type="submit"]').textContent='저장하기';
     for (const key of ['storage_name', 'access_code', 'content']) form.elements[key].value = marker[key] || '';
-    form.elements.marker_type.value = marker.id ? markerType(marker) : (filters.type !== 'all' && (!repository || isStorage(filters.type)) ? filters.type : markerType(marker));
+    form.elements.marker_type.value = marker.id ? markerType(marker) : (filters.type !== 'all' && (!repository || editableType(filters.type)) ? filters.type : markerType(marker));
     const companies = getContractors();
     const unavailable = marker.contractor_id && !companies.some(row => row.id === marker.contractor_id);
     form.elements.contractor_id.innerHTML = '<option value="">협력사 선택</option>' + companies.map(row => `<option value="${escape(row.id)}">${escape(row.name)}</option>`).join('') + (unavailable ? `<option value="${escape(marker.contractor_id)}">목록에서 확인할 수 없는 협력사 (다시 선택해 주세요)</option>` : '');
     form.elements.contractor_id.value = repository ? contractorId : marker.contractor_id || '';
     if (repository) {
       form.elements.contractor_id.closest('label').hidden = true;
-      for (const option of form.elements.marker_type.options) option.hidden = !isStorage(option.value);
+      for (const option of form.elements.marker_type.options) option.hidden = !editableType(option.value);
     }
     root.querySelector('#hmContractorHint').textContent = companies.length ? '협력사 관리에 등록된 현장 협력사를 선택하세요.' : '등록된 협력사가 없습니다. 협력사 관리에서 등록한 뒤 선택할 수 있습니다.';
     root.querySelector('#hmItemRows').innerHTML = '';
@@ -300,7 +313,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     form.querySelector('.hm-form-error').textContent = '';
     root.querySelector('#hmMarkerTitle').textContent = marker.id ? '스티커 정보 수정' : '스티커 등록';
     root.querySelector('#hmMarkerDialog').showModal();
-    form.elements.storage_name.focus();
+    (form.elements.marker_type.value==='memo'?form.elements.content:form.elements.storage_name).focus();
   }
 
   function addItemRow(item = {}) {
@@ -310,7 +323,15 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
   function updateEditorType() {
     const type=root.querySelector('#hmMarkerForm').elements.marker_type.value;
     root.querySelector('#hmStorageFields').hidden = !isStorage(type);
-    root.querySelector('#hmTypeHelp').textContent=type==='issue'?'부적합 위치와 내용을 적고 담당 업체를 지정하세요. 업체 전용 사이트에서 조치 사진을 제출할 수 있습니다.':isStorage(type)?'저장소·창고의 담당 업체와 관리 정보를 입력하고 위치별 사진을 추가하세요.':'현장에서 찾기 쉬운 이름을 입력하세요. 동·게이트는 공용 위치로 안내할 수 있습니다.';
+    const memo=type==='memo',form=root.querySelector('#hmMarkerForm');
+    root.querySelector('#hmMarkerNameField').hidden=memo;
+    root.querySelector('#hmMarkerContractorField').hidden=memo;
+    root.querySelector('#hmMarkerPhotos').hidden=memo;
+    form.elements.storage_name.required=!memo;
+    form.elements.content.maxLength=memo?10000:3000;
+    form.elements.content.rows=memo?10:4;
+    form.elements.content.placeholder=memo?'자유롭게 메모를 적으세요. 도면에는 ‘메모’로만 표시됩니다.':'보관 내용, 주의사항, 점검사항 등을 입력하세요.';
+    root.querySelector('#hmTypeHelp').textContent=type==='memo'?'도면에는 ‘메모’로 표시됩니다. 내용을 길게 적어도 스티커 크기는 그대로이며, 눌러서 확인·수정할 수 있습니다.':type==='issue'?'부적합 위치와 내용을 적고 담당 업체를 지정하세요. 업체 전용 사이트에서 조치 사진을 제출할 수 있습니다.':isStorage(type)?'저장소·창고의 담당 업체와 관리 정보를 입력하고 위치별 사진을 추가하세요.':'현장에서 찾기 쉬운 이름을 입력하세요. 동·게이트는 공용 위치로 안내할 수 있습니다.';
   }
 
   function openUpload(replace = false) {
@@ -402,8 +423,9 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
       const marker = markers.find(row => row.id === button.dataset.id);
       switch (button.dataset.action) {
         case 'locate': if (marker) { highlightedId=marker.id; viewMode='all'; render(); root.querySelector('#hmStage')?.scrollIntoView({behavior:'smooth',block:'center'}); root.querySelector('#hmStage')?.focus({preventScroll:true}); } break;
-        case 'view': if(marker) { highlightedId=marker.id; render(); const card=[...root.querySelectorAll('[data-location-id]')].find(el=>el.dataset.locationId===marker.id); card?.scrollIntoView({behavior:'smooth',block:'center'}); card?.focus({preventScroll:true}); } break;
+        case 'view': if(marker) { highlightedId=marker.id; render(); const card=[...root.querySelectorAll('[data-location-id]')].find(el=>el.dataset.locationId===marker.id); card?.scrollIntoView({behavior:'smooth',block:'center'}); card?.focus({preventScroll:true}); const memo=card?.querySelector('.hm-memo-content'); if(memo) memo.open=true; } break;
         case 'clear-filters': filters=emptyFilters(); render(); break;
+        case 'zoom-photo': if(current()&&imageUrl) imageViewer.open({title:current().title,url:imageUrl,width:current().width,height:current().height,markers:filterHazardMarkers(markers,filters,getContractors()).map(row=>({x:row.x,y:row.y,label:markerType(row)==='memo'?'메모':row.storage_name}))}); break;
         case 'photos': if (marker) photos.open(marker); break;
         case 'upload': root.querySelector('#hmUpload').click(); break;
         case 'add': openEditor({ x: 0.5, y: 0.5 }); break;
@@ -425,7 +447,8 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     if (busy || !draft || !current()) return;
     const form = e.target, ctx = context();
     const values = Object.fromEntries(['storage_name', 'access_code', 'content', 'marker_type'].map(key => [key, form.elements[key].value.trim()]));
-    values.contractor_id = form.elements.contractor_id.value || null;
+    if(values.marker_type==='memo') values.storage_name='메모';
+    values.contractor_id = values.marker_type==='memo' ? draft.contractor_id || (repository?contractorId:null) : form.elements.contractor_id.value || null;
     values.items = [...form.querySelectorAll('.hm-item-row')].map(row => ({ name: row.querySelector('[name="item_name"]').value.trim(), quantity: row.querySelector('[name="item_quantity"]').value.trim() })).filter(item => item.name || item.quantity);
     if (!values.storage_name) { form.elements.storage_name.focus(); return; }
     if (isStorage(values.marker_type) && values.items.some(item => !item.name)) {
@@ -446,7 +469,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
       // Keep the new ID immediately: a photo retry updates this sticker rather
       // than inserting a second one after a partial upload failure.
       draft={...data};
-      const attached=photoDraft.count;
+      const attached=values.marker_type==='memo'?0:photoDraft.count;
       let refreshFailed=false;
       if(attached) {
         const result=await photoDraft.save(data,()=>isCurrent(ctx),message=>{ if(isCurrent(ctx)) form.querySelector('.hm-form-error').textContent=message; });
