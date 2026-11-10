@@ -6,7 +6,8 @@
 <div id="directoryLoading" class="portal-empty" role="status">협력사 목록을 불러오는 중입니다…</div>
 <div id="directoryError" class="directory-error" role="alert" hidden></div>
 <section id="directoryContent" hidden>
-<div class="portal-overview"><div><span class="eyebrow">SITE PARTNERS</span><h2>함께 만드는 안전한 현장</h2><p>협력사명을 누르면 해당 협력사의 자료 관리페이지로 이동합니다.</p></div><button id="directoryRegister" class="btn btn-primary">+ 협력사 등록하기</button></div>
+<div class="portal-overview"><div><span class="eyebrow">SITE PARTNERS</span><h2>우리 업체 페이지에서 MSDS·경고표지를 인쇄하세요</h2><p>아래에서 우리 업체를 찾고 <b>업체 페이지 열기</b>를 누르세요. MSDS 확인·업로드와 경고표지 인쇄를 할 수 있습니다.</p></div><button id="directoryRegister" class="btn btn-secondary">목록에 없는 업체 등록하기</button></div>
+<section class="directory-guide" aria-labelledby="directoryGuideTitle"><div><h3 id="directoryGuideTitle">처음 오셨나요? 이렇게 이용하세요</h3><ol><li><b>1. 우리 업체 검색</b><span>아래 검색창에 회사명을 입력하세요.</span></li><li><b>2. 업체 페이지 열기</b><span>회사명 아래의 진입 버튼을 누르세요.</span></li><li><b>3. 자료 확인·인쇄</b><span>MSDS 원본 또는 경고표지를 선택해 인쇄하세요.</span></li></ol></div><button type="button" class="btn btn-primary" id="directoryFindCompany">우리 업체 찾기 ↓</button></section>
 <div class="portal-stats"><div><span>전체 협력사</span><strong id="directoryTotal">0</strong></div><div><span>등록증 제출</span><strong id="directoryLicenseTotal">0</strong></div><div><span>MSDS 제출</span><strong id="directoryMsdsTotal">0</strong></div></div>
 <div class="portal-toolbar directory-toolbar"><input id="directorySearch" type="search" placeholder="협력사명, 관리자명, 전화번호 검색" aria-label="협력사 검색"><select id="directoryFilter" aria-label="제출 현황 필터"><option value="all">전체 협력사</option><option value="license">등록증 미제출</option><option value="msds">MSDS 미제출</option></select><button class="btn btn-secondary" id="directoryRefresh">새로고침</button></div>
 <p id="directoryResultCount" class="directory-count" role="status"></p>

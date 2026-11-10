@@ -107,7 +107,7 @@ function renderPortalDocumentLists() {
     const query = document.getElementById(searchId).value.trim().toLowerCase();
     const rows = portalRecords.filter(r => [r.product_name, r.work_type, r.supplier, r.pdf_name]
       .some(value => (value || '').toLowerCase().includes(query)));
-  document.getElementById(listId).innerHTML = rows.length ? rows.map(r => `<article class="document-row"><div class="document-icon" aria-hidden="true">↗</div><div class="document-info"><h3>${escapeHtml(r.product_name)}</h3><p>${escapeHtml(r.work_type || '공종 미지정')} · ${escapeHtml(r.pdf_name || '첨부파일 없음')}</p><span class="status ${printable(r) ? 'ready' : ''}">${printable(r) ? '안전정보 등록' : '관리자 분석 대기'}</span></div><div class="document-actions">${r.pdf_path ? `<a class="btn btn-secondary" href="${import.meta.env.VITE_SUPABASE_URL}/functions/v1/msds-view?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener noreferrer">원본 보기 ↗</a>` : '<span class="muted">원본 없음</span>'}</div></article>`).join('') : `<div class="portal-empty">${query ? '검색 결과가 없습니다.' : '아직 등록된 MSDS가 없습니다. 새 자료를 업로드해주세요.'}</div>`;
+  document.getElementById(listId).innerHTML = rows.length ? rows.map(r => `<article class="document-row"><div class="document-icon" aria-hidden="true">↗</div><div class="document-info"><h3>${escapeHtml(r.product_name)}</h3><p>${escapeHtml(r.work_type || '공종 미지정')} · ${escapeHtml(r.pdf_name || '첨부파일 없음')}</p><span class="status ${printable(r) ? 'ready' : ''}">${printable(r) ? '안전정보 등록' : '관리자 분석 대기'}</span></div><div class="document-actions">${r.pdf_path ? `<a class="btn btn-secondary" href="${import.meta.env.VITE_SUPABASE_URL}/functions/v1/msds-view?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener noreferrer">MSDS 보기·인쇄 ↗</a>` : '<span class="muted">원본 없음</span>'}</div></article>`).join('') : `<div class="portal-empty">${query ? '검색 결과가 없습니다.' : '아직 등록된 MSDS가 없습니다. 새 자료를 업로드해주세요.'}</div>`;
     if (listId === 'uploadExistingList') {
       document.getElementById('uploadExistingCount').textContent = query
         ? `검색 ${rows.length}건 / 전체 ${portalRecords.length}건` : `${portalRecords.length}건`;
@@ -120,7 +120,7 @@ function renderPortalRecords() {
   document.getElementById('licenseSummary').textContent = licenseData ? '등록 완료' : '미등록';
   document.getElementById('warningCount').textContent = portalRecords.filter(printable).length;
 
-  document.getElementById('warningRecordList').innerHTML = portalRecords.length ? portalRecords.map(r => `<label class="warning-row"><input type="checkbox" value="${r.id}" ${printable(r) ? '' : 'disabled'}><span><strong>${escapeHtml(r.product_name)}</strong><small>${printable(r) ? escapeHtml(r.work_type || '공종 미지정') : '관리자 안전정보 분석 후 인쇄할 수 있습니다'}</small></span></label>`).join('') : '<div class="portal-empty">등록된 MSDS가 없습니다.</div>';
+  document.getElementById('warningRecordList').innerHTML = portalRecords.length ? portalRecords.map(r => `<label class="warning-row"><input type="checkbox" value="${r.id}" ${printable(r) ? '' : 'disabled'}><span><strong>${escapeHtml(r.product_name)}</strong><small>${printable(r) ? escapeHtml(r.work_type || '공종 미지정') : '관리자 안전정보 분석 후 인쇄할 수 있습니다'}</small></span></label>`).join('') : `<div class="portal-empty">등록된 MSDS가 없습니다. 자료 등록 후 관리자가 안전정보를 확인하면 경고표지를 인쇄할 수 있습니다.<br><button type="button" class="btn btn-secondary" onclick="switchPortalPanel('upload')">MSDS 자료 등록하기</button></div>`;
   document.getElementById('printPortalWarnings').disabled = !portalRecords.some(printable);
   updatePortalWarningPreview();
 }

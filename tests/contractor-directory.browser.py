@@ -37,7 +37,29 @@ async def main():
   assert await page.title()=='서울 신축현장 전체 협력사 리스트'
   assert await page.locator('#directoryList tr').count()==2
   assert '홍길동' in await page.locator('#directoryList').inner_text()
+  await page.locator('#directoryFindCompany').click()
+  assert await page.locator('#directorySearch').evaluate('e=>document.activeElement===e')
+  assert await page.locator('.directory-open-workspace').count()==2
   await page.screenshot(path=str(OUT/'desktop.png'),full_page=True)
+  for name in ['안전건설','새봄전기']:
+   await page.get_by_role('link',name=name+' MSDS 보기·인쇄',exact=True).click()
+   await page.locator('#recordsPanel:not([hidden])').wait_for()
+   assert 'panel=records' in page.url and name in await page.title()
+   await back_to_directory()
+   await page.get_by_role('link',name=name+' 경고표지 인쇄',exact=True).click()
+   await page.locator('#warningsPanel:not([hidden])').wait_for()
+   assert 'panel=warnings' in page.url and name in await page.title()
+   await page.get_by_role('button',name='MSDS 자료 등록하기',exact=True).click()
+   assert await page.locator('#uploadPanel').is_visible()
+   await back_to_directory()
+  await page.get_by_role('link',name='안전건설 업체 페이지 열기',exact=True).click()
+  await page.locator('#dashboardPanel:not([hidden])').wait_for()
+  await page.locator('.cw-print-actions [data-workspace-nav=records]').click()
+  assert await page.locator('#recordsPanel').is_visible()
+  await page.evaluate("switchPortalPanel('dashboard')")
+  await page.locator('.cw-print-actions [data-workspace-nav=warnings]').click()
+  assert await page.locator('#warningsPanel').is_visible()
+  await back_to_directory()
   assert await page.locator('.directory-register-license').count()==1
   assert await page.locator('.directory-add-msds').count()==2
   for name in ['안전건설','새봄전기']:

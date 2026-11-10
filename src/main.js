@@ -3299,9 +3299,9 @@ function renderMemberList() {
     return `<div class="member-item"><div class="member-avatar">↗</div><div class="member-info">
       <div class="member-name">일반 직원 가입 신청 링크 · ${status}</div>
       <div class="member-email">${expiry}까지 · 1명 참여 가능</div></div>
-      ${canManage && active ? `<button class="btn btn-danger btn-sm" onclick="cancelInvite('${inv.id}')">링크 취소</button>` : ''}</div>`;
+      ${canManage ? `<button type="button" class="btn btn-danger btn-sm" data-delete-invite="${inv.id}" onclick="deleteTeamInvite('${inv.id}', this)" aria-label="${status} 초대 링크 삭제">삭제</button>` : ''}</div>`;
   }).join('');
-  el.innerHTML = memberHtml + (canManage ? `<div class="team-invite-heading">발급한 초대 링크</div>${inviteHtml || '<div class="form-note">발급한 초대 링크가 없습니다.</div>'}` : '');
+  el.innerHTML = memberHtml + (canManage ? `<div class="team-invite-heading">발급한 초대 링크</div><p class="form-note">필요 없는 링크는 상태와 관계없이 삭제할 수 있습니다. 이미 가입한 팀원과 승인 대기 신청은 유지됩니다.</p>${inviteHtml || '<div class="form-note">발급한 초대 링크가 없습니다.</div>'}` : '');
 }
 
 window.openTeamInvite = function () {
@@ -3342,6 +3342,25 @@ window.copyTeamInvite = async function () {
   const input = document.getElementById('teamInviteUrl');
   try { await navigator.clipboard.writeText(createdTeamInvite.url); toast('초대 링크를 복사했습니다.', 'success'); }
   catch { input.focus(); input.select(); toast('링크를 선택했습니다. 복사해서 전달해주세요.'); }
+};
+
+window.deleteTeamInvite = async function (id, button) {
+  if (!canManageTeam()) return toast('현장 관리자만 초대 링크를 삭제할 수 있습니다.', 'error');
+  if (!pendingInvites.some(inv=>inv.id===id)) return;
+  if (!confirm('이 초대 링크를 삭제하시겠습니까? 목록에서 사라지고 더 이상 사용할 수 없습니다. 이미 가입한 팀원과 승인 대기 신청은 유지됩니다.')) return;
+  const workspaceId=currentWS.id;
+  if (button) {button.disabled=true;button.textContent='삭제 중…';}
+  try {
+    await teamRpc('delete_workspace_invite_link',{p_id:id});
+    if (currentWS?.id!==workspaceId) return;
+    pendingInvites=pendingInvites.filter(inv=>inv.id!==id);
+    if (createdTeamInvite?.id===id) {
+      createdTeamInvite=null;
+      document.getElementById('teamInviteResult').hidden=true;
+      document.getElementById('teamInviteUrl').value='';
+    }
+    renderMemberList(); toast('초대 링크를 삭제했습니다.','success');
+  } catch(error) {if(currentWS?.id===workspaceId){toast(error.message,'error');if(button){button.disabled=false;button.textContent='삭제';}}}
 };
 
 window.cancelInvite = async function (id) {
