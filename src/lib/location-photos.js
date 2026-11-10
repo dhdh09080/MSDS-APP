@@ -1,4 +1,4 @@
-import { REVIEW_STATES, reviewState } from './hazard-map-filters.js';
+import { REVIEW_STATES, reviewState, PHOTO_KINDS } from './hazard-map-filters.js';
 const BUCKET = 'hazard-location-photos';
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -78,7 +78,7 @@ export function createLocationPhotos({supabase, getWorkspace, getUser, repositor
       button.setAttribute('aria-pressed',String(key===photoFilter));
       button.querySelector('span').textContent=entries.filter(row=>key==='all'||row.kind===key).length;
     });
-    dialog.querySelector('[data-gallery]').innerHTML = rows.length ? rows.map(row => `<figure><a href="${escape(row.signed_url)}" target="_blank" rel="noopener noreferrer"><img src="${escape(row.signed_url)}" alt="${row.kind === 'remedy' ? '조치' : '발견'} 사진" loading="lazy"></a><figcaption><b class="lp-kind lp-kind-${row.kind==='remedy'?'remedy':'finding'}">${row.kind === 'remedy' ? '조치 후' : '발견 현장'}</b><time>${escape(new Date(row.created_at).toLocaleString('ko-KR'))}</time><p class="lp-note">${escape(row.note)}</p></figcaption>${!repository ? `<button class="btn btn-outline" type="button" data-delete="${escape(row.id)}">사진 삭제</button>` : ''}</figure>`).join('') : '<p class="hm-hint lp-empty">이 분류에 등록된 사진이 없습니다. 위에서 사진을 촬영하거나 선택해 주세요.</p>';
+    dialog.querySelector('[data-gallery]').innerHTML = rows.length ? rows.map(row => `<figure><a href="${escape(row.signed_url)}" target="_blank" rel="noopener noreferrer"><img src="${escape(row.signed_url)}" alt="${PHOTO_KINDS[row.kind] || '일반 기록'} 사진" loading="lazy"></a><figcaption><b class="lp-kind lp-kind-${row.kind==='remedy'?'remedy':'finding'}">${PHOTO_KINDS[row.kind] || '일반 기록'}</b><time>${escape(new Date(row.created_at).toLocaleString('ko-KR'))}</time><p class="lp-note">${escape(row.note)}</p></figcaption>${!repository ? `<button class="btn btn-outline" type="button" data-delete="${escape(row.id)}">사진 삭제</button>` : ''}</figure>`).join('') : '<p class="hm-hint lp-empty">이 분류에 등록된 사진이 없습니다. 위에서 사진을 촬영하거나 선택해 주세요.</p>';
     const hint=dialog.querySelector('[data-review-hint]');
     if(hint) hint.textContent=entries.some(row=>row.kind==='remedy')?'조치 사진을 확인한 후 아래에서 확인 결과를 저장하세요.':'조치 사진이 등록되면 확인 완료할 수 있습니다.';
   }
@@ -87,6 +87,11 @@ export function createLocationPhotos({supabase, getWorkspace, getUser, repositor
     const state=reviewState(marker), el=dialog.querySelector('[data-status]');
     el.textContent=REVIEW_STATES[state].label;
     el.className=`hm-review-status hm-badge-${state}`;
+    const reviewPanel=dialog.querySelector('.lp-review-panel');
+    if(reviewPanel) reviewPanel.hidden=state==='none';
+    const remedyOption=dialog.querySelector('[data-kind] option[value=remedy]');
+    if(remedyOption) remedyOption.disabled=state==='none';
+    if(state==='none' && dialog.querySelector('[data-kind]').value==='remedy') dialog.querySelector('[data-kind]').value='record';
     const note=dialog.querySelector('[data-review-note-display]');
     note.textContent=marker.review_note ? '관리자 의견: '+marker.review_note : '';
     note.hidden=!marker.review_note;
@@ -100,15 +105,15 @@ export function createLocationPhotos({supabase, getWorkspace, getUser, repositor
     dialog.setAttribute('aria-label', '위치별 사진 및 조치 관리');
     dialog.innerHTML = `
       <div class="hm-dialog-heading"><div><span class="lp-eyebrow">위치별 사진 · 조치 이력</span><h2>${escape(row.storage_name)}</h2></div><button type="button" class="btn btn-outline" data-close>닫기</button></div>
-      <div class="lp-status-panel"><p data-status></p><p class="hm-hint">${repository ? '조치 사진 제출 → 관리자 검토 → 확인 완료' : '발견 사진 등록 → 업체 조치 사진 제출 → 관리자 확인'}</p><p data-review-note-display class="hm-review-note" hidden></p></div>
-      <section class="lp-upload-panel" aria-labelledby="lpUploadHeading"><h3 id="lpUploadHeading">사진 등록하기</h3><p class="hm-hint">${repository ? '현장 조치 후 사진을 올려 주세요. ' : ''}촬영하거나 사진을 선택하면 바로 저장됩니다.</p>
-        <label>어떤 사진인가요?<select class="form-input" data-kind><option value="finding">발견 현장 사진 · 조치 전 모습</option><option value="remedy" ${repository ? 'selected' : ''}>조치 후 사진 · 개선한 모습</option></select></label>
+      <div class="lp-status-panel"><p data-status></p><p class="hm-hint">일반 기록은 조치 요청에 포함되지 않습니다. 조치 요청 → 조치 후 사진 → 관리자 확인 순서로 관리합니다.</p><p data-review-note-display class="hm-review-note" hidden></p></div>
+      <section class="lp-upload-panel" aria-labelledby="lpUploadHeading"><h3 id="lpUploadHeading">사진 등록하기</h3><p class="hm-hint">일반 현황은 ‘일반 기록’, 조치를 요청할 때는 ‘조치 요청’을 선택하세요. 촬영하거나 선택하면 바로 저장됩니다.</p>
+        <label>어떤 사진인가요?<select class="form-input" data-kind><option value="record">일반 기록 · 조치 요청 안 함</option><option value="finding">조치 요청 · 조치 전으로 등록</option><option value="remedy" ${repository && reviewState(row)!=='none' ? 'selected' : ''}>조치 후 사진 · 개선한 모습</option></select></label>
         <label>사진 설명 / 조치 내용<textarea class="form-input" data-note maxlength="2000" rows="2" placeholder="예: PIT층 통로 적치물 제거 완료"></textarea></label>
         <div class="lp-controls"><button type="button" class="btn btn-primary" data-camera>📷 바로 촬영</button><button type="button" class="btn btn-outline" data-album>사진 여러 장 선택</button></div>
         <input type="file" data-camera-input accept="image/*" capture="environment" hidden><input type="file" data-album-input accept="image/*" multiple hidden>
         <p class="hm-hint">한 번에 최대 30장 · 한 장 최대 20 MB · 전송 전 크기 자동 조정</p><p data-message class="lp-progress" role="status" aria-live="polite"></p>
       </section>
-      <section class="lp-history" aria-labelledby="lpHistoryHeading"><h3 id="lpHistoryHeading">등록된 사진 확인</h3><p class="hm-hint">사진을 누르면 크게 볼 수 있습니다. 새 창에서 열립니다.</p><div class="lp-photo-filters" role="group" aria-label="사진 분류">${[['all','전체'],['finding','발견 사진'],['remedy','조치 사진']].map(([key,label])=>`<button class="btn btn-outline" type="button" data-photo-filter="${key}" aria-pressed="${key==='all'}">${label} <span>0</span></button>`).join('')}</div><div data-gallery class="lp-gallery"></div></section>
+      <section class="lp-history" aria-labelledby="lpHistoryHeading"><h3 id="lpHistoryHeading">등록된 사진 확인</h3><p class="hm-hint">사진을 누르면 크게 볼 수 있습니다. 새 창에서 열립니다.</p><div class="lp-photo-filters" role="group" aria-label="사진 분류">${[['all','전체'],['record','일반 기록'],['finding','조치 요청'],['remedy','조치 후']].map(([key,label])=>`<button class="btn btn-outline" type="button" data-photo-filter="${key}" aria-pressed="${key==='all'}">${label} <span>0</span></button>`).join('')}</div><div data-gallery class="lp-gallery"></div></section>
       ${!repository && canReview() ? '<section class="lp-review-panel" aria-labelledby="lpReviewHeading"><h3 id="lpReviewHeading">관리자 확인</h3><p class="hm-hint" data-review-hint></p><label>관리자 확인 의견<textarea class="form-input" data-review-note maxlength="2000" rows="2" placeholder="확인 의견 또는 재조치가 필요한 내용을 입력하세요"></textarea></label><div class="lp-controls"><button type="button" class="btn btn-primary" data-review="verified">확인 완료</button><button type="button" class="btn btn-outline" data-review="open">재조치 요청</button></div></section>' : ''}`;
     document.body.append(dialog);
     dialog.querySelector('[data-close]').onclick = () => { if (!busy) dialog.close(); };
@@ -148,7 +153,6 @@ export function createLocationPhotos({supabase, getWorkspace, getUser, repositor
         await load(seq, ws);
         message(`${saved}장 저장 완료${failed.length ? `\n실패 ${failed.length}장 (실패한 사진만 다시 선택해 주세요)\n${failed.join('\n')}` : ''}`);
         if (saved) {
-          dialog.querySelector('[data-status]').textContent = kind === 'remedy' ? '관리자 확인 전' : '조치 전';
           marker = await onChange(marker.id) || marker; updateStatus();
         }
       }

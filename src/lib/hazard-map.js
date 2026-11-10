@@ -1,7 +1,7 @@
 import './hazard-map.css';
 import { createLocationPhotos } from './location-photos.js';
 import { createMarkerPhotoDraft } from './marker-photo-draft.js';
-import { REVIEW_STATES, reviewState, emptyFilters, filterHazardMarkers, issueSummary } from './hazard-map-filters.js';
+import { REVIEW_STATES, reviewState, emptyFilters, filterHazardMarkers, actionSummary } from './hazard-map-filters.js';
 
 const BUCKET = 'hazard-map-photos';
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -62,13 +62,13 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     root = document.getElementById('hazardMapRoot');
     root.innerHTML = `
       <details class="hm-help"><summary>처음 사용하시나요? 관리 순서 보기</summary>
-        <ol>${repository ? '<li><b>담당 위치 찾기</b><span>도면을 고르고, 분류나 조치 상태로 우리 업체의 항목을 찾으세요.</span></li><li><b>조치 사진 제출</b><span>위치 카드의 사진 / 조치 관리에서 조치 후 사진과 설명을 올리세요.</span></li><li><b>확인 결과 보기</b><span>관리자 확인 완료를 확인하세요. 재조치 의견이 있으면 보완 사진을 제출하세요.</span></li>' : '<li><b>도면 등록</b><span>도면·전경 업로드에서 PIT층 도면이나 현장 사진을 올리세요.</span></li><li><b>위치와 사진 등록</b><span>도면을 눌러 분류·이름·담당 업체를 지정하고 발견 사진을 첨부하세요.</span></li><li><b>업체 조치 → 관리자 확인</b><span>업체가 전용 사이트에서 조치 사진을 올리면, 관리자가 확인 완료하거나 재조치를 요청하세요.</span></li>'}</ol>
+        <ol>${repository ? '<li><b>담당 위치 찾기</b><span>도면을 고르고, 분류나 조치 상태로 우리 업체의 항목을 찾으세요.</span></li><li><b>조치 사진 제출</b><span>위치 카드의 사진 / 조치 관리에서 조치 후 사진과 설명을 올리세요.</span></li><li><b>확인 결과 보기</b><span>관리자 확인 완료를 확인하세요. 재조치 의견이 있으면 보완 사진을 제출하세요.</span></li>' : '<li><b>도면 등록</b><span>도면·전경 업로드에서 PIT층 도면이나 현장 사진을 올리세요.</span></li><li><b>위치와 사진 등록</b><span>도면을 눌러 분류·이름·담당 업체를 지정하고 일반 기록 또는 조치 요청 사진을 첨부하세요.</span></li><li><b>업체 조치 → 관리자 확인</b><span>업체가 전용 사이트에서 조치 사진을 올리면, 관리자가 확인 완료하거나 재조치를 요청하세요.</span></li>'}</ol>
       </details>
       <div class="hm-toolbar">
         <div><label for="hmMapSelect">도면 / 전경 사진</label><select class="form-input" id="hmMapSelect" aria-label="전경 사진 선택"></select></div>
         <div class="hm-actions"><button type="button" class="btn btn-outline" id="hmRefresh">새로고침</button><button type="button" class="btn btn-primary" id="hmUpload">도면·전경 업로드</button></div>
       </div>
-      <section id="hmOverview" class="hm-overview" aria-labelledby="hmOverviewTitle" hidden><div class="hm-overview-heading"><h2 id="hmOverviewTitle">부적합 진행 현황</h2><span>선택한 위치도 기준 · 누르면 모아보기</span></div><div class="hm-summary-grid">${[['all','부적합 전체'],['open','조치 전'],['pending','관리자 확인 전'],['verified','확인 완료']].map(([key,label])=>`<button class="hm-summary hm-state-${key}" type="button" data-quick-status="${key}" aria-pressed="false"><span>${label}</span><strong data-count="${key}">0</strong><small>${({all:'등록된 부적합',open:'조치가 필요해요',pending:repository?'검토를 기다려 주세요':'사진을 검토해 주세요',verified:'조치 확인을 마쳤어요'})[key]}</small></button>`).join('')}</div></section>
+      <section id="hmOverview" class="hm-overview" aria-labelledby="hmOverviewTitle" hidden><div class="hm-overview-heading"><h2 id="hmOverviewTitle">조치 요청 현황</h2><span>선택한 위치도 기준 · 누르면 모아보기</span></div><div class="hm-summary-grid">${[['all','조치 요청 전체'],['open','조치 전'],['pending','관리자 확인 전'],['verified','확인 완료']].map(([key,label])=>`<button class="hm-summary hm-state-${key}" type="button" data-quick-status="${key}" aria-pressed="false"><span>${label}</span><strong data-count="${key}">0</strong><small>${({all:'조치를 요청한 위치',open:'조치가 필요해요',pending:repository?'검토를 기다려 주세요':'사진을 검토해 주세요',verified:'조치 확인을 마쳤어요'})[key]}</small></button>`).join('')}</div></section>
       <section id="hmFilters" class="hm-filters" aria-label="위치 검색 및 분류" hidden>
         <label class="hm-search-label">위치 찾기<input class="form-input" type="search" id="hmSearch" placeholder="위치명·업체·관리사항·물질명 검색" maxlength="200" /></label>
         <div class="hm-filter-fields"><label>위치 분류<select class="form-input" id="hmTypeFilter"><option value="all">모든 분류</option>${Object.entries(TYPES).map(([key,type])=>`<option value="${key}">${type.label}</option>`).join('')}</select></label><label>조치 상태<select class="form-input" id="hmStateFilter"><option value="all">모든 상태</option>${Object.entries(REVIEW_STATES).map(([key,state])=>`<option value="${key}">${state.label}</option>`).join('')}</select></label><label ${repository ? 'hidden' : ''}>담당 업체<select class="form-input" id="hmContractorFilter"></select></label></div>
@@ -110,9 +110,9 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     if (repository) root.querySelector('#hmUpload').hidden = true;
     root.querySelector('#hmMapSelect').addEventListener('change', e => selectMap(e.target.value));
     root.querySelector('#hmSearch').addEventListener('input', e => { filters.query = e.target.value; render(); });
-    for (const [id,key] of [['hmTypeFilter','type'],['hmStateFilter','status'],['hmContractorFilter','contractor']]) root.querySelector('#'+id).addEventListener('change',e=>{ filters[key]=e.target.value; render(); });
+    for (const [id,key] of [['hmTypeFilter','type'],['hmStateFilter','status'],['hmContractorFilter','contractor']]) root.querySelector('#'+id).addEventListener('change',e=>{ filters[key]=e.target.value; if(key==='status') filters.requested=false; render(); });
     root.querySelector('#hmClearFilters').addEventListener('click',()=>{ filters=emptyFilters(); render(); });
-    root.querySelectorAll('[data-quick-status]').forEach(button=>button.addEventListener('click',()=>{ filters={...emptyFilters(),type:'issue',status:button.dataset.quickStatus}; render(); }));
+    root.querySelectorAll('[data-quick-status]').forEach(button=>button.addEventListener('click',()=>{ filters={...emptyFilters(),status:button.dataset.quickStatus,requested:true}; render(); }));
     root.querySelectorAll('[data-hm-view]').forEach(button=>button.addEventListener('click',()=>{ viewMode=button.dataset.hmView; render(); }));
     root.querySelector('#hmRefresh').addEventListener('click', () => show());
     root.querySelector('#hmUpload').addEventListener('click', () => openUpload());
@@ -162,21 +162,21 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
       ${isStorage(type) ? `<dl><div><dt>협력사</dt><dd>${escape(contractor?.name || (marker.contractor_id ? '목록에서 확인할 수 없는 협력사' : '미선택'))}</dd></div><div><dt>비밀번호</dt><dd>${escape(marker.access_code || '미입력')}</dd></div></dl>
       ${items.length ? `<table class="hm-items-table"><caption class="hm-sr-only">물질별 수량</caption><thead><tr><th scope="col">물질</th><th scope="col">수량</th></tr></thead><tbody>${items.map(item => `<tr><td>${escape(item.name)}</td><td>${escape(item.quantity || '미입력')}</td></tr>`).join('')}</tbody></table>` : '<p class="hm-hint">등록된 물질 없음</p>'}` : ''}
       ${!isStorage(type) && marker.contractor_id ? `<p class="hm-hint">담당 협력사: ${escape(contractor?.name || '지정 업체')}</p>` : ''}
-      <p class="hm-review-status hm-badge-${reviewState(marker)}">${REVIEW_STATES[reviewState(marker)].label}${marker.reviewed_at ? ` · ${escape(new Date(marker.reviewed_at).toLocaleString('ko-KR'))}` : ''}</p>
+      ${reviewState(marker)!=='none' ? `<p class="hm-review-status hm-badge-${reviewState(marker)}">${REVIEW_STATES[reviewState(marker)].label}${marker.reviewed_at ? ` · ${escape(new Date(marker.reviewed_at).toLocaleString('ko-KR'))}` : ''}</p>` : ''}
       ${marker.review_note ? `<p class="hm-review-note"><b>관리자 의견</b> ${escape(marker.review_note)}</p>` : ''}
       ${marker.content ? `<p class="hm-content">${escape(marker.content)}</p>` : ''}
-      ${!repository || marker.contractor_id === contractorId ? `<p class="hm-next-step">${markerType(marker) === 'issue' ? repository && reviewState(marker)==='pending' ? '사진 제출 완료 · 관리자의 확인을 기다려 주세요' : REVIEW_STATES[reviewState(marker)].hint : '위치별 발견 사진과 조치 이력을 관리하세요'}</p><button type="button" class="btn btn-outline hm-photo-button" data-action="photos" data-id="${escape(marker.id)}">📷 사진 / 조치 관리</button>` : ''}
+      ${!repository || marker.contractor_id === contractorId ? `<p class="hm-next-step">${repository && reviewState(marker)==='pending' ? '사진 제출 완료 · 관리자의 확인을 기다려 주세요' : REVIEW_STATES[reviewState(marker)].hint}</p><button type="button" class="btn btn-outline hm-photo-button" data-action="photos" data-id="${escape(marker.id)}">📷 사진 / 조치 관리</button>` : ''}
       <button type="button" class="btn btn-outline btn-sm hm-locate" data-action="locate" data-id="${escape(marker.id)}">도면에서 위치 보기</button>
-      ${editable(marker) ? `<div class="hm-actions"><button type="button" class="btn btn-outline btn-sm" data-action="edit" data-id="${escape(marker.id)}">정보 수정</button><button type="button" class="btn btn-outline btn-sm" data-action="move" data-id="${escape(marker.id)}">위치 이동</button><button type="button" class="btn btn-outline btn-sm" data-action="delete" data-id="${escape(marker.id)}">삭제</button></div>` : `<p class="hm-hint">${marker.contractor_id === contractorId ? '부적합 정보는 현장 관리자가 수정합니다. 조치 사진을 제출해 주세요.' : '현장 공용 위치'}</p>`}</article>`;
+      ${editable(marker) ? `<div class="hm-actions"><button type="button" class="btn btn-outline btn-sm" data-action="edit" data-id="${escape(marker.id)}">정보 수정</button><button type="button" class="btn btn-outline btn-sm" data-action="move" data-id="${escape(marker.id)}">위치 이동</button><button type="button" class="btn btn-outline btn-sm" data-action="delete" data-id="${escape(marker.id)}">삭제</button></div>` : `<p class="hm-hint">${marker.contractor_id === contractorId ? '위치 정보는 현장 관리자가 수정합니다. 사진을 기록하거나 조치를 요청할 수 있습니다.' : '현장 공용 위치'}</p>`}</article>`;
   }
 
   function syncFilters(visible) {
     const available = Boolean(current()) && !loading && !errorText;
     root.querySelector('#hmOverview').hidden = !available;
     root.querySelector('#hmFilters').hidden = !available;
-    const counts=issueSummary(markers);
+    const counts=actionSummary(markers);
     root.querySelectorAll('[data-count]').forEach(el=>{ el.textContent=counts[el.dataset.count]; });
-    root.querySelectorAll('[data-quick-status]').forEach(el=>el.setAttribute('aria-pressed',String(filters.type==='issue' && filters.status===el.dataset.quickStatus)));
+    root.querySelectorAll('[data-quick-status]').forEach(el=>el.setAttribute('aria-pressed',String(filters.requested && filters.status===el.dataset.quickStatus)));
     root.querySelector('#hmSearch').value=filters.query;
     root.querySelector('#hmTypeFilter').value=filters.type;
     root.querySelector('#hmStateFilter').value=filters.status;

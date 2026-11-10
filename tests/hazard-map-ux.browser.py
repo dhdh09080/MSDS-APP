@@ -11,9 +11,9 @@ async def main():
  ('PIT 동측 통로 적치물 정리','issue','open','con-3',.20,.23,'통행로 적치물을 정리해 주세요',''),
  ('PIT 서측 안전난간 보완','issue','pending','con-1',.66,.23,'조치 사진을 확인해 주세요',''),
  ('PIT 출입구 정비','issue','verified','con-3',.86,.76,'출입구 정리 완료','안전팀 확인 완료'),
- ('지하 자재 창고','warehouse','open','con-1',.30,.72,'자재 적치 상태 확인',''),
- ('정문','gate','open',None,.90,.57,'현장 공용 출입구',''),
- ('동측 위험물 저장소','hazard','open','con-3',.75,.46,'화기 엄금','')])]
+ ('지하 자재 창고','warehouse','none','con-1',.30,.72,'자재 적치 상태 확인',''),
+ ('정문','gate','none',None,.90,.57,'현장 공용 출입구',''),
+ ('동측 위험물 저장소','hazard','none','con-3',.75,.46,'화기 엄금','')])]
  maps=[dict(id='plan',workspace_id='preview-workspace',title='PIT층 도면 · 지하 1층',storage_path='plan.svg',width=1200,height=700),dict(id='second',workspace_id='preview-workspace',title='지상 1층 도면',storage_path='plan.svg',width=1200,height=700)]
  errors=[]
  async with async_playwright() as p:
@@ -30,6 +30,8 @@ async def main():
    return await route.fulfill(json=[])
   await page.route('**/*.supabase.co/**',api)
   await page.goto(BASE+'/?preview=hazard-map');await page.locator('.hm-storage-card').nth(5).wait_for()
+  assert await page.locator('[data-location-id=m3] .hm-review-status').count()==0
+  assert await page.locator('[data-location-id=m4] .hm-review-status').count()==0
   assert await page.locator('[data-count=all]').inner_text()=='3'
   assert await page.locator('[data-count=pending]').inner_text()=='1'
   await page.locator('.hm-help summary').click();assert '도면 등록' in await page.locator('.hm-help').inner_text();await page.locator('.hm-help summary').click()

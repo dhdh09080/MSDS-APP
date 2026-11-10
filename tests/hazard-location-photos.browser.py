@@ -38,7 +38,7 @@ async def main():
    if u.path.endswith('/hazard_markers'):
     if req.method=='GET':return await route.fulfill(json=markers)
     if req.method=='POST':
-     marker=dict(body,id=f'marker-{len(markers)}',photo_revision=0,review_status='open');markers.append(marker);return await route.fulfill(json=marker)
+     marker=dict(body,id=f'marker-{len(markers)}',photo_revision=0,review_status='none');markers.append(marker);return await route.fulfill(json=marker)
     marker=next(m for m in markers if q['id'][0]=='eq.'+m['id']);marker.update(body);return await route.fulfill(json=marker)
    if u.path.endswith('/hazard_location_photos'):
     if req.method=='GET':return await route.fulfill(json=[r for r in photos if q.get('marker_id',['eq.'+r['marker_id']])[0]=='eq.'+r['marker_id']])
@@ -46,7 +46,8 @@ async def main():
      if body['note']=='fail-once' and not failed:
       failed=True;return await route.fulfill(status=500,json={'message':'일시적인 저장 실패'})
      photo=dict(body,id=f'photo-{len(photos)}',created_at='2026-11-10T01:00:00Z');photos.append(photo)
-     marker=next(m for m in markers if m['id']==photo['marker_id']);marker.update(photo_revision=marker['photo_revision']+1,review_status='pending' if photo['kind']=='remedy' else 'open',reviewed_at=None)
+     marker=next(m for m in markers if m['id']==photo['marker_id']);
+     if photo['kind']!='record':marker.update(photo_revision=marker['photo_revision']+1,review_status='pending' if photo['kind']=='remedy' else 'open',reviewed_at=None)
      return await route.fulfill(json=photo)
    return await route.fulfill(json=[])
   await page.route('**/*.supabase.co/**',api)
@@ -68,6 +69,7 @@ async def main():
   assert len(photos)==0 and len(calls)==0, 'Selection uploaded before the sticker was saved'
   await form.locator('[data-remove-photo]').nth(1).click()
   assert await form.locator('[data-draft-previews] figure').count()==1
+  await form.locator('[data-draft-kind]').select_option('finding')
   await form.locator('[data-draft-note]').fill('fail-once')
   await form.locator('[data-draft-camera-input]').set_input_files({'name':'retry.png','mimeType':'image/png','buffer':png()})
   assert await form.locator('[data-draft-previews] figure').count()==2
@@ -75,6 +77,8 @@ async def main():
   await form.locator('button[type=submit]').click()
   await form.locator('.hm-form-error').get_by_text('실패한 사진만 남아 있습니다.',exact=False).wait_for()
   assert len(markers)==1 and len(photos)==1
+  assert photos[0]['kind']=='record' and markers[0]['review_status']=='none'
+  assert await page.locator('.hm-storage-card .hm-review-status').count()==0
   assert await form.locator('[data-draft-previews] figure').count()==1
   assert 'retry.png' in await form.locator('[data-draft-previews]').inner_text()
   await form.locator('button[type=submit]').click()
@@ -107,7 +111,7 @@ async def main():
   await modal.locator('[data-photo-filter=remedy]').click()
   assert await modal.locator('.lp-gallery figure').count()==2
   await modal.locator('[data-photo-filter=finding]').click()
-  assert await modal.locator('.lp-gallery figure').count()==3
+  assert await modal.locator('.lp-gallery figure').count()==2
   await modal.locator('[data-photo-filter=all]').click()
   await page.screenshot(path=str(OUT/'photo-dialog-mobile.png'))
   assert markers[0]['review_status']=='pending'
@@ -115,6 +119,12 @@ async def main():
   await modal.locator('[data-review=verified]').click()
   await modal.locator('[data-message]').get_by_text('관리자 확인 상태를 저장했습니다.',exact=True).wait_for()
   assert markers[0]['review_status']=='verified'
+  await modal.locator('[data-kind]').select_option('record')
+  await modal.locator('[data-album-input]').set_input_files({'name':'reference.png','mimeType':'image/png','buffer':png()})
+  await modal.locator('[data-message]').get_by_text('1장 저장 완료',exact=False).wait_for()
+  await modal.locator('[data-camera]:not([disabled])').wait_for()
+  assert markers[0]['review_status']=='verified', 'Ordinary record reopened an approved action'
+  await modal.locator('[data-kind]').select_option('remedy')
   await modal.locator('[data-review-note]').fill('PIT 통로 추가 정리 필요')
   await modal.locator('[data-review=open]').click()
   await page.wait_for_function("document.querySelector('.hm-review-status')?.textContent.includes('조치 전')")
@@ -125,7 +135,7 @@ async def main():
   await modal.locator('[data-close]:not([disabled])').click()
   await page.reload();await page.locator('[data-action=photos]').click()
   await modal.locator('[data-camera]:not([disabled])').wait_for()
-  assert await modal.locator('.lp-gallery figure').count()==6
+  assert await modal.locator('.lp-gallery figure').count()==7
   await modal.locator('[data-close]').click()
   await page.locator('[data-action=add]').click()
   await form.locator('[data-draft-album-input]').set_input_files({'name':'cancel.png','mimeType':'image/png','buffer':png()})

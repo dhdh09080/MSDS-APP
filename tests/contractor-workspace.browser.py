@@ -11,7 +11,7 @@ async def main():
  OUT.mkdir(parents=True,exist_ok=True)
  contacts=[dict(id='contact-a',name='김관리',phone='010-1111-1111',is_primary=True)]
  maps=[dict(id=MID,workspace_id=WS,title='현장 전경',storage_path='fixture.png',width=1000,height=600)]
- markers=[dict(id='marker-own',workspace_id=WS,map_id=MID,contractor_id=CON,x=.4,y=.5,storage_name='동측 위험물 저장소',marker_type='hazard',items=[dict(name='신나',quantity='20 L')],access_code='1234',content='화기 엄금'),dict(id='marker-common',workspace_id=WS,map_id=MID,contractor_id=None,x=.8,y=.8,storage_name='정문',marker_type='gate',items=[],content='')]
+ markers=[dict(id='marker-own',workspace_id=WS,map_id=MID,contractor_id=CON,x=.4,y=.5,storage_name='동측 위험물 저장소',marker_type='hazard',review_status='open',items=[dict(name='신나',quantity='20 L')],access_code='1234',content='화기 엄금'),dict(id='marker-common',workspace_id=WS,map_id=MID,contractor_id=None,x=.8,y=.8,storage_name='정문',marker_type='gate',items=[],content='')]
  writes=[];errors=[];workers=[];photos=[]
  async with async_playwright() as p:
   browser=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])

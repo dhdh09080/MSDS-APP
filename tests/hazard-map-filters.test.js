@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {emptyFilters,filterHazardMarkers,issueSummary} from '../src/lib/hazard-map-filters.js';
+import {emptyFilters,filterHazardMarkers,actionSummary} from '../src/lib/hazard-map-filters.js';
 const companies=[{id:'a',name:'한빛전기'},{id:'b',name:'대한건설'}];
 const markers=[
  {id:'open',marker_type:'issue',storage_name:'PIT 동측 통로',contractor_id:'a',review_status:'open',content:'적치물 정리'},
@@ -21,7 +21,10 @@ test('combine type, status, company and search without losing map/list identity'
  assert.deepEqual(find({type:'hazard'}),['legacy']);
  assert.deepEqual(find({}),markers.map(row=>row.id));
 });
-test('issue counts exclude warehouses and common landmarks with default open state',()=>{
- assert.deepEqual(issueSummary(markers),{all:3,open:1,pending:1,verified:1});
- assert.deepEqual(issueSummary([]),{all:0,open:0,pending:0,verified:0});
+test('action counts exclude ordinary locations and include requests in any category',()=>{
+ assert.deepEqual(actionSummary(markers),{all:3,open:1,pending:1,verified:1});
+ assert.deepEqual(actionSummary([...markers,{id:'warehouse-request',marker_type:'warehouse',review_status:'open'}]),{all:4,open:2,pending:1,verified:1});
+ assert.deepEqual(find({status:'none'}),['warehouse','gate','legacy']);
+ assert.deepEqual(find({requested:true}),['open','pending','done']);
+ assert.deepEqual(actionSummary([]),{all:0,open:0,pending:0,verified:0});
 });

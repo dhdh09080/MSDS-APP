@@ -18,7 +18,7 @@ Deno.serve(async req => {
     if (error || !context?.markers?.some((m:{id:string,contractor_id:string}) => m.id===marker_id && m.contractor_id===contractor_id)) return json({error:'유효한 담당 업체 링크가 필요합니다.'},403);
     if (form) {
       const file = form.get('photo'), kind = form.get('kind'), note = form.get('note') || '';
-      if (!(file instanceof File) || file.type !== 'image/jpeg' || file.size === 0 || file.size > 20*1024*1024 || !['finding','remedy'].includes(String(kind)) || typeof note !== 'string' || note.length>2000) return json({error:'올바른 JPG 사진과 설명을 입력해 주세요.'},400);
+      if (!(file instanceof File) || file.type !== 'image/jpeg' || file.size === 0 || file.size > 20*1024*1024 || !['record','finding','remedy'].includes(String(kind)) || typeof note !== 'string' || note.length>2000) return json({error:'올바른 JPG 사진과 설명을 입력해 주세요.'},400);
       const magic = new Uint8Array(await file.slice(0,3).arrayBuffer());
       if (magic[0]!==0xff || magic[1]!==0xd8 || magic[2]!==0xff) return json({error:'JPG 형식이 아닙니다.'},400);
       const path = `${context.maps.find((m:{id:string}) => m.id===map_id).workspace_id}/${marker_id}/${crypto.randomUUID()}.jpg`;
