@@ -18,14 +18,23 @@ async def main():
  errors=[]
  async with async_playwright() as p:
   browser=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
-  page=await browser.new_page(viewport=dict(width=1440,height=1000),has_touch=True);page.on('pageerror',lambda e:errors.append(str(e)))
+  page=await browser.new_page(viewport=dict(width=1440,height=1000),has_touch=True);page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept())
   async def api(route):
    req=route.request;u=urlparse(req.url);q=parse_qs(u.query)
    if '/storage/v1/object/sign/' in u.path:
     if req.method=='POST':return await route.fulfill(json={'signedURL':'/object/sign/hazard-map-photos/plan.svg?token=fixture'})
     return await route.fulfill(content_type='image/svg+xml',body=PLAN)
    if u.path.endswith('/hazard_maps'):return await route.fulfill(json=maps)
-   if u.path.endswith('/hazard_markers'):return await route.fulfill(json=markers if q.get('map_id',[''])[0]=='eq.plan' else [])
+   if u.path.endswith('/hazard_markers'):
+    if req.method=='GET':return await route.fulfill(json=markers if q.get('map_id',[''])[0]=='eq.plan' else [])
+    data=req.post_data_json
+    if req.method=='POST':
+     row=dict(data,id='memo-new',review_status='none');markers.append(row)
+    else:
+     row=next(m for m in markers if q['id'][0]=='eq.'+m['id'])
+     if req.method=='PATCH':row.update(data)
+     if req.method=='DELETE':markers.remove(row)
+    return await route.fulfill(json=row)
    if u.path.endswith('/hazard_location_photos'):return await route.fulfill(json=[])
    return await route.fulfill(json=[])
   await page.route('**/*.supabase.co/**',api)
@@ -69,7 +78,66 @@ async def main():
   await page.locator('#hmClearFilters').click()
   await page.locator('[data-location-id=m4] [data-action=locate]').click()
   assert await page.locator('.hm-storage-card.is-highlighted h3').inner_text()=='정문'
+  await page.locator('#hmTypeFilter').select_option('memo')
+  await page.locator('[data-action=add]').click()
+  form=page.locator('#hmMarkerForm')
+  assert await form.locator('[name=marker_type]').input_value()=='memo'
+  assert not await page.locator('#hmMarkerNameField').is_visible()
+  assert not await page.locator('#hmStorageFields').is_visible()
+  long_note='긴 메모 내용입니다. 줄바꿈도 자유롭게 적습니다.\n'*150
+  await form.locator('[name=content]').fill(long_note)
+  await form.locator('button[type=submit]').click()
+  await page.locator('#hmMarkerDialog').wait_for(state='hidden')
+  assert await page.locator('.hm-pin.hm-type-memo').inner_text()=='메모'
+  assert markers[-1]['storage_name']=='메모' and markers[-1]['content']==long_note.strip()
+  assert await page.locator('.hm-review-status').count()==0
+  await page.locator('.hm-pin.hm-type-memo').click()
+  assert await form.locator('[name=content]').input_value()==long_note.strip()
+  await form.locator('[name=content]').fill(long_note+'수정한 마지막 줄')
+  await form.locator('button[type=submit]').click()
+  await page.locator('#hmMarkerDialog').wait_for(state='hidden')
+  await page.locator('[data-action=move]').click()
+  await page.locator('#hmPhoto').click(position=dict(x=50,y=50))
+  await page.wait_for_function('!document.querySelector(".hm-move-banner")')
+  assert markers[-1]['x']!=.5
+  await page.reload();await page.locator('.hm-pin.hm-type-memo').wait_for()
+  await page.locator('#hmTypeFilter').select_option('memo')
+  for width in [360,390,768,1440]:
+   await page.set_viewport_size(dict(width=width,height=1000))
+   assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+   assert await page.locator('.hm-pin.hm-type-memo').inner_text()=='메모'
+  await page.locator('.hm-memo-content summary').click()
+  assert '수정한 마지막 줄' in await page.locator('.hm-memo-content').inner_text()
+  # Read the original drawing in a separate zoom surface; coordinates stay fixed.
+  await page.set_viewport_size(dict(width=390,height=844))
+  snapshot=dict(markers[-1])
+  await page.locator('[data-action=zoom-photo]').click()
+  viewer=page.locator('.hm-zoom-dialog')
+  await page.wait_for_function('document.querySelector(".hm-zoom-stage img")?.naturalWidth>0')
+  before=await viewer.locator('.hm-zoom-stage').evaluate('e=>e.getBoundingClientRect().width')
+  await viewer.locator('[data-zoom-in]').click()
+  after=await viewer.locator('.hm-zoom-stage').evaluate('e=>e.getBoundingClientRect().width')
+  assert after>before*1.4
+  await viewer.locator('[data-zoom-original]').click()
+  assert await viewer.locator('.hm-zoom-stage').evaluate('e=>Math.round(e.getBoundingClientRect().width)')==1200
+  await viewer.locator('[data-zoom-in]').click()
+  await viewer.locator('.hm-zoom-viewport').evaluate('e=>e.scrollTo(300,150)')
+  assert await viewer.locator('.hm-zoom-viewport').evaluate('e=>e.scrollLeft>0 && e.scrollTop>0')
+  await viewer.locator('[data-zoom-markers]').check()
+  assert await viewer.locator('.hm-zoom-marker').inner_text()=='메모'
+  await viewer.locator('[data-zoom-fit]').click()
+  assert await viewer.locator('[data-zoom-value]').inner_text()=='100%'
+  assert await viewer.locator('.hm-zoom-viewport').evaluate('e=>e.scrollLeft===0 && e.scrollTop===0')
+  for width in [360,390,768,1440]:
+   await page.set_viewport_size(dict(width=width,height=1000))
+   await viewer.locator('[data-zoom-fit]').click()
+   assert await viewer.evaluate('e=>e.getBoundingClientRect().right<=innerWidth')
+  await viewer.locator('[data-zoom-close]').click()
+  assert markers[-1]==snapshot, 'Zooming changed the saved sticker'
+  await page.locator('[data-action=delete]').click()
+  await page.locator('.hm-pin.hm-type-memo').wait_for(state='detached')
+  assert len(markers)==6
   assert not errors,errors
   await browser.close()
- print('PASS: issue counts, category/status/company/search intersections, stable numbering, input focus, no-results reset, refresh retention, map selection reset, list/map navigation, common-pin viewing and 360/390/768/1440px')
+ print('PASS: issue counts, category/status/company/search intersections, stable numbering, input focus, no-results reset, refresh retention, map selection reset, list/map navigation, common-pin viewing, long memo CRUD/move/persistence, fixed label, original-image zoom/scroll/fit and 360/390/768/1440px')
 asyncio.run(main())

@@ -82,5 +82,19 @@ await insertPhoto('record');assert.equal((await row()).review_status,'verified')
 await db.exec('reset role');
 await db.query(`delete from hazard_location_photos where marker_id='${marker}' and kind<>'record'`);
 assert.equal((await row()).review_status,'none');
+await db.exec(readFileSync('supabase/migrations/20261110041310_hazard_map_memo_stickers.sql','utf8'));
+await as(admin);
+await db.query(`update hazard_markers set marker_type='memo',storage_name='메모',content=$1 where id='${marker}'`,['긴 메모\n'.repeat(1200)]);
+assert.equal((await row()).marker_type,'memo');assert.equal((await row()).review_status,'none');
+await assert.rejects(db.query(`update hazard_markers set content=$1 where id='${marker}'`,['가'.repeat(10001)]),/check constraint/);
+await assert.rejects(db.query(`update hazard_markers set marker_type='building' where id='${marker}'`),/check constraint/);
+await db.exec(`reset role;update test_tokens set expires_at=now()+interval '1 day';set role anon;`);
+await db.query(`select save_contractor_hazard_marker('contractor-test-token','${company}','${map}','${marker}','save',$1)`,[JSON.stringify({marker_type:'memo',storage_name:'메모',content:'협력사 메모 수정',items:[]})]);
+const partnerMemo=(await db.query(`select get_contractor_hazard_maps('contractor-test-token','${company}','${map}') as result`)).rows[0].result;
+assert.equal(partnerMemo.markers[0].content,'협력사 메모 수정');
+await db.exec(`reset role;update hazard_markers set contractor_id=null where id='${marker}';set role anon;`);
+const commonMemo=(await db.query(`select get_contractor_hazard_maps('contractor-test-token','${company}','${map}') as result`)).rows[0].result;
+assert.equal(commonMemo.markers.length,0); // Unassigned team notes are not public contractor landmarks.
+await assert.rejects(db.query(`select save_contractor_hazard_marker('contractor-test-token','${company}','${map}','${marker}','move','{"x":0.1,"y":0.2}')`),/marker not found/);
 await db.close();
 console.log('Location photos SQL: RLS, file scope, contractor isolation/expiry, protected approvals, photo revisions and cascade passed');
