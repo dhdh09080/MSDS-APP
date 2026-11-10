@@ -32,6 +32,18 @@ end; $$;
 revoke all on function public.transfer_contractor_documents(uuid,uuid,uuid) from public,anon;
 grant execute on function public.transfer_contractor_documents(uuid,uuid,uuid) to authenticated;
 -- Return only active companies from the public directory.
+do $compat$
+declare definition text;
+begin
+ if to_regprocedure('public.get_contractor_directory(text)') is not null then
+  select pg_get_functiondef('public.get_contractor_directory(text)'::regprocedure) into definition;
+  if position('where c.workspace_id=v_workspace)' in definition)>0 then
+   execute replace(definition,'where c.workspace_id=v_workspace)','where c.workspace_id=v_workspace and c.is_active)');
+  elsif position('where c.workspace_id=v_workspace and c.is_active)' in definition)=0 then
+   raise exception 'Directory definition changed; review active-company filter before applying';
+  end if;
+ else
+  execute $fallback$
 create or replace function public.get_contractor_directory(p_token text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_workspace uuid;
@@ -46,6 +58,9 @@ begin
     ) order by c.name) from public.contractors c where c.workspace_id=v_workspace and c.is_active),'[]'::jsonb));
 end;
 $$;
+$fallback$;
+ end if;
+end; $compat$;
 revoke all on function public.get_contractor_directory(text) from public,authenticated;
 grant execute on function public.get_contractor_directory(text) to anon;
 
