@@ -1,5 +1,6 @@
 import './hazard-map.css';
 import { createLocationPhotos } from './location-photos.js';
+import { createMarkerPhotoDraft } from './marker-photo-draft.js';
 import { REVIEW_STATES, reviewState, emptyFilters, filterHazardMarkers, issueSummary } from './hazard-map-filters.js';
 
 const BUCKET = 'hazard-map-photos';
@@ -38,11 +39,13 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
   let filters = emptyFilters(), viewMode = 'all', highlightedId = null;
   const current = () => maps.find(map => map.id === selectedId);
   const editable = marker => !repository || (marker.contractor_id === contractorId && isStorage(markerType(marker)));
+  const photoDraft = createMarkerPhotoDraft({supabase,repository,getUser});
   const photos = createLocationPhotos({ supabase, getWorkspace, getUser, repository, canReview, toast, onChange: async id => { await show(); return markers.find(row => row.id === id); } });
   const context = () => ({ workspaceId, revision });
   const isCurrent = ctx => ctx.workspaceId === workspaceId && ctx.workspaceId === getWorkspace()?.id && ctx.revision === revision;
 
   function reset() {
+    photoDraft.reset();
     photos.reset();
     cancelDrag();
     revision++;
@@ -98,10 +101,12 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
             <fieldset class="hm-items-fieldset"><legend>물질별 수량</legend><div id="hmItemRows"></div><button type="button" class="btn btn-outline btn-sm" id="hmAddItem">+ 물질 추가</button></fieldset>
           </div>
           <label>내용 / 관리사항<textarea class="form-input" name="content" rows="4" maxlength="3000" placeholder="보관 내용, 주의사항, 점검사항 등을 입력하세요."></textarea></label>
-          <label class="hm-save-photo-option"><input type="checkbox" name="add_photos" />저장 후 바로 사진 추가하기</label>
+          <section id="hmMarkerPhotos" class="hm-marker-photos" aria-label="스티커 사진 첨부"></section>
           <p class="hm-form-error" role="alert"></p><button type="submit" class="btn btn-primary">저장하기</button>
         </form>
       </dialog>`;
+    photoDraft.mount(root.querySelector('#hmMarkerPhotos'));
+    root.querySelector('#hmMarkerDialog').addEventListener('close',()=>photoDraft.reset());
     if (repository) root.querySelector('#hmUpload').hidden = true;
     root.querySelector('#hmMapSelect').addEventListener('change', e => selectMap(e.target.value));
     root.querySelector('#hmSearch').addEventListener('input', e => { filters.query = e.target.value; render(); });
@@ -274,6 +279,8 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     draft = { ...marker };
     const form = root.querySelector('#hmMarkerForm');
     form.reset();
+    photoDraft.reset();
+    form.querySelector('button[type="submit"]').textContent='저장하기';
     for (const key of ['storage_name', 'access_code', 'content']) form.elements[key].value = marker[key] || '';
     form.elements.marker_type.value = marker.id ? markerType(marker) : (filters.type !== 'all' && (!repository || isStorage(filters.type)) ? filters.type : markerType(marker));
     const companies = getContractors();
@@ -435,9 +442,28 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
       if (!isCurrent(ctx)) return;
       if (id) markers = markers.map(marker => marker.id === id ? data : marker);
       else markers.push(data);
+      // Keep the new ID immediately: a photo retry updates this sticker rather
+      // than inserting a second one after a partial upload failure.
+      draft={...data};
+      const attached=photoDraft.count;
+      let refreshFailed=false;
+      if(attached) {
+        const result=await photoDraft.save(data,()=>isCurrent(ctx),message=>{ if(isCurrent(ctx)) form.querySelector('.hm-form-error').textContent=message; });
+        if(!isCurrent(ctx)) return;
+        if(result.failed.length) {
+          root.querySelector('#hmMarkerTitle').textContent='스티커 정보 수정';
+          form.querySelector('button[type="submit"]').textContent='남은 사진 다시 저장';
+          form.querySelector('.hm-form-error').textContent=`스티커는 저장됐습니다. 사진 ${result.saved}장 저장, ${result.failed.length}장 실패.\n실패한 사진만 남아 있습니다. 다시 저장하거나 첨부를 취소해 주세요.\n${result.failed.join('\n')}`;
+          return;
+        }
+        const latest=await (repository ? repository.listMarkers(selectedId) : supabase.from('hazard_markers').select('*').eq('workspace_id',ctx.workspaceId).eq('map_id',selectedId));
+        if(!isCurrent(ctx)) return;
+        const updated=latest.data?.find(row=>row.id===data.id);
+        refreshFailed=Boolean(latest.error || !updated);
+        if(updated) markers=markers.map(row=>row.id===updated.id?updated:row);
+      }
       root.querySelector('#hmMarkerDialog').close();
-      toast('스티커 정보를 저장했습니다', 'success');
-      if(form.elements.add_photos.checked) photos.open(data);
+      toast(refreshFailed ? '스티커와 사진은 저장했습니다. 최신 상태를 보려면 새로고침해 주세요.' : attached ? `스티커와 사진 ${attached}장을 저장했습니다` : '스티커 정보를 저장했습니다', refreshFailed ? 'warn' : 'success');
 
     } catch (error) { if (isCurrent(ctx)) form.querySelector('.hm-form-error').textContent = '저장 실패: ' + report(error); }
     finally { if (isCurrent(ctx)) { setBusy(false); render(); } }

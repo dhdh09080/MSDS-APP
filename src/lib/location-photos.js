@@ -23,6 +23,32 @@ export async function prepareLocationPhoto(file) {
   } finally { bitmap.close(); }
 }
 
+// Shared by the inline sticker form and the existing photo/history dialog.
+export async function saveLocationPhoto({supabase, repository, marker, file, kind, note, userId, isActive = () => true}) {
+  const blob = await prepareLocationPhoto(file);
+  if (!isActive()) throw new Error('화면이 변경되어 사진 저장을 중단했습니다.');
+  if (repository) {
+    const result = await repository.uploadPhoto(marker, blob, kind, note);
+    if (result.error) throw result.error;
+    return;
+  }
+  const path = `${marker.workspace_id}/${marker.id}/${crypto.randomUUID()}.jpg`;
+  let uploaded = false, committed = false;
+  try {
+    const result = await supabase.storage.from(BUCKET).upload(path, blob, {contentType:'image/jpeg', upsert:false});
+    if (result.error) throw result.error;
+    uploaded = true;
+    if (!isActive()) throw new Error('화면이 변경되어 사진 저장을 중단했습니다.');
+    const saved = await supabase.from('hazard_location_photos').insert({workspace_id:marker.workspace_id, marker_id:marker.id, storage_path:path, kind, note, created_by:userId});
+    if (saved.error) throw saved.error;
+    committed = true;
+  } finally {
+    if (uploaded && !committed) {
+      try { await supabase.storage.from(BUCKET).remove([path]); } catch { /* Preserve the original upload error. */ }
+    }
+  }
+}
+
 export function createLocationPhotos({supabase, getWorkspace, getUser, repository, canReview = () => false, toast, onChange}) {
   let dialog, marker, generation = 0, busy = false, entries = [], photoFilter = 'all';
   const current = (seq, ws) => seq === generation && ws === getWorkspace()?.id;
@@ -112,25 +138,10 @@ export function createLocationPhotos({supabase, getWorkspace, getUser, repositor
     for (const [i, file] of files.entries()) {
       if (!current(seq, ws)) break;
       message(`${i + 1} / ${files.length}장 업로드 중…`);
-      let path, uploaded = false, committed = false;
       try {
-        const blob = await prepareLocationPhoto(file);
-        if (!current(seq, ws)) break;
-        if (repository) {
-          const r = await repository.uploadPhoto(marker, blob, kind, note);
-          if (r.error) throw r.error;
-        } else {
-          path = `${ws}/${marker.id}/${crypto.randomUUID()}.jpg`;
-          const r = await supabase.storage.from(BUCKET).upload(path, blob, {contentType:'image/jpeg', upsert:false});
-          if (r.error) throw r.error;
-          uploaded = true;
-          const result = await supabase.from('hazard_location_photos').insert({workspace_id:ws, marker_id:marker.id, storage_path:path, kind, note, created_by:getUser().id});
-          if (result.error) throw result.error;
-          committed = true;
-        }
+        await saveLocationPhoto({supabase, repository, marker, file, kind, note, userId:getUser()?.id, isActive:()=>current(seq, ws)});
         saved++;
       } catch (error) { failed.push(`${file.name}: ${error.message}`); }
-      finally { if (uploaded && !committed) await supabase.storage.from(BUCKET).remove([path]); }
     }
     try {
       if (current(seq, ws)) {

@@ -61,14 +61,31 @@ async def main():
   await form.locator('[name=storage_name]').fill(name)
   await form.locator('[name=contractor_id]').select_option('con-3')
   await form.locator('[name=content]').fill('위치별 발견 사진과 조치 사진을 확인해 주세요.')
-  await form.locator('[name=add_photos]').check()
+  assert await form.locator('[name=add_photos]').count()==0
+  assert await form.locator('[data-draft-camera-input]').get_attribute('capture')=='environment'
+  await form.locator('[data-draft-note]').fill('발견 현장 기록')
+  await form.locator('[data-draft-album-input]').set_input_files([{'name':'inline.png','mimeType':'image/png','buffer':png()},{'name':'remove.png','mimeType':'image/png','buffer':png()}])
+  assert len(photos)==0 and len(calls)==0, 'Selection uploaded before the sticker was saved'
+  await form.locator('[data-remove-photo]').nth(1).click()
+  assert await form.locator('[data-draft-previews] figure').count()==1
+  await form.locator('[data-draft-note]').fill('fail-once')
+  await form.locator('[data-draft-camera-input]').set_input_files({'name':'retry.png','mimeType':'image/png','buffer':png()})
+  assert await form.locator('[data-draft-previews] figure').count()==2
+  await page.screenshot(path=str(OUT/'inline-photos-mobile.png'))
+  await form.locator('button[type=submit]').click()
+  await form.locator('.hm-form-error').get_by_text('실패한 사진만 남아 있습니다.',exact=False).wait_for()
+  assert len(markers)==1 and len(photos)==1
+  assert await form.locator('[data-draft-previews] figure').count()==1
+  assert 'retry.png' in await form.locator('[data-draft-previews]').inner_text()
   await form.locator('button[type=submit]').click()
   await page.locator('#hmMarkerDialog').wait_for(state='hidden')
+  assert len(markers)==1 and len(photos)==2, 'Retry duplicated sticker or successful photos'
   assert markers[0]['marker_type']=='issue' and markers[0]['contractor_id']=='con-3'
   pin=page.locator('.hm-pin span')
   assert await pin.inner_text()==name
   assert await pin.evaluate("e=>getComputedStyle(e).textOverflow!=='ellipsis' && e.scrollHeight<=e.clientHeight+1")
-  await page.locator('.lp-dialog').wait_for(state='visible')
+  assert await page.locator('.lp-dialog').count()==0
+  await page.locator('[data-action=photos]').click()
   modal=page.locator('.lp-dialog')
   await modal.locator('[data-camera]:not([disabled])').wait_for()
   assert await modal.locator('[data-camera-input]').get_attribute('capture')=='environment'
@@ -79,7 +96,7 @@ async def main():
   await modal.locator('[data-note]').fill('<img src=x onerror=alert(1)> 발견 사진')
   await modal.locator('[data-album-input]').set_input_files([{'name':'finding.png','mimeType':'image/png','buffer':png(4000,2200)},{'name':'bad.txt','mimeType':'text/plain','buffer':b'bad'}])
   await modal.locator('[data-message]').get_by_text('1장 저장 완료',exact=False).wait_for()
-  assert len(photos)==1 and len(calls)==1
+  assert len(photos)==3 and len(calls)==4
   assert await modal.locator('[data-message]').get_by_text('실패 1장',exact=False).is_visible()
   assert await modal.locator('figcaption img').count()==0
   await modal.locator('[data-kind]').select_option('remedy')
@@ -90,7 +107,7 @@ async def main():
   await modal.locator('[data-photo-filter=remedy]').click()
   assert await modal.locator('.lp-gallery figure').count()==2
   await modal.locator('[data-photo-filter=finding]').click()
-  assert await modal.locator('.lp-gallery figure').count()==1
+  assert await modal.locator('.lp-gallery figure').count()==3
   await modal.locator('[data-photo-filter=all]').click()
   await page.screenshot(path=str(OUT/'photo-dialog-mobile.png'))
   assert markers[0]['review_status']=='pending'
@@ -108,8 +125,16 @@ async def main():
   await modal.locator('[data-close]:not([disabled])').click()
   await page.reload();await page.locator('[data-action=photos]').click()
   await modal.locator('[data-camera]:not([disabled])').wait_for()
-  assert await modal.locator('.lp-gallery figure').count()==4
+  assert await modal.locator('.lp-gallery figure').count()==6
   await modal.locator('[data-close]').click()
+  await page.locator('[data-action=add]').click()
+  await form.locator('[data-draft-album-input]').set_input_files({'name':'cancel.png','mimeType':'image/png','buffer':png()})
+  before=len(calls)
+  await form.locator('[data-close]').click()
+  await page.locator('[data-action=add]').click()
+  assert await form.locator('[data-draft-previews] figure').count()==0
+  assert len(calls)==before
+  await form.locator('[data-close]').click()
   for width in [360,390,768,1440]:
    await page.set_viewport_size({'width':width,'height':960})
    assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth'),width
