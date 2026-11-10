@@ -21,11 +21,21 @@ export function validatePartnerSnapshot(value, now=Date.now()) {
 export async function publishPartnerSnapshot(appOrigin, projectCode, date) {
   if(!['https://gshealthk.vercel.app','http://localhost:3000'].includes(appOrigin) || !/^[A-Za-z0-9_-]{1,32}$/.test(projectCode) || !/^\d{4}-\d{2}-\d{2}$/.test(date))return;
   if(location.origin!=='https://pmx.gsenc.com'){alert('PMX에 로그인한 뒤 즐겨찾기를 실행해주세요.');return;}
+  let failure='브라우저에서 요청을 준비하지 못했습니다.', timer;
   try {
-    const response=await fetch('/pgs/work_daily/getWorkDailyPartnerMainUseList.ax',{method:'POST',credentials:'include',cache:'no-store',signal:AbortSignal.timeout(18000),headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:new URLSearchParams({workLevel1CcSeq:'',sdate:date,ccwSeq:'',unwriteTf:'0',activeTf:'1',pagePjCd:projectCode}).toString()});
-    if(!response.ok)throw new Error('조회 실패');
+    const controller=new AbortController();
+    timer=setTimeout(()=>controller.abort(),18000);
+    failure='조회 요청을 보내지 못했습니다. 네트워크 또는 브라우저의 요청 차단 여부를 확인해주세요.';
+    const response=await fetch('/pgs/work_daily/getWorkDailyPartnerMainUseList.ax',{method:'POST',credentials:'include',cache:'no-store',signal:controller.signal,headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','Accept':'application/json, text/javascript, */*; q=0.01','X-Requested-With':'XMLHttpRequest'},body:new URLSearchParams({workLevel1CcSeq:'',sdate:date,ccwSeq:'',unwriteTf:'0',activeTf:'1',pagePjCd:projectCode}).toString()});
+    failure='서버 응답 오류 (HTTP '+Number(response.status)+').';
+    if(!response.ok)throw new Error();
+    failure=response.redirected ? '조회가 다른 페이지로 이동했고 JSON을 받지 못했습니다. PMX의 협력사 조회 화면에서 다시 실행해주세요.' : '서버가 JSON 대신 다른 형식의 응답을 반환했습니다. (HTTP '+Number(response.status)+')';
     const body=await response.json();
-    if(body.resultCode!=='0000' || body.result!==true || !Array.isArray(body.data?.contents) || body.data.contents.length>1000)throw new Error('응답 확인 필요');
+    failure='PMX가 조회 실패를 반환했습니다. 응답코드: '+(typeof body?.resultCode==='string' && /^[A-Za-z0-9_-]{1,16}$/.test(body.resultCode) ? body.resultCode : '확인 불가');
+    if(body?.resultCode!=='0000' || body.result!==true)throw new Error();
+    failure='조회는 성공했지만 협력사 목록(data.contents)의 형식이 예상과 다릅니다.';
+    if(!Array.isArray(body.data?.contents) || body.data.contents.length>1000)throw new Error();
+    failure='조회된 업체 중 업체명 또는 계약명 형식이 예상과 다른 항목이 있습니다.';
     const grouped=new Map();
     for(const row of body.data.contents){
       if(typeof row.companyNm!=='string' || !row.companyNm.trim() || row.companyNm.length>200 || (row.contractNm!=null && (typeof row.contractNm!=='string' || row.contractNm.length>200)))throw new Error('업체 정보 확인 필요');
@@ -36,14 +46,19 @@ export async function publishPartnerSnapshot(appOrigin, projectCode, date) {
     // Never forward worker counts/names, memos, tokens or the raw response.
     const partners=Array.from(grouped,([companyNm,contracts])=>({companyNm,contracts:[...contracts]}));
     const text=JSON.stringify({version:1,source:'pmx-partners',projectCode,date,fetchedAt:new Date().toISOString(),partners});
-    if(new TextEncoder().encode(text).length>500000)throw new Error('자료 크기 초과');
+    failure='가져온 업체 목록이 허용 크기를 초과했습니다.';
+    if(new TextEncoder().encode(text).length>500000)throw new Error();
+    failure='조회는 성공했지만 보건관리 사이트로 전달하거나 파일을 저장하지 못했습니다.';
     const download=()=>{const url=URL.createObjectURL(new Blob([text],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='pmx-partners-'+projectCode+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);alert('협력사 파일을 받았습니다. 보건관리 사이트의 협력사 가져오기에서 파일을 선택해주세요.');};
     try{window.opener=null;window.name='';}catch{download();return;}
     if(window.opener!==null){download();return;}
     const target=appOrigin+'/pmx-import.html#snapshot='+encodeURIComponent(text);
     if(target.length>250000){download();return;}
     try{location.replace(target);}catch{download();}
-  }catch{alert('협력사 목록을 가져오지 못했습니다. PMX 로그인과 해당 현장의 조회 권한을 확인해주세요.');}
+  }catch(error){
+    if(error?.name==='AbortError' || error?.name==='TimeoutError')failure='조회 응답 대기시간(18초)을 초과했습니다.';
+    alert('PMX 협력사 가져오기 v2\n현장코드 '+projectCode+' · 조회일 '+date+'\n'+failure);
+  }finally{if(timer!==undefined)clearTimeout(timer);}
 }
 export function makePartnerBookmarklet(origin,projectCode,date){
   if(!origins.includes(origin) || !/^[A-Za-z0-9_-]{1,32}$/.test(projectCode) || !/^\d{4}-\d{2}-\d{2}$/.test(date))throw new Error('현장코드와 조회일을 확인해주세요.');
