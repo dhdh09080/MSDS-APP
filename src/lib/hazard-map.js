@@ -2,6 +2,7 @@ import './hazard-map.css';
 import { createLocationPhotos } from './location-photos.js';
 import { createMarkerPhotoDraft } from './marker-photo-draft.js';
 import { createMapImageViewer } from './map-image-viewer.js';
+import { createMapEditorViewport } from './map-editor-viewport.js';
 import { REVIEW_STATES, reviewState, emptyFilters, filterHazardMarkers, actionSummary } from './hazard-map-filters.js';
 
 const BUCKET = 'hazard-map-photos';
@@ -42,6 +43,11 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
   let filters = emptyFilters(), viewMode = 'all', highlightedId = null;
   const current = () => maps.find(map => map.id === selectedId);
   const editable = marker => !repository || (marker.contractor_id === contractorId && editableType(markerType(marker)));
+  const editorViewport=createMapEditorViewport({
+    isEnabled:()=>!busy&&!loading,
+    onGestureStart:()=>{if(drag){const old=releaseDrag();old.element.style.left=`${old.x*100}%`;old.element.style.top=`${old.y*100}%`;old.element.classList.remove('is-dragging');}},
+    onTap:(x,y)=>{const photo=root?.querySelector('#hmPhoto');if(photo)placePoint(relativePoint(x,y,photo.getBoundingClientRect()));},
+  });
   const imageViewer=createMapImageViewer();
   const photoDraft = createMarkerPhotoDraft({supabase,repository,getUser});
   const photos = createLocationPhotos({ supabase, getWorkspace, getUser, repository, canReview, toast, onChange: async id => { await show(); return markers.find(row => row.id === id); } });
@@ -49,6 +55,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
   const isCurrent = ctx => ctx.workspaceId === workspaceId && ctx.workspaceId === getWorkspace()?.id && ctx.revision === revision;
 
   function reset() {
+    editorViewport.reset();
     imageViewer.reset();
     photoDraft.reset();
     photos.reset();
@@ -157,7 +164,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
   function renderPin(marker, i) {
     const type = markerType(marker);
     const label = type === 'memo' ? '메모' : marker.storage_name;
-    return `<button type="button" class="hm-pin hm-type-${type} ${marker.id === movingId || marker.id === highlightedId ? 'is-selected' : ''}" style="left:${marker.x * 100}%;top:${marker.y * 100}%;transform:translate(${marker.x < .25 ? 0 : marker.x > .75 ? -100 : -50}%,${marker.y < .2 ? 0 : marker.y > .8 ? -100 : -50}%)" data-action="${editable(marker) ? 'edit' : marker.contractor_id === contractorId ? 'photos' : 'view'}" data-id="${escape(marker.id)}" title="${escape(marker.storage_name)}${editable(marker) ? ' · 드래그하여 이동' : marker.contractor_id === contractorId ? ' · 조치 사진 관리' : ' · 공용 위치'}" aria-label="${i + 1}번 ${TYPES[type].label} ${escape(marker.storage_name)} ${editable(marker) ? '정보 수정' : marker.contractor_id === contractorId ? '조치 사진 관리' : '공용 위치'}">${icon(type)}<span>${escape(label)}</span></button>`;
+    return `<button type="button" class="hm-pin hm-type-${type} ${marker.id === movingId || marker.id === highlightedId ? 'is-selected' : ''}" style="left:${marker.x * 100}%;top:${marker.y * 100}%;transform:scale(var(--hm-pin-scale,1)) translate(${marker.x < .25 ? 0 : marker.x > .75 ? -100 : -50}%,${marker.y < .2 ? 0 : marker.y > .8 ? -100 : -50}%)" data-action="${editable(marker) ? 'edit' : marker.contractor_id === contractorId ? 'photos' : 'view'}" data-id="${escape(marker.id)}" title="${escape(marker.storage_name)}${editable(marker) ? ' · 드래그하여 이동' : marker.contractor_id === contractorId ? ' · 조치 사진 관리' : ' · 공용 위치'}" aria-label="${i + 1}번 ${TYPES[type].label} ${escape(marker.storage_name)} ${editable(marker) ? '정보 수정' : marker.contractor_id === contractorId ? '조치 사진 관리' : '공용 위치'}">${icon(type)}<span>${escape(label)}</span></button>`;
   }
 
   function renderCard(marker, i) {
@@ -215,14 +222,15 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
         <div class="hm-card-heading"><div><h2>${escape(current().title)}</h2><span>스티커 ${markers.length}개</span></div><div class="hm-actions"><button type="button" class="btn btn-outline btn-sm" data-action="zoom-photo">⤢ 확대 보기</button><button type="button" class="btn btn-outline btn-sm" data-action="add">+ 스티커 추가</button><button type="button" class="btn btn-outline btn-sm" data-action="replace-photo">사진 변경 (스티커 유지)</button><button type="button" class="btn btn-outline btn-sm" data-action="delete-map">위치도 삭제</button></div></div>
         <div class="hm-legend" aria-label="스티커 종류">${Object.entries(TYPES).map(([key, type]) => `<span class="hm-legend-item"><span class="hm-legend-icon hm-type-${key}">${icon(key)}</span>${type.label}</span>`).join('')}</div>
         ${movingId ? '<div class="hm-move-banner">이동할 위치를 클릭하세요.<button type="button" class="btn btn-outline btn-sm" data-action="cancel-move">이동 취소</button></div>' : ''}
-        ${imageUrl ? `<div class="hm-photo-padding"><div class="hm-stage ${movingId ? 'is-moving' : ''}" id="hmStage" tabindex="0" role="group" aria-label="현장 위치도. 클릭하여 위치 선택. 키보드는 Enter로 중앙에 등록 후 위치 이동." aria-describedby="hmStatus"><img id="hmPhoto" src="${escape(imageUrl)}" width="${Number(current().width)}" height="${Number(current().height)}" alt="${escape(current().title)} 현장 전경" draggable="false" />${visible.map(marker=>renderPin(marker,markers.indexOf(marker))).join('')}</div></div>` : '<p class="hm-empty">사진을 표시할 수 없습니다. 새로고침을 눌러 주세요.</p>'}
-        <p class="hm-photo-caption">스티커를 누르면 정보 수정, 드래그하면 위치 이동. 사진을 변경해도 스티커와 입력 정보는 유지됩니다.</p>
+        ${imageUrl ? `<div class="hm-photo-padding"><div class="hm-editor-tools" role="group" aria-label="편집 도면 확대"><button type="button" class="btn btn-outline" data-editor-zoom="out" aria-label="편집 도면 축소">−</button><span data-editor-zoom-value role="status" aria-live="polite">100%</span><button type="button" class="btn btn-outline" data-editor-zoom="in" aria-label="편집 도면 확대">＋</button><button type="button" class="btn btn-outline" data-editor-zoom="fit">화면 맞춤</button></div><div class="hm-editor-viewport"><div class="hm-stage ${movingId ? 'is-moving' : ''}" id="hmStage" tabindex="0" role="group" aria-label="현장 위치도. 클릭하여 위치 선택. 키보드는 Enter로 중앙에 등록 후 위치 이동." aria-describedby="hmStatus"><img id="hmPhoto" src="${escape(imageUrl)}" width="${Number(current().width)}" height="${Number(current().height)}" alt="${escape(current().title)} 현장 전경" draggable="false" />${visible.map(marker=>renderPin(marker,markers.indexOf(marker))).join('')}</div></div></div>` : '<p class="hm-empty">사진을 표시할 수 없습니다. 새로고침을 눌러 주세요.</p>'}
+        <p class="hm-photo-caption">도면 위에서 휠로 확대·축소, 확대 후 빈 곳을 드래그하거나 휠 버튼을 누른 채 이동하세요. 휴대폰은 두 손가락으로 확대·이동합니다. 확대 상태에서도 빈 곳을 누르면 스티커를 추가하고, 스티커를 끌어 위치를 옮길 수 있습니다.</p>
       </section>
       <section class="hm-list" aria-labelledby="hmListTitle"><h2 id="hmListTitle">위치별 관리 목록 <span>${visible.length}</span></h2>
         ${visible.length ? visible.map(marker=>renderCard(marker,markers.indexOf(marker))).join('') : markers.length ? '<div class="hm-list-empty"><b>조건에 맞는 위치가 없습니다.</b><p>다른 분류·상태를 선택하거나 검색 조건을 초기화해 주세요.</p><button type="button" class="btn btn-outline" data-action="clear-filters">모든 위치 보기</button></div>' : '<div class="hm-list-empty">아직 등록된 스티커가 없습니다.<br>사진에서 표시할 위치를 클릭해 주세요.</div>'}
       </section></div>`;
     if (repository) root.querySelectorAll('[data-action="replace-photo"],[data-action="delete-map"]').forEach(button => { button.hidden = true; });
     const photo = root.querySelector('#hmPhoto');
+    if(photo)editorViewport.mount(root.querySelector('.hm-photo-padding'),`${current().id}:${current().storage_path}`);
     if (photo) photo.addEventListener('error', () => {
       if (!photo.isConnected || root?.querySelector('#hmPhoto') !== photo) return;
       root.querySelector('#hmStatus').textContent = '사진을 표시할 수 없습니다. 새로고침을 눌러 주세요.';
