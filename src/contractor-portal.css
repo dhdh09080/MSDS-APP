@@ -35,3 +35,13 @@
 .portal-upload-workspace #uploadZone .upload-icon{display:none}
 .portal-upload-workspace #uploadZone .upload-text{font-size:13px;line-height:1.8}
 .fi-error{color:var(--danger);font-size:11px;overflow-wrap:anywhere;margin-top:4px}
+
+/* One reading flow: check existing documents, then upload missing files. */
+.portal-upload-workspace{grid-template-columns:1fr;gap:28px}
+.portal-upload-workspace .upload-existing-records{position:static}
+.portal-upload-workspace #uploadExistingList{max-height:none;overflow:visible;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.portal-upload-workspace .document-row{border:1px solid var(--border);border-radius:12px;align-items:start}
+.portal-upload-workspace .document-actions{margin-left:0}
+.portal-upload-workspace #worktypeGrid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.portal-compliance{padding:20px 24px;margin:0 0 24px;border:1px solid #edc883;border-left:5px solid #b56b08;border-radius:12px;background:#fff9ed;color:#633e09}
+.portal-compliance strong{display:block;font-size:17px}.portal-compliance p{line-height:1.7;margin:8px 0}.portal-compliance b{display:block;color:#9e310e}.portal-compliance small{display:block;margin-top:10px;line-height:1.6}.portal-compliance a{color:inherit;text-decoration:underline}

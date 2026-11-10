@@ -503,12 +503,12 @@
         </div>
         <section id="recordsPanel" data-portal-panel="records" role="tabpanel" aria-labelledby="recordsTab">
           <div class="portal-section-heading"><div><h2>MSDS 보기·인쇄</h2><p>자료의 ‘MSDS 보기·인쇄’를 누르면 원본 PDF가 새 창에서 열립니다. PDF 화면의 인쇄 버튼으로 출력하세요.</p></div><button class="btn btn-primary" onclick="switchPortalPanel('upload')">+ MSDS 업로드</button></div>
-          <div class="portal-toolbar"><input id="portalSearch" type="search" aria-label="MSDS 검색" placeholder="제품명, 공종, 공급업체 검색"><button class="btn btn-secondary" onclick="refreshPortalRecords()">새로고침</button></div>
+          <aside class="portal-compliance"><strong>MSDS를 작업장에서 바로 확인할 수 있도록 게시·비치하세요</strong><p>원본 MSDS를 확인·인쇄하고 근로자가 쉽게 볼 수 있는 장소에 비치하세요. 요건을 갖춘 전산 열람 방식도 가능합니다. 사이트 업로드만으로 현장 비치 의무가 충족되는 것은 아닙니다.</p><b>게시·비치 위반: 1차 100만원 · 2차 200만원 · 3차 이상 500만원</b><small>제공받거나 작성한 자료 기준, 물질 1종·작업장 1개소당. 미제공 등 위반 유형과 감경에 따라 달라질 수 있습니다. <a href="https://www.kosha.or.kr/ebook/fcatalog/access/ecatalogt.jsp?Dir=538&amp;start=104" target="_blank" rel="noopener noreferrer">안전보건공단 기준 보기</a></small></aside><div class="portal-toolbar"><input id="portalSearch" type="search" aria-label="MSDS 검색" placeholder="제품명, 공종, 공급업체 검색"><button class="btn btn-secondary" onclick="refreshPortalRecords()">새로고침</button></div>
           <div id="portalRecordList" class="portal-list" aria-live="polite"></div>
         </section>
         <section id="warningsPanel" data-portal-panel="warnings" role="tabpanel" aria-labelledby="warningsTab" hidden>
           <div class="portal-section-heading"><div><h2>경고표지 인쇄</h2><p>물질과 표지 크기를 선택해 인쇄하거나 PDF로 저장하세요.</p></div></div>
-          <div class="print-settings"><label>표지 크기<select id="portalPrintSize"><option value="a4">A4 · 1분할</option><option value="a5">A5 · 2분할</option><option value="a6">A6 · 4분할</option><option value="mini">소분용기 · 8분할</option></select></label><label>물질당 매수<input id="portalPrintCopies" type="number" min="1" max="20" value="1"></label><button class="btn btn-primary" id="printPortalWarnings" onclick="printPortalWarnings()">선택한 표지 인쇄</button></div>
+          <aside class="portal-compliance"><strong>화학물질을 담은 용기·소분용기에 경고표지를 부착하세요</strong><p>취급자가 잘 볼 수 있는 용기 표면에 부착하고, 내용이 지워지거나 떨어지면 교체하세요. 실제 제품의 MSDS와 표지 내용이 일치하는지 확인하세요.</p><b>사용 사업주의 용기 경고표시 위반: 1차 50만원 · 2차 100만원 · 3차 이상 300만원</b><small>물질 1종당 기준. 예외·위반 유형·감경에 따라 달라질 수 있습니다. <a href="https://www.kosha.or.kr/ebook/fcatalog/access/ecatalogt.jsp?Dir=538&amp;start=104" target="_blank" rel="noopener noreferrer">안전보건공단 기준 보기</a></small></aside><div class="print-settings"><label>표지 크기<select id="portalPrintSize"><option value="a4">A4 · 1분할</option><option value="a5">A5 · 2분할</option><option value="a6">A6 · 4분할</option><option value="mini">소분용기 · 8분할</option></select></label><label>물질당 매수<input id="portalPrintCopies" type="number" min="1" max="20" value="1"></label><button class="btn btn-primary" id="printPortalWarnings" onclick="printPortalWarnings()">선택한 표지 인쇄</button></div>
           <p class="portal-notice">관리자가 안전정보를 등록한 자료만 인쇄할 수 있습니다. 인쇄 전 원본 MSDS를 확인해주세요.</p>
           <div class="portal-warning-workspace">
             <div><label class="select-all"><input type="checkbox" onchange="selectAllPortalWarnings(this.checked)"> 인쇄 가능 자료 전체 선택</label><div id="warningRecordList" class="portal-list"></div></div>
@@ -524,7 +524,7 @@
         <section id="licensePanel" data-portal-panel="license" role="tabpanel" aria-labelledby="licenseTab" hidden><div class="portal-section-heading"><div><h2>사업자등록증 등록</h2><p>최초 한 번 등록하면 담당 보건관리자가 확인할 수 있습니다.</p></div></div><div id="licenseCardHost"></div></section>
         <section id="uploadPanel" data-portal-panel="upload" aria-label="MSDS 업로드" hidden>
           <button class="portal-back" onclick="switchPortalPanel('records')">← MSDS 자료로 돌아가기</button>
-          <div class="portal-upload-workspace">
+          <aside class="portal-compliance"><strong>MSDS를 작업장에서 바로 확인할 수 있도록 게시·비치하세요</strong><p>원본 MSDS를 확인·인쇄하고 근로자가 쉽게 볼 수 있는 장소에 비치하세요. 요건을 갖춘 전산 열람 방식도 가능합니다. 사이트 업로드만으로 현장 비치 의무가 충족되는 것은 아닙니다.</p><b>게시·비치 위반: 1차 100만원 · 2차 200만원 · 3차 이상 500만원</b><small>제공받거나 작성한 자료 기준, 물질 1종·작업장 1개소당. 미제공 등 위반 유형과 감경에 따라 달라질 수 있습니다. <a href="https://www.kosha.or.kr/ebook/fcatalog/access/ecatalogt.jsp?Dir=538&amp;start=104" target="_blank" rel="noopener noreferrer">안전보건공단 기준 보기</a></small></aside><div class="portal-upload-workspace">
           <section class="upload-existing-records" aria-labelledby="uploadExistingHeading">
             <div class="portal-section-heading"><div><h2 id="uploadExistingHeading">이미 등록된 MSDS <span id="uploadExistingCount" class="muted"></span></h2><p>우리 협력사에 등록된 자료를 먼저 확인하고, 없는 자료만 추가해주세요.</p></div></div>
             <div class="portal-toolbar"><input id="uploadExistingSearch" type="search" aria-label="등록된 MSDS 검색" placeholder="제품명, 공종, 공급업체 검색"><button type="button" class="btn btn-secondary" onclick="refreshPortalRecords()">새로고침</button></div>
@@ -628,7 +628,7 @@
             >
               등록된 공종이 없습니다.
               <br />
-              아래에서 공종을 추가하거나 미지정으로 업로드할 수 있습니다.
+              위에서 공종을 추가하거나 미지정으로 업로드할 수 있습니다.
             </div>
           </div>
           <button

@@ -76,7 +76,7 @@ async def main():
   await page.locator('#dashboardContact a').wait_for()
   assert '대한건설, 오늘 하루도 좋은 하루 되세요!' in await page.locator('#dashboardPanel').inner_text()
   assert await page.get_by_role('tablist').count()==0
-  assert await page.locator('#contractorWorkspaceSidebar button[data-workspace-nav]').count()==9
+  assert await page.locator('#contractorWorkspaceSidebar button[data-workspace-nav]').count()==8
   await page.screenshot(path=str(OUT/'dashboard-desktop.png'),full_page=True)
   await page.locator('#recordsTab').click();assert await page.locator('#uploadPanel').is_visible()
   await page.locator('nav [data-workspace-nav=contacts]').click()
@@ -91,7 +91,11 @@ async def main():
   await page.locator('#cwContactPhone').fill('02-123-4567');await page.locator('#cwContactSave').click()
   await page.locator('.cw-contact').first.get_by_role('link',name='02-123-4567').wait_for()
   await page.locator('nav [data-workspace-nav=dashboard]').click();assert '02-123-4567' in await page.locator('#dashboardContact').inner_text()
-  await page.locator('nav [data-workspace-nav=hazard]').click();await page.wait_for_function('document.querySelector("#hmPhoto")?.naturalWidth>0')
+  await page.locator('nav [data-workspace-nav=hazard]').click()
+  await page.locator('#hmStage').wait_for()
+  assert await page.locator('.hm-pin.hm-type-gate').count()==1
+  assert await page.locator('.hm-list .hm-type-gate').count()==0
+  assert '정문' not in await page.locator('.hm-list').inner_text();await page.wait_for_function('document.querySelector("#hmPhoto")?.naturalWidth>0')
   assert not await page.locator('#hmUpload').is_visible()
   assert not await page.locator('[data-action=replace-photo]').is_visible()
   assert await page.locator('.hm-storage-card').nth(1).locator('[data-action=edit],[data-action=move],[data-action=delete],[data-action=photos]').count()==0
@@ -114,18 +118,8 @@ async def main():
   await modal.locator('[data-close]:not([disabled])').click()
   assert markers[0]['review_status']=='pending'
   assert '관리자 확인 전' in await page.locator('.hm-storage-card').first.inner_text()
-  await page.locator('nav [data-workspace-nav=workers]').click()
-  await page.locator('#cwWorkerName:not([disabled])').fill('홍근로')
-  await page.locator('#cwWorkerPhone4').fill('4321');await page.locator('#cwWorkerJob').fill('형틀목공');await page.locator('#cwWorkerSave').click()
-  await page.wait_for_function('document.querySelector("#cwWorkerList").textContent.includes("홍근로")')
-  assert workers[0]['phone_last4']=='4321'
-  await page.locator('#cwWorkerSearch').fill('없는이름');assert '검색 결과가 없습니다' in await page.locator('#cwWorkerList').inner_text()
-  await page.locator('#cwWorkerSearch').fill('')
-  await page.wait_for_function('document.querySelectorAll("#toastWrap .toast").length===0')
-  await page.screenshot(path=str(OUT/'workers-desktop.png'),full_page=True)
-  await page.locator('#cwWorkerList').get_by_role('button',name='수정',exact=True).click();await page.locator('#cwWorkerJob').fill('철근공');await page.locator('#cwWorkerSave').click()
-  await page.wait_for_function('document.querySelector("#cwWorkerList").textContent.includes("철근공")')
-  await page.locator('#cwWorkerList').get_by_role('button',name='정보변경 신청',exact=True).click()
+  assert await page.locator('[data-workspace-nav=workers]').count()==0
+  await page.locator('nav [data-workspace-nav=worker-changes]').click()
   assert await page.locator('#cwWorkerChangeLink').get_attribute('href')=='https://pmx-worker-change.vercel.app/?site=070120'
   await page.wait_for_function('document.querySelector("#cwWorkerChangeFrame").src.endsWith("?site=070120")')
   assert 'token' not in await page.locator('#cwWorkerChangeFrame').get_attribute('src')

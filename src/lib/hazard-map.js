@@ -197,7 +197,8 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
     root.querySelector('#hmUpload').disabled = busy || loading;
     root.querySelector('#hmStatus').textContent = errorText || (loading ? '위치도를 불러오는 중입니다…' : movingId ? '사진에서 새 위치를 클릭하세요. Esc 키 또는 취소 버튼으로 취소할 수 있습니다.' : maps.length ? '사진을 클릭해 스티커를 추가하고, 스티커를 드래그해 위치를 옮기세요.' : '도면 이미지나 전경 사진을 올리고 저장소·창고·PIT층 부적합 위치를 표시하세요.');
     const visible=filterHazardMarkers(markers,filters,getContractors());
-    syncFilters(visible);
+    const listMarkers = visible.filter(marker => !['building','gate'].includes(markerType(marker)) && (!repository || marker.contractor_id === contractorId));
+    syncFilters(listMarkers);
     const body = root.querySelector('#hmBody');
     if (errorText) { body.innerHTML = '<div class="hm-empty"><p>위치도를 불러오지 못했습니다.</p><p>새로고침으로 다시 시도해 주세요.</p></div>'; return; }
     if (loading) { body.innerHTML = '<div class="hm-empty" aria-busy="true">사진과 저장소 정보를 불러오고 있습니다…</div>'; return; }
@@ -206,15 +207,15 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
       return;
     }
     body.innerHTML = `<div class="hm-layout ${viewMode === 'list' ? 'hm-list-view' : ''}">
-      <section class="hm-photo-card" aria-label="위험물 위치도 사진" ${viewMode === 'list' ? 'hidden' : ''}>
+      <section class="hm-photo-card" aria-label="현장 위치도 사진" ${viewMode === 'list' ? 'hidden' : ''}>
         <div class="hm-card-heading"><div><h2>${escape(current().title)}</h2><span>스티커 ${markers.length}개</span></div><div class="hm-actions"><button type="button" class="btn btn-outline btn-sm" data-action="add">+ 스티커 추가</button><button type="button" class="btn btn-outline btn-sm" data-action="replace-photo">사진 변경 (스티커 유지)</button><button type="button" class="btn btn-outline btn-sm" data-action="delete-map">위치도 삭제</button></div></div>
         <div class="hm-legend" aria-label="스티커 종류">${Object.entries(TYPES).map(([key, type]) => `<span class="hm-legend-item"><span class="hm-legend-icon hm-type-${key}">${icon(key)}</span>${type.label}</span>`).join('')}</div>
         ${movingId ? '<div class="hm-move-banner">이동할 위치를 클릭하세요.<button type="button" class="btn btn-outline btn-sm" data-action="cancel-move">이동 취소</button></div>' : ''}
         ${imageUrl ? `<div class="hm-photo-padding"><div class="hm-stage ${movingId ? 'is-moving' : ''}" id="hmStage" tabindex="0" role="group" aria-label="현장 위치도. 클릭하여 위치 선택. 키보드는 Enter로 중앙에 등록 후 위치 이동." aria-describedby="hmStatus"><img id="hmPhoto" src="${escape(imageUrl)}" width="${Number(current().width)}" height="${Number(current().height)}" alt="${escape(current().title)} 현장 전경" draggable="false" />${visible.map(marker=>renderPin(marker,markers.indexOf(marker))).join('')}</div></div>` : '<p class="hm-empty">사진을 표시할 수 없습니다. 새로고침을 눌러 주세요.</p>'}
         <p class="hm-photo-caption">스티커를 누르면 정보 수정, 드래그하면 위치 이동. 사진을 변경해도 스티커와 입력 정보는 유지됩니다.</p>
       </section>
-      <section class="hm-list" aria-labelledby="hmListTitle"><h2 id="hmListTitle">위치별 관리 목록 <span>${visible.length}</span></h2>
-        ${visible.length ? visible.map(marker=>renderCard(marker,markers.indexOf(marker))).join('') : markers.length ? '<div class="hm-list-empty"><b>조건에 맞는 위치가 없습니다.</b><p>다른 분류·상태를 선택하거나 검색 조건을 초기화해 주세요.</p><button type="button" class="btn btn-outline" data-action="clear-filters">모든 위치 보기</button></div>' : '<div class="hm-list-empty">아직 등록된 스티커가 없습니다.<br>사진에서 표시할 위치를 클릭해 주세요.</div>'}
+      <section class="hm-list" aria-labelledby="hmListTitle"><h2 id="hmListTitle">위치별 관리 목록 <span>${listMarkers.length}</span></h2>
+        ${listMarkers.length ? listMarkers.map(marker=>renderCard(marker,markers.indexOf(marker))).join('') : markers.length ? '<div class="hm-list-empty"><b>조건에 맞는 위치가 없습니다.</b><p>다른 분류·상태를 선택하거나 검색 조건을 초기화해 주세요.</p><button type="button" class="btn btn-outline" data-action="clear-filters">모든 위치 보기</button></div>' : '<div class="hm-list-empty">아직 등록된 스티커가 없습니다.<br>사진에서 표시할 위치를 클릭해 주세요.</div>'}
       </section></div>`;
     if (repository) root.querySelectorAll('[data-action="replace-photo"],[data-action="delete-map"]').forEach(button => { button.hidden = true; });
     const photo = root.querySelector('#hmPhoto');
@@ -226,7 +227,7 @@ export function createHazardMap({ supabase, getWorkspace, getUser, getContractor
   }
 
   function report(error) {
-    if (['42P01', 'PGRST205'].includes(error?.code)) return '위험물 위치도 저장 기능이 아직 준비되지 않았습니다. 데이터베이스 설정을 확인해 주세요.';
+    if (['42P01', 'PGRST205'].includes(error?.code)) return '현장 위치도 저장 기능이 아직 준비되지 않았습니다. 데이터베이스 설정을 확인해 주세요.';
     return error?.message || '잠시 후 다시 시도해 주세요.';
   }
 

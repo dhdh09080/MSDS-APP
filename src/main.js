@@ -1,3 +1,4 @@
+import {createPartnerPanel} from './lib/pmx-partner-panel.js';
 import { installMenuFavorites } from './lib/menu-favorites.js';
 import { createPmxPanel } from './lib/pmx-panel.js';
 import { installFileDropzones } from './lib/file-dropzone.js';
@@ -103,7 +104,9 @@ let announcements = [],
 let announcementsLoadedAt = 0,
   announcementsWorkspaceId = null;
 
-const pmxPanel = createPmxPanel({client:supabase,getWorkspace:()=>currentWS,getUser:()=>user,canManage:()=>canManageTeam(),toast,onUpdate:(data)=>{
+const partnerPanel = createPartnerPanel({client:supabase,getWorkspace:()=>currentWS,getUser:()=>user,canManage:()=>canManageTeam(),toast,onUpdate:async()=>{await Promise.all([loadContractors(),loadWorkTypes(),loadMsdsRecords()]);renderContractorTags();}});
+window.openPmxPartners = () => partnerPanel.open();
+const pmxPanel = createPmxPanel({onPartnersSnapshot:data=>partnerPanel.review(data),client:supabase,getWorkspace:()=>currentWS,getUser:()=>user,canManage:()=>canManageTeam(),toast,onUpdate:(data)=>{
   Object.assign(currentWS,data);
   const cached=workspaces.find(w=>w.id===data.id);if(cached)Object.assign(cached,data);
   document.getElementById('sidebarWSName').textContent=data.name;
@@ -2966,13 +2969,15 @@ window.renderContractorTags = function () {
       return `<div class="contractor-row">
       <div class="contractor-main">
         <div class="contractor-name">
-          ${escapeHtml(c.name)}
+          ${escapeHtml(c.name)} ${c.pmx_company_name ? '<span class="tag">PMX</span>' : '<span class="tag">직접 등록</span>'}
           <button class="btn btn-secondary btn-sm" onclick="renameContractor('${c.id}')">이름 수정</button>
         </div>
         <div class="contractor-contact-line"><span>관리자 ${escapeHtml(c.manager_name || '미등록')}</span><span>${escapeHtml(c.manager_phone || '전화번호 미등록')}</span><button class="btn btn-secondary btn-sm" onclick="editContractorContact('${c.id}')">연락처 수정</button></div><div class="contractor-work-types">${wtChips}</div>
       </div>
       <div class="contractor-statuses">
         <button class="contractor-badge neutral" onclick="openContractorMsds('${c.id}')">🧪 MSDS ${msdsCnt}건</button>
+        <label class="contractor-active"><input type="checkbox" role="switch" aria-label="${escapeHtml(c.name)} 사용 여부" ${c.is_active !== false ? 'checked' : ''} onchange="toggleContractorActive('${c.id}',this.checked)">${c.is_active !== false ? '사용' : '미사용'}</label>
+        <button class="btn btn-secondary btn-sm" onclick="openContractorTransfer('${c.id}')">문서 이관</button>
         <button class="btn btn-danger btn-sm" onclick="removeContractor('${c.id}')">삭제</button>
       </div>
     </div>`;
@@ -11238,3 +11243,26 @@ function renderGsWeek(fc) {
 }
 
 init();
+
+window.toggleContractorActive = async function(id, active) {
+ const {error}=await supabase.rpc('set_contractor_active',{p_workspace:currentWS.id,p_contractor:id,p_active:active});
+ if(error){toast('사용 여부 저장 실패: '+error.message,'error');renderContractorTags();return;}
+ const c=contractors.find(c=>c.id===id);if(c)c.is_active=active;
+ renderContractorTags();populateContractorSelects();
+};
+window.openContractorTransfer = function(id) {
+ document.getElementById('contractorTransferDialog')?.remove();
+ const source=contractors.find(c=>c.id===id);if(!source)return;
+ const dialog=document.createElement('dialog');dialog.id='contractorTransferDialog';dialog.className='pmx-picker';
+ dialog.innerHTML=`<h2>협력사 문서 이관</h2><p><strong>${escapeHtml(source.name)}</strong>의 MSDS·공종·사업자등록증을 선택한 업체로 이관합니다. 원래 업체는 미사용으로 전환됩니다. 연락처·근로자·위치 배정은 유지됩니다.</p><label>받는 협력사<select class="form-input" id="transferTarget"><option value="">업체 선택</option>${contractors.filter(c=>c.id!==id && c.is_active!==false).map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}</select></label><p role="alert" id="transferError"></p><div class="pmx-actions"><button class="btn btn-primary" id="transferSave">이관하기</button><button class="btn btn-secondary" id="transferCancel">취소</button></div>`;
+ document.body.append(dialog);dialog.showModal();
+ dialog.querySelector('#transferCancel').onclick=()=>dialog.close();
+ dialog.querySelector('#transferSave').onclick=async event=>{
+  const target=dialog.querySelector('#transferTarget').value;if(!target)return;
+  if(!confirm('선택한 업체로 문서를 이관하고 원래 업체를 미사용으로 전환할까요?'))return;
+  event.target.disabled=true;
+  const {error}=await supabase.rpc('transfer_contractor_documents',{p_workspace:currentWS.id,p_source:id,p_target:target});
+  if(error){dialog.querySelector('#transferError').textContent='이관 실패. 문서는 변경되지 않았습니다. '+error.message;event.target.disabled=false;return;}
+  dialog.close();await Promise.all([loadContractors(),loadWorkTypes(),loadMsdsRecords()]);renderContractorTags();toast('문서 이관 완료');
+ };
+};

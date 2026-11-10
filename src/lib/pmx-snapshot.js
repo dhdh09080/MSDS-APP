@@ -1,3 +1,4 @@
+import {validatePartnerSnapshot} from './pmx-partners.js';
 import {normalizeProject} from './pmx.js';
 
 export const PMX_INCOMING_KEY = 'gs_pmx_incoming_v1';
@@ -5,6 +6,7 @@ export const PMX_MAX_SNAPSHOT_BYTES = 500_000;
 const fields = ['prjCd','prjNm','bizFldNm','cstrnStrtYmd','cstrnEndYmd','actlTProgrt'];
 
 export function validatePmxSnapshot(value, now = Date.now()) {
+  if (value?.source === 'pmx-partners') return validatePartnerSnapshot(value, now);
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(k => !['version','source','projects','fetchedAt'].includes(k)) || value.version !== 1 || value.source !== 'pmx-bookmark') throw new Error('PMX 정보 파일 형식이 올바르지 않습니다.');
   if (!Array.isArray(value.projects) || !value.projects.length || value.projects.length > 500) throw new Error('현장 목록은 1~500개여야 합니다.');
   const stamp = Date.parse(value.fetchedAt);

@@ -5,7 +5,7 @@ import initialProjects from '../data/pmx-projects.json';
 import { PMX_URL, normalizeProject, estimatedCare, kstDay, manualProject } from './pmx.js';
 import './pmx.css';
 
-export function createPmxPanel({client,getWorkspace,getUser,canManage,onUpdate,toast}) {
+export function createPmxPanel({client,getWorkspace,getUser,canManage,onUpdate,toast,onPartnersSnapshot}) {
   let projects = initialProjects.map(normalizeProject), busy = false, lastResponse = null, applying = false, status = '';
   let approvedAccount = null, approvedWorkspace = null, incoming = null, reviewOpen = false;
   const escape = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -155,6 +155,7 @@ export function createPmxPanel({client,getWorkspace,getUser,canManage,onUpdate,t
       if(raw){incoming=parsePmxSnapshot(raw);sessionStorage.removeItem(PMX_INCOMING_KEY);}
     } catch(error){clearIncoming();toast(error.message,'error');return;}
     if(!incoming)return;
+    if(incoming.source==='pmx-partners'){const data=incoming;clearIncoming();onPartnersSnapshot?.(data);return;}
     openReview(incoming);
   }
   function openReview(snapshot) {
