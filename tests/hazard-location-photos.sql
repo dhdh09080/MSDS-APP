@@ -1,0 +1,48 @@
+-- Synthetic fixture rows only; the transaction always rolls back.
+begin;
+do $test$
+declare u uuid; outsider uuid; ws uuid:=gen_random_uuid(); co uuid:=gen_random_uuid(); other_co uuid:=gen_random_uuid(); m uuid:=gen_random_uuid(); h uuid:=gen_random_uuid(); p uuid; result jsonb; blocked boolean;
+ test_token text:='location-test-'||gen_random_uuid(); other_token text:='location-other-'||gen_random_uuid(); path text;
+begin
+ select id into u from auth.users order by id limit 1;
+ select id into outsider from auth.users where id<>u order by id limit 1;
+ if outsider is null then raise exception 'Two accounts required for rollback checks'; end if;
+ insert into public.workspaces(id,name,code,owner_id) values(ws,'Location photos rollback fixture',substr(ws::text,1,8),u);
+ insert into public.workspace_members(workspace_id,user_id,role) values(ws,u,'admin') on conflict do nothing;
+ insert into public.contractors(id,workspace_id,name) values(co,ws,'Location A'),(other_co,ws,'Location B');
+ insert into public.upload_tokens(workspace_id,contractor_id,token,expires_at) values(ws,co,test_token,now()+interval '1 day'),(ws,other_co,other_token,now()+interval '1 day');
+ insert into public.hazard_maps(id,workspace_id,title,storage_path,width,height,created_by) values(m,ws,'PIT 도면',ws||'/'||m||'/'||gen_random_uuid()||'.png',1200,700,u);
+ insert into public.hazard_markers(id,workspace_id,map_id,x,y,storage_name,marker_type,contractor_id,created_by) values(h,ws,m,.4,.5,'PIT 부적합','issue',co,u);
+ perform set_config('request.jwt.claim.sub',u::text,true);
+ blocked:=false;begin perform public.review_hazard_marker(h,'verified','',0);exception when others then blocked:=true;end;assert blocked,'approval without remedy';
+ path:=ws||'/'||h||'/'||gen_random_uuid()||'.jpg';
+ result:=public.add_contractor_location_photo(test_token,co,m,h,path,'remedy','통로 정리 완료');p:=(result->>'id')::uuid;
+ assert (select review_status='pending' and photo_revision=1 from public.hazard_markers where id=h),'submission state';
+ blocked:=false;begin perform public.add_contractor_location_photo(other_token,other_co,m,h,ws||'/'||h||'/'||gen_random_uuid()||'.jpg','remedy','');exception when others then blocked:=true;end;assert blocked,'other contractor wrote photo';
+ assert jsonb_array_length(public.get_contractor_hazard_maps(other_token,other_co,m)->'markers')=0,'other contractor read issue';
+ perform set_config('request.jwt.claim.sub',outsider::text,true);
+ blocked:=false;begin perform public.review_hazard_marker(h,'verified','forged',1);exception when others then blocked:=true;end;assert blocked,'outsider approval';
+ perform set_config('request.jwt.claim.sub',u::text,true);
+ result:=public.review_hazard_marker(h,'verified','안전팀 확인',1);
+ assert result->>'review_status'='verified' and (result->>'reviewed_by')::uuid=u;
+ perform public.add_contractor_location_photo(test_token,co,m,h,ws||'/'||h||'/'||gen_random_uuid()||'.jpg','remedy','추가 조치');
+ assert (select review_status='pending' and reviewed_by is null and photo_revision=2 from public.hazard_markers where id=h),'new evidence did not reopen';
+ blocked:=false;begin perform public.review_hazard_marker(h,'verified','stale',1);exception when others then blocked:=true;end;assert blocked,'stale approval';
+ perform public.review_hazard_marker(h,'verified','보건팀 확인',2);
+ update public.hazard_markers set content='변경된 부적합 사항' where id=h;
+ assert (select review_status='open' and photo_revision=3 from public.hazard_markers where id=h),'changed issue retained approval';
+ blocked:=false;begin perform public.save_contractor_hazard_marker(test_token,co,m,h,'delete');exception when others then blocked:=true;end;assert blocked,'contractor deleted assigned issue';
+ update public.upload_tokens set expires_at=now()-interval '1 second' where upload_tokens.token=test_token;
+ blocked:=false;begin perform public.add_contractor_location_photo(test_token,co,m,h,ws||'/'||h||'/'||gen_random_uuid()||'.jpg','remedy','');exception when others then blocked:=true;end;assert blocked,'expired link wrote photo';
+ assert not has_column_privilege('authenticated','public.hazard_markers','review_status','UPDATE');
+ assert not has_column_privilege('authenticated','public.hazard_markers','review_status','INSERT');
+ assert not has_table_privilege('anon','public.hazard_location_photos','SELECT');
+ assert not has_function_privilege('anon','public.review_hazard_marker(uuid,text,text,integer)','EXECUTE');
+ assert not has_function_privilege('anon','public.add_contractor_location_photo(text,uuid,uuid,uuid,text,text,text)','EXECUTE');
+ assert has_table_privilege('service_role','public.hazard_location_photos','SELECT');
+ assert (select not public from storage.buckets where id='hazard-location-photos');
+ delete from public.hazard_markers where id=h;
+ assert not exists(select 1 from public.hazard_location_photos where marker_id=h),'photo cascade';
+end;
+$test$;
+rollback;

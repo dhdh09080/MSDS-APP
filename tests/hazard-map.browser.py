@@ -89,6 +89,7 @@ async def main():
         assert len(maps) == 1 and len(uploads) == 1
 
         async def place(x, y):
+            await page.locator('#hmPhoto').scroll_into_view_if_needed()
             box = await page.locator('#hmPhoto').bounding_box()
             await page.mouse.click(box['x'] + box['width'] * x, box['y'] + box['height'] * y)
         await place(.23, .62)

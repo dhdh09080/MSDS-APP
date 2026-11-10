@@ -1,0 +1,66 @@
+import {PGlite} from '@electric-sql/pglite';
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const db = new PGlite();
+await db.exec(`
+ create role anon; create role authenticated; create role service_role bypassrls;
+ create schema auth; create schema storage;
+ create table auth.users(id uuid primary key);
+ create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+ grant usage on schema auth,storage to authenticated,service_role;
+ create table public.workspaces(id uuid primary key,name text,owner_id uuid);
+ create table public.workspace_members(workspace_id uuid,user_id uuid,role text);
+ create table public.contractors(id uuid primary key,workspace_id uuid,name text);
+ create table public.test_tokens(token text,contractor_id uuid,workspace_id uuid,expires_at timestamptz);
+ create function public.get_contractor_portal(p_token text,p_contractor_id uuid) returns jsonb language plpgsql security definer set search_path='' as $$
+ declare t public.test_tokens; begin select * into t from public.test_tokens where token=p_token and contractor_id=p_contractor_id and expires_at>now(); if t.token is null then raise exception 'invalid token'; end if;
+ return jsonb_build_object('workspace',jsonb_build_object('id',t.workspace_id),'contractor',jsonb_build_object('id',t.contractor_id),'public_link','null'::jsonb); end; $$;
+ create function public.can_manage_workspace_links(p_workspace uuid) returns boolean language sql stable security definer set search_path='' as $$ select exists(select 1 from public.workspace_members where workspace_id=p_workspace and user_id=auth.uid() and role='admin'); $$;
+ create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+ create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text);
+ create function storage.foldername(text) returns text[] language sql immutable as $$select (string_to_array($1,'/'))[1:array_length(string_to_array($1,'/'),1)-1]$$;
+ grant select on public.workspace_members to authenticated;
+`);
+for (const file of ['20261023010754_hazard_maps.sql','20261023023814_hazard_map_sticker_details.sql','20261110011246_hazard_location_photos.sql']) await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));
+await db.exec(`grant select,insert,update,delete on all tables in schema public to service_role;grant execute on all functions in schema public to service_role;`);
+const admin='11111111-1111-4111-8111-111111111111',member='22222222-2222-4222-8222-222222222222',outsider='33333333-3333-4333-8333-333333333333';
+const ws='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',other='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',map='cccccccc-cccc-4ccc-8ccc-cccccccccccc',marker='dddddddd-dddd-4ddd-8ddd-dddddddddddd',company='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',otherCompany='ffffffff-ffff-4fff-8fff-ffffffffffff';
+const as = async user => db.exec(`reset role;set request.jwt.claim.sub='${user}';set role authenticated;`);
+const row = async () => (await db.query(`select * from public.hazard_markers where id='${marker}'`)).rows[0];
+const insertPhoto = async(kind='remedy',custom={}) => {
+ const path=custom.path || `${ws}/${marker}/${crypto.randomUUID()}.jpg`;
+ return db.query(`insert into public.hazard_location_photos(workspace_id,marker_id,storage_path,kind,note,created_by) values($1,$2,$3,$4,'제거 완료',$5) returning id`,[custom.ws||ws,marker,path,kind,custom.user||admin]);
+};
+await db.exec(`insert into auth.users values('${admin}'),('${member}'),('${outsider}');insert into workspaces values('${ws}','PIT','${admin}'),('${other}','Other','${outsider}');insert into workspace_members values('${ws}','${admin}','admin'),('${ws}','${member}','member'),('${other}','${outsider}','admin');insert into contractors values('${company}','${ws}','A'),('${otherCompany}','${ws}','B');insert into test_tokens values('contractor-test-token','${company}','${ws}',now()+interval '1 day'),('other-company-token','${otherCompany}','${ws}',now()+interval '1 day');insert into hazard_maps(id,workspace_id,title,storage_path,width,height,created_by) values('${map}','${ws}','PIT 도면','${ws}/${map}/${crypto.randomUUID()}.png',1200,700,'${admin}');insert into hazard_markers(id,workspace_id,map_id,x,y,storage_name,marker_type,contractor_id,created_by) values('${marker}','${ws}','${map}',.2,.4,'PIT 부적합','issue','${company}','${admin}');`);
+await as(admin);
+await assert.rejects(db.query(`update hazard_markers set review_status='verified' where id='${marker}'`),/permission denied/);
+await assert.rejects(db.query(`insert into hazard_markers(workspace_id,map_id,x,y,storage_name,review_status,created_by) values('${ws}','${map}',.3,.4,'forge','verified','${admin}')`),/permission denied/);
+await assert.rejects(db.query(`select review_hazard_marker('${marker}','verified','',0)`),/조치 사진/);
+await insertPhoto(); assert.equal((await row()).review_status,'pending'); assert.equal((await row()).photo_revision,1);
+await as(member);await assert.rejects(db.query(`select review_hazard_marker('${marker}','verified','',1)`),/관리자/);
+await as(outsider);assert.equal((await db.query('select * from hazard_location_photos')).rows.length,0);await assert.rejects(insertPhoto('finding',{user:outsider}),/row-level security/);
+await as(admin);await assert.rejects(insertPhoto('finding',{ws:other}),/check constraint|foreign key|row-level security/);await assert.rejects(insertPhoto('finding',{path:`${ws}/${map}/${crypto.randomUUID()}.jpg`}),/check constraint/);
+await db.query(`select review_hazard_marker('${marker}','verified','안전팀 확인 완료',1)`);assert.equal((await row()).review_status,'verified');assert.equal((await row()).reviewed_by,admin);
+await insertPhoto('remedy');assert.equal((await row()).review_status,'pending');assert.equal((await row()).reviewed_by,null);
+await assert.rejects(db.query(`select review_hazard_marker('${marker}','verified','',1)`),/사진이 변경/);
+await db.query(`select review_hazard_marker('${marker}','open','추가 정리 필요',2)`);assert.equal((await row()).review_note,'추가 정리 필요');
+// The anonymous portal can read only its company's markers and cannot alter issues or approvals.
+await db.exec(`reset role;set role anon;`);
+let context=(await db.query(`select get_contractor_hazard_maps('contractor-test-token','${company}','${map}') as result`)).rows[0].result;
+assert.equal(context.markers.length,1);assert.equal(context.markers[0].review_status,'open');
+context=(await db.query(`select get_contractor_hazard_maps('other-company-token','${otherCompany}','${map}') as result`)).rows[0].result;assert.equal(context.markers.length,0);
+await assert.rejects(db.query(`select save_contractor_hazard_marker('contractor-test-token','${company}','${map}','${marker}','delete')`),/현장 관리자/);
+await assert.rejects(db.query(`select review_hazard_marker('${marker}','verified','',2)`),/permission denied/);
+await assert.rejects(db.query(`select * from hazard_location_photos`),/permission denied/);
+await assert.rejects(db.query(`select add_contractor_location_photo('contractor-test-token','${company}','${map}','${marker}','x','remedy','')`),/permission denied/);
+// Edge finalization checks assignment and token again after Storage upload.
+await db.exec(`reset role;set role service_role;`);
+const finalize=async(token,co,path)=>db.query(`select add_contractor_location_photo($1,$2,$3,$4,$5,'remedy','협력업체 조치 완료')`,[token,co,map,marker,path]);
+await assert.rejects(finalize('other-company-token',otherCompany,`${ws}/${marker}/${crypto.randomUUID()}.jpg`),/담당 업체/);
+await finalize('contractor-test-token',company,`${ws}/${marker}/${crypto.randomUUID()}.jpg`);
+assert.equal((await row()).review_status,'pending');
+await db.exec(`reset role;update test_tokens set expires_at=now()-interval '1 second';set role service_role;`);
+await assert.rejects(finalize('contractor-test-token',company,`${ws}/${marker}/${crypto.randomUUID()}.jpg`),/invalid token/);
+await db.exec(`reset role;`);await db.query(`delete from hazard_markers where id='${marker}'`);assert.equal((await db.query('select * from hazard_location_photos')).rows.length,0);
+await db.close();
+console.log('Location photos SQL: RLS, file scope, contractor isolation/expiry, protected approvals, photo revisions and cascade passed');

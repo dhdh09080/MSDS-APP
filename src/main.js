@@ -119,7 +119,7 @@ window.openCreateWorkspace = () => {
 window.refreshWorkspaceList = () => loadWorkspaces();
 window.refreshWorkspaceTeam = () => loadMembers();
 
-const hazardMap = createHazardMap({ supabase, getWorkspace: () => currentWS, getUser: () => user, getContractors: () => contractors, toast });
+const hazardMap = createHazardMap({ supabase, getWorkspace: () => currentWS, getUser: () => user, getContractors: () => contractors, canReview: () => canManageTeam(), toast });
 
 // 전역 붙여넣기 캐치: 사진 업로드 모달이 열려있을 때 어디서 Ctrl+V를 눌러도 잡히도록 보강
 document.addEventListener('paste', (e) => {
@@ -230,6 +230,7 @@ function showDevFeaturePreview(page) {
     latitude: 37.5663,
     longitude: 127.0541,
   };
+  if (page === 'hazard-map') currentWS.owner_id = user.id;
   if (page === 'pmx') Object.assign(currentWS,{owner_id:user.id,workspace_members:[{role:'admin'}],pmx_prj_cd:'000012',pmx_category:'주택',pmx_start_date:'2024-07-01',pmx_end_date:'2027-10-01',pmx_progress:60.5});
   profile = { name: '현장 담당자' };
   contractors = [

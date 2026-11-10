@@ -12,12 +12,23 @@ async def main():
  contacts=[dict(id='contact-a',name='김관리',phone='010-1111-1111',is_primary=True)]
  maps=[dict(id=MID,workspace_id=WS,title='현장 전경',storage_path='fixture.png',width=1000,height=600)]
  markers=[dict(id='marker-own',workspace_id=WS,map_id=MID,contractor_id=CON,x=.4,y=.5,storage_name='동측 위험물 저장소',marker_type='hazard',items=[dict(name='신나',quantity='20 L')],access_code='1234',content='화기 엄금'),dict(id='marker-common',workspace_id=WS,map_id=MID,contractor_id=None,x=.8,y=.8,storage_name='정문',marker_type='gate',items=[],content='')]
- writes=[];errors=[];workers=[]
+ writes=[];errors=[];workers=[];photos=[]
  async with async_playwright() as p:
   browser=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
   page=await browser.new_page(viewport=dict(width=1440,height=1050));page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept())
   async def api(route):
-   data=json.loads(route.request.post_data or '{}');url=route.request.url
+   url=route.request.url
+   if '/functions/v1/contractor-location-photo' in url:
+    if 'multipart/form-data' in route.request.headers.get('content-type',''):
+     body=route.request.post_data_buffer
+     assert b'workspace-fixture-token' in body and CON.encode() in body and b'marker-own' in body
+     photos.append(dict(id='photo-1',marker_id='marker-own',kind='remedy',note='업체 조치 완료',created_at='2026-11-10T01:00:00Z',signed_url=BASE+'/fixture-panorama.png'))
+     markers[0]['review_status']='pending';markers[0]['photo_revision']=1
+     return await route.fulfill(json=dict(photo=photos[-1]))
+    data=json.loads(route.request.post_data or '{}')
+    assert data['contractor_id']==CON and data['marker_id']=='marker-own'
+    return await route.fulfill(json=dict(photos=photos))
+   data=json.loads(route.request.post_data or '{}')
    if 'get_contractor_portal' in url:return await route.fulfill(json=dict(workspace=dict(id=WS,name='성동자이리버뷰'),contractor=dict(id=CON,name='대한건설'),public_link=None,work_types=[dict(id='trade1',name='골조')],license=None,records=[dict(id='record1',product_name='수성도료',work_type='골조',pdf_name='수성도료.pdf')]))
    if 'get_public_reupload_requests' in url:return await route.fulfill(json=[])
    if 'get_contractor_workspace' in url:return await route.fulfill(json=dict(contacts=contacts,worker_site_code='070120'))
@@ -83,7 +94,7 @@ async def main():
   await page.locator('nav [data-workspace-nav=hazard]').click();await page.wait_for_function('document.querySelector("#hmPhoto")?.naturalWidth>0')
   assert not await page.locator('#hmUpload').is_visible()
   assert not await page.locator('[data-action=replace-photo]').is_visible()
-  assert await page.locator('.hm-storage-card').nth(1).get_by_role('button').count()==0
+  assert await page.locator('.hm-storage-card').nth(1).locator('[data-action=edit],[data-action=move],[data-action=delete],[data-action=photos]').count()==0
   await page.locator('.hm-storage-card').first.get_by_role('button',name='정보 수정').click()
   await page.locator('#hmMarkerForm [name=storage_name]').fill('수정된 우리 저장소')
   await page.locator('#hmMarkerForm [name=item_quantity]').fill('40 L')
@@ -91,6 +102,18 @@ async def main():
   assert markers[0]['storage_name']=='수정된 우리 저장소' and markers[0]['items'][0]['quantity']=='40 L'
   await page.wait_for_function('document.querySelectorAll("#toastWrap .toast").length===0')
   await page.screenshot(path=str(OUT/'hazard-desktop.png'),full_page=True)
+  await page.locator('.hm-storage-card').first.locator('[data-action=photos]').click()
+  modal=page.locator('.lp-dialog')
+  await modal.locator('[data-camera]:not([disabled])').wait_for()
+  assert await modal.locator('[data-review]').count()==0
+  assert await modal.locator('[data-delete]').count()==0
+  assert await modal.locator('[data-kind]').input_value()=='remedy'
+  await modal.locator('[data-note]').fill('업체 조치 완료')
+  await modal.locator('[data-album-input]').set_input_files({'name':'remedy.png','mimeType':'image/png','buffer':png()})
+  await modal.locator('[data-message]').get_by_text('1장 저장 완료',exact=False).wait_for()
+  await modal.locator('[data-close]:not([disabled])').click()
+  assert markers[0]['review_status']=='pending'
+  assert '관리자 확인 전' in await page.locator('.hm-storage-card').first.inner_text()
   await page.locator('nav [data-workspace-nav=workers]').click()
   await page.locator('#cwWorkerName:not([disabled])').fill('홍근로')
   await page.locator('#cwWorkerPhone4').fill('4321');await page.locator('#cwWorkerJob').fill('형틀목공');await page.locator('#cwWorkerSave').click()
