@@ -1,7 +1,5 @@
 import { PDFDocument } from 'pdf-lib';
 
-// Required PDF operations load with the page, so an open tab can still analyze
-// after a new deployment removes the previous deployment's lazy chunks.
 // Keep PDF requests small enough for page, context and output limits.
 export const MEASURE_BATCH_PAGES = 8;
 export const MEASURE_TEXT_CHARS = 24000;

@@ -1,3 +1,4 @@
+import { loadCaptureLibrary } from './lib/optional-tools.js';
 import {createPartnerPanel} from './lib/pmx-partner-panel.js';
 import { installMenuFavorites } from './lib/menu-favorites.js';
 import { createPmxPanel } from './lib/pmx-panel.js';
@@ -11,8 +12,6 @@ import { createWarningRenderer } from './lib/warning-print.js';
 import { weatherAlertsHtml, A4_POSTER, buildHealthPosterSvg, hourlyWeatherHtml, posterModel, kstDate, riskMetric } from './lib/weather-poster.js';
 import { loadWeatherDetail, loadWeatherObservations } from './lib/weather-detail.js';
 import { labelSafetySections } from './lib/warning-label.js';
-import * as XLSX from 'xlsx';
-import JSZip from 'jszip';
 import {
   supabase,
   isAutoLoginEnabled,
@@ -45,7 +44,6 @@ import {
   openPrintWindow,
   buildPrintHtml,
 } from './lib/ui.js';
-import { createMeasureAftercareDocx } from './lib/measure-docx.js';
 import { buildMeasureAftercare } from './lib/measure-aftercare.js';
 import {
   PAGES,
@@ -53,9 +51,41 @@ import {
   WARN_SIZES,
   PHOTO_FOLDER_PRESETS,
 } from './data/constants.js';
-import { analyzeMeasurePdf } from './lib/measure-analysis.js';
-import { extractMeasurePages } from './lib/measure-pdf-text.js';
 import { parseLocalMeasureReport } from './lib/measure-local.js';
+
+async function createMeasureAftercareDocx(...args) {
+  const module = await import('./lib/measure-docx.js');
+  return module.createMeasureAftercareDocx(...args);
+}
+
+async function analyzeMeasurePdf(...args) {
+  const module = await import('./lib/measure-analysis.js');
+  return module.analyzeMeasurePdf(...args);
+}
+
+async function extractMeasurePages(...args) {
+  const module = await import('./lib/measure-pdf-text.js');
+  return module.extractMeasurePages(...args);
+}
+
+// Import errors are recoverable; allow another click to retry without losing form data.
+async function loadSpreadsheet() {
+  try {
+    return await import('xlsx');
+  } catch {
+    toast('엑셀 기능을 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도해주세요. 계속 실패하면 페이지를 새로고침해주세요.', 'error');
+    return null;
+  }
+}
+
+async function loadZipLibrary() {
+  try {
+    return (await import('jszip')).default;
+  } catch {
+    toast('압축 기능을 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도해주세요. 계속 실패하면 페이지를 새로고침해주세요.', 'error');
+    return null;
+  }
+}
 
 installFileDropzones({onError: message => toast(message, 'error')});
 
@@ -5425,7 +5455,9 @@ function splitComponents(r) {
   });
 }
 
-window.exportMsdsExcel = function () {
+window.exportMsdsExcel = async function () {
+  const XLSX = await loadSpreadsheet();
+  if (!XLSX) return;
   const filtered = getFilteredMsds().sort((a, b) => {
     const conSort = a.contractor.localeCompare(b.contractor, 'ko');
     if (conSort !== 0) return conSort;
@@ -5648,6 +5680,8 @@ window.updatePkgCount = function () {
 };
 
 window.exportPackage = async function () {
+  const XLSX = await loadSpreadsheet();
+  if (!XLSX) return;
   const selected = selectedPackageContractors();
   if (!selected.length) {
     toast('협력사를 선택하세요', 'error');
@@ -5666,6 +5700,8 @@ window.exportPackage = async function () {
     return;
   }
   toast(`협력사 ${selected.length}곳 패키지 생성 중...`);
+  const JSZip = await loadZipLibrary();
+  if (!JSZip) return;
   const zip = new JSZip();
   const safeZipName = (value) =>
     String(value || '미지정')
@@ -5914,7 +5950,7 @@ window.printMsdsFullDocs = async function () {
   let printedGroups = 0;
 
   try {
-    const { PDFDocument, rgb } = PDFLib;
+    const { PDFDocument, rgb } = await import('pdf-lib');
     const merged = await PDFDocument.create();
     let pageCount = 0;
 
@@ -6594,7 +6630,9 @@ window.deleteMeasureResult = async function (id) {
   toast('삭제됐습니다');
 };
 
-window.downloadMeasureDust = function () {
+window.downloadMeasureDust = async function () {
+  const XLSX = await loadSpreadsheet();
+  if (!XLSX) return;
   if (!currentMeasureData) return;
   const d = currentMeasureData;
   const rows = (d.dust || []).map((r) => ({
@@ -6613,7 +6651,9 @@ window.downloadMeasureDust = function () {
   toast('분진 결과표 다운로드 완료', 'success');
 };
 
-window.downloadMeasureNoise = function () {
+window.downloadMeasureNoise = async function () {
+  const XLSX = await loadSpreadsheet();
+  if (!XLSX) return;
   if (!currentMeasureData) return;
   const d = currentMeasureData;
   const rows = (d.noise || []).map((r) => ({
@@ -6991,7 +7031,9 @@ window.handleHealthExcel = function (e) {
   e.target.value = '';
 };
 
-window.downloadHealthExcel = function () {
+window.downloadHealthExcel = async function () {
+  const XLSX = await loadSpreadsheet();
+  if (!XLSX) return;
   if (!healthExcelData) {
     toast('엑셀 양식을 먼저 업로드하세요', 'error');
     return;
@@ -7261,8 +7303,9 @@ window.handlePlacementExcel = function (e) {
   if (!file) return;
   document.getElementById('placementFileName').textContent = file.name;
   const reader = new FileReader();
-  reader.onload = (ev) => {
+  reader.onload = async (ev) => {
     try {
+      const XLSX = await import('xlsx');
       const wb = XLSX.read(ev.target.result, { type: 'binary' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
@@ -7405,7 +7448,9 @@ window.runPlacementFilter = function () {
     ?.style.setProperty('display', '');
 };
 
-window.downloadPlacementExcel = function () {
+window.downloadPlacementExcel = async function () {
+  const XLSX = await loadSpreadsheet();
+  if (!XLSX) return;
   if (!placementFiltered.length) {
     toast('추출된 명단이 없습니다', 'error');
     return;
@@ -7571,6 +7616,8 @@ window.downloadPlacementImagesByContractor = async function () {
     byContractor[r.contractor].push(r);
   });
 
+  const JSZip = await loadZipLibrary();
+  if (!JSZip) return;
   const zip = new JSZip();
   const folder = zip.folder(`배치전_확인서_미수령_협력사별_${today()}`);
 
@@ -7863,6 +7910,8 @@ window.downloadAllLicenses = async function () {
     toast('다운로드할 사업자등록증이 없습니다', 'error');
     return;
   }
+  const JSZip = await loadZipLibrary();
+  if (!JSZip) return;
   const zip = new JSZip();
   const folder = zip.folder(`사업자등록증_${currentWS.name}_${today()}`);
   for (const lic of businessLicenses) {
@@ -8797,8 +8846,9 @@ window.handleSortingExcel = function (e) {
   if (!file) return;
   document.getElementById('sortingFileName').textContent = file.name;
   const reader = new FileReader();
-  reader.onload = (ev) => {
+  reader.onload = async (ev) => {
     try {
+      const XLSX = await import('xlsx');
       const wb = XLSX.read(ev.target.result, { type: 'binary' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const raw = XLSX.utils.sheet_to_json(ws, { defval: '' });
@@ -8990,7 +9040,9 @@ function renderSortingResult() {
   document.getElementById('sortingSummaryArea').style.display = '';
 }
 
-window.downloadSortingExcel = function () {
+window.downloadSortingExcel = async function () {
+  const XLSX = await loadSpreadsheet();
+  if (!XLSX) return;
   if (!sortingRows.length) {
     toast('분석된 데이터가 없습니다', 'error');
     return;
@@ -9301,8 +9353,9 @@ window.mpClearSel = function () {
 function parseMpXlsx(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await import('xlsx');
         const wb = XLSX.read(e.target.result, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
@@ -9888,8 +9941,9 @@ const VUL_DEFS = [
 window.handleVulFile = function (file) {
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
+      const XLSX = await import('xlsx');
       const wb = XLSX.read(e.target.result, { type: 'array' });
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {
         defval: '',
@@ -9988,13 +10042,14 @@ function renderVulGroups() {
 
 window.downloadVulImage = async function (key) {
   const el = document.getElementById('vulCapture-' + key);
-  if (!el || typeof html2canvas === 'undefined') {
+  if (!el) {
     toast('이미지 모듈 로드 실패 — 새로고침 후 시도하세요', 'error');
     return;
   }
   const title = el.querySelector('.vul-cap-title');
   title.style.display = 'block';
   try {
+    const html2canvas = await loadCaptureLibrary();
     const canvas = await html2canvas(el, {
       scale: 2,
       backgroundColor: '#ffffff',
@@ -10011,7 +10066,9 @@ window.downloadVulImage = async function (key) {
   title.style.display = 'none';
 };
 
-window.downloadVulSignSheet = function () {
+window.downloadVulSignSheet = async function () {
+  const XLSX = await loadSpreadsheet();
+  if (!XLSX) return;
   if (!vulGroups) return;
   const wb = XLSX.utils.book_new();
   const groups = { g1: vulGroups.g1, g2: vulGroups.g2, g3: vulGroups.g3 };
@@ -10095,8 +10152,9 @@ function extractElderly(activeRows) {
 window.handleBpFile = function (file) {
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
+      const XLSX = await import('xlsx');
       const wb = XLSX.read(e.target.result, { type: 'array' });
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {
         defval: '',
@@ -10161,7 +10219,7 @@ function renderBpPage() {
 
 window.downloadBpImage = async function () {
   const el = document.getElementById('bpCapture');
-  if (!el || typeof html2canvas === 'undefined') {
+  if (!el) {
     toast('이미지 모듈 로드 실패 — 새로고침 후 시도하세요', 'error');
     return;
   }
@@ -10169,6 +10227,7 @@ window.downloadBpImage = async function () {
   t.textContent = `🩺 고령근로자 혈압측정 대상 명단 — ${bpList.length}명 (매주 월·화 측정 · 기준일 ${bpBaseDate}) · ${currentWS?.name || '현장'}`;
   t.style.display = 'block';
   try {
+    const html2canvas = await loadCaptureLibrary();
     const canvas = await html2canvas(el, {
       scale: 2,
       backgroundColor: '#ffffff',
@@ -10184,7 +10243,9 @@ window.downloadBpImage = async function () {
   t.style.display = 'none';
 };
 
-window.downloadBpSheet = function () {
+window.downloadBpSheet = async function () {
+  const XLSX = await loadSpreadsheet();
+  if (!XLSX) return;
   if (!bpList?.length) {
     toast('고령근로자 명단이 없습니다', 'error');
     return;
@@ -10558,6 +10619,7 @@ window.handleKgFile = function (file) {
   const reader = new FileReader();
   reader.onload = async (e) => {
     try {
+      const XLSX = await import('xlsx');
       const wb = XLSX.read(e.target.result, { type: 'array' });
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {
         defval: '',
@@ -10712,7 +10774,7 @@ window.switchContractorTab = function (tab) {
       };
     }
   });
-  if (!getDevPreviewPage()) {
+  if (currentWS && !getDevPreviewPage()) {
     Promise.all([loadContractors(),loadMsdsRecords(),loadBusinessLicenses(),loadSiteDirectoryLink()]).then(() => { renderContractorTags(); renderSiteDirectoryLink(); renderBusinessLicenseStatus(); });
   }
   if (contractorTab === 'licenses') renderBusinessLicenseStatus();
