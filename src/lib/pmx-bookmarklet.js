@@ -1,9 +1,9 @@
-const allowedAppOrigins = ['https://gshealthk.vercel.app','http://localhost:3000'];
+const allowedAppOrigins = ['https://gshealthk.vercel.app','https://gs-msds.vercel.app','http://localhost:3000'];
 
 // Serialized into the bookmark. One fixed GET, six data fields, then navigation.
 // No message listener, opener bridge, cookie read, arbitrary request or remote script.
 export async function publishPmxSnapshot(appOrigin) {
-  if (!['https://gshealthk.vercel.app','http://localhost:3000'].includes(appOrigin)) return;
+  if (!['https://gshealthk.vercel.app','https://gs-msds.vercel.app','http://localhost:3000'].includes(appOrigin)) return;
   if (location.origin !== 'https://pmx.gsenc.com' || !location.pathname.startsWith('/com/')) {
     alert('PMX에 접속하고 로그인한 뒤 이 즐겨찾기를 눌러주세요.');return;
   }

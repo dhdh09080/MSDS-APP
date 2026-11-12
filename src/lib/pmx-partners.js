@@ -1,4 +1,4 @@
-const origins = ['https://gshealthk.vercel.app','http://localhost:3000'];
+const origins = ['https://gshealthk.vercel.app','https://gs-msds.vercel.app','http://localhost:3000'];
 export function validatePartnerSnapshot(value, now=Date.now()) {
   const fail=()=>{throw new Error('PMX 협력사 정보 형식이 올바르지 않습니다.');};
   if(!value || value.version!==1 || value.source!=='pmx-partners' || Object.keys(value).some(k=>!['version','source','projectCode','date','fetchedAt','partners'].includes(k)))fail();
@@ -19,7 +19,7 @@ export function validatePartnerSnapshot(value, now=Date.now()) {
 
 // Executes only in the user's authenticated PMX tab; fixed read-only POST endpoint.
 export async function publishPartnerSnapshot(appOrigin, projectCode, date) {
-  if(!['https://gshealthk.vercel.app','http://localhost:3000'].includes(appOrigin) || !/^[A-Za-z0-9_-]{1,32}$/.test(projectCode) || !/^\d{4}-\d{2}-\d{2}$/.test(date))return;
+  if(!['https://gshealthk.vercel.app','https://gs-msds.vercel.app','http://localhost:3000'].includes(appOrigin) || !/^[A-Za-z0-9_-]{1,32}$/.test(projectCode) || !/^\d{4}-\d{2}-\d{2}$/.test(date))return;
   if(location.origin!=='https://pmx.gsenc.com'){alert('PMX에 로그인한 뒤 즐겨찾기를 실행해주세요.');return;}
   let failure='브라우저에서 요청을 준비하지 못했습니다.', timer;
   try {
