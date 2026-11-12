@@ -44,8 +44,8 @@ begin
       'work_type', r.work_type, 'pdf_name', r.pdf_name, 'pdf_path', r.pdf_path, 'signal_word', r.signal_word,
       'h_codes', r.h_codes, 'p_codes', r.p_codes, 'pictograms', r.pictograms, 'protective_equipment', r.protective_equipment,
       'handling_precautions', r.handling_precautions, 'first_aid', r.first_aid, 'emergency_response', r.emergency_response,
-      'legal_special', r.legal_special) order by r.created_at desc)
-      from public.msds_records r where r.workspace_id = v_workspace and r.contractor = v_name and coalesce(r.status, 'active') = 'active'), '[]'::jsonb) else '[]'::jsonb end);
+      'legal_special', r.legal_special, 'cas_no', r.cas_no, 'version', r.version, 'status', coalesce(r.status,'active'), 'contractor', r.contractor, 'submission_no_valid', r.submission_no_valid) order by r.created_at desc)
+      from public.msds_records r where r.workspace_id = v_workspace and r.contractor = v_name and coalesce(r.status, 'active') in ('active','ended')), '[]'::jsonb) else '[]'::jsonb end);
 end;
 $$;
 revoke all on function public.get_contractor_portal(text, uuid) from public, authenticated;

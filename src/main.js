@@ -1,3 +1,4 @@
+import {msdsStatusSwitch} from './lib/msds-status-switch.js';
 import { installMobileExperience } from './lib/mobile-experience.js';
 import { loadCaptureLibrary } from './lib/optional-tools.js';
 import {createPartnerPanel} from './lib/pmx-partner-panel.js';
@@ -3756,10 +3757,7 @@ window.renderMsdsTable = function (pageNumber = 1) {
         r.legal_special === 'Y'
           ? '<span class="badge badge-danger">특별</span>'
           : '<span class="badge badge-gray">일반</span>';
-      const st =
-        (r.status || 'active') === 'active'
-          ? `<button type="button" class="badge badge-ok status-toggle" onclick="toggleMsdsStatus('${r.id}')">사용중</button>`
-          : `<button type="button" class="badge badge-gray status-toggle" onclick="toggleMsdsStatus('${r.id}')">종료</button>`;
+      const st = msdsStatusSwitch(r,'toggleMsdsStatus');
       const rc =
         (r.receipt_status || 'received') === 'received'
           ? `<button type="button" class="badge badge-ok status-toggle" onclick="openReceipt('${r.id}')">✓ 수령</button>`
@@ -5096,17 +5094,19 @@ window.deleteMsdsRecord = async function (id) {
 // ═══════════════════════════════════════════════
 // Status / Receipt
 // ═══════════════════════════════════════════════
+const pendingMsdsStatuses=new Set();
 window.toggleMsdsStatus = async function (id) {
-  const r = msdsRecords.find((x) => x.id === id);
-  if (!r) return;
-  const newSt = (r.status || 'active') === 'active' ? 'ended' : 'active';
-  await supabase.from('msds_records').update({ status: newSt }).eq('id', id);
-  r.status = newSt;
-  renderMsdsTable();
-  updateStats();
-  toast(
-    newSt === 'active' ? '사용중으로 변경됐습니다' : '사용종료로 변경됐습니다',
-  );
+ const record=msdsRecords.find(row=>row.id===id), workspace=currentWS?.id;
+ if(!record || !workspace || pendingMsdsStatuses.has(id))return;
+ const status=(record.status||'active')==='active'?'ended':'active';
+ pendingMsdsStatuses.add(id);document.querySelectorAll('.msds-usage-switch').forEach(button=>{if(button.dataset.recordId===id)button.disabled=true;});
+ try{
+  const {data,error}=await supabase.from('msds_records').update({status}).eq('id',id).eq('workspace_id',workspace).select('id,status').single();
+  if(error)throw error;
+  if(currentWS?.id!==workspace)return;
+  record.status=data.status;renderMsdsTable();updateStats();toast(status==='active'?'사용중으로 변경했습니다':'미사용중으로 변경했습니다','success');
+ }catch(error){if(currentWS?.id===workspace)toast('사용 상태 변경 실패: '+error.message,'error');}
+ finally{pendingMsdsStatuses.delete(id);document.querySelectorAll('.msds-usage-switch').forEach(button=>{if(button.dataset.recordId===id)button.disabled=button.hasAttribute('data-readonly');});}
 };
 
 window.openReceipt = function (id) {

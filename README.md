@@ -727,3 +727,20 @@ MSDS 메뉴는 상단의 공종 선택(미지정 가능)·단일 파일 선택 �
 하단의 상세 기준으로 안내합니다. 모바일 메뉴가 닫힌 동안 화면을 가리지 않도록 합니다.
 검증: npm test, npm run build, tests/contractor-portal.browser.py, tests/portal-trade-upload.browser.py,
 tests/mobile-portal.browser.py, tests/contractor-directory.browser.py (합성 자료만 사용).
+
+## 관리자·협력사 MSDS 대장 공통 표시와 사용 상태 스위치
+
+협력사 대장의 열을 제품명·협력사·공종·공급업체·CAS·특별·상태·원본으로 맞췄습니다.
+관리자와 협력사 화면은 같은 사용 상태 스위치 컴포넌트를 사용합니다. 원본은 PDF 아이콘으로
+열고, 제품명은 경고표지 메뉴로 연결합니다. 모바일은 제품명 열을 고정하고 가로 스크롤합니다.
+`supabase/contractor_msds_register.sql`은 기존 토큰 검증을 유지하며 목록 응답에 공통 열의
+필드와 미사용 자료를 포함합니다. 삭제된 자료는 포함하지 않습니다. 이 조회 전용 변경은 운영에 적용했습니다.
+관리자 상태 변경은 기존 인증·RLS 경로를 사용하며 저장 실패 시 표시 상태를 바꾸지 않습니다.
+
+협력사 상태 편집은 서버의 `can_edit_msds_usage`가 true일 때만 활성화됩니다. 기본값은 읽기 전용입니다.
+`supabase/contractor_msds_usage.sql`은 사용자에게 공유 링크의 업체 선택·상태 변경 범위를
+설명하고 명시적으로 승인받은 뒤 `approved_partner_msds_usage_via_shared_links`로 운영에 적용했습니다.
+협력사도 상태를 변경할 수 있으며 개인/공유 링크의 유효기간, 선택 업체·현장·자료 소속과 MSDS
+권한을 검증합니다. 토글 저장 성공 후에만 상태를 갱신하고 실패하면 기존 상태를 유지합니다.
+검증: npm test, npm run build, tests/contractor-portal.browser.py, tests/msds-status-switch.browser.py, tests/mobile-portal.browser.py.
+합성 자료로 상태 유지·복원·실패 처리, 조회 필드, 토큰 만료·업체·현장·자료 범위 검증을 확인합니다.

@@ -1,3 +1,4 @@
+import {msdsStatusSwitch} from './lib/msds-status-switch.js';
 import { installPortalMobileExperience } from './lib/mobile-experience.js';
 import { installFileDropzones } from './lib/file-dropzone.js';
 import { collectDroppedFiles } from './lib/upload-files.js';
@@ -26,6 +27,7 @@ let publicLinkData = null,
 let currentUploadToken = '';
 
 let portalRecords = [];
+let portalUsageAllowed=false;
 let portalMobile;
 const workspace = createContractorWorkspace({supabase,getContext:()=>({workspace:wsData,contractor:contractorData,token:currentUploadToken}),navigate:panel=>window.switchPortalPanel(panel),toast:(...args)=>toast(...args)});
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -34,6 +36,7 @@ async function portalRequest(contractorId = null) {
     p_token: currentUploadToken, p_contractor_id: contractorId,
   });
   if (error) throw new Error(/invalid or expired|not found|does not match/.test(error.message || '') ? '만료되었거나 유효하지 않은 링크입니다. 담당 보건관리자에게 새 링크를 요청해주세요.' : '관리페이지를 불러오지 못했습니다. 연결을 확인하고 다시 시도해주세요.');
+  portalUsageAllowed=data?.can_edit_msds_usage===true;
   return data;
 }
 async function init() {
@@ -105,19 +108,37 @@ async function refreshPortalRecords() {
   } catch (err) { toast(err.message, 'error'); }
 }
 window.refreshPortalRecords = refreshPortalRecords;
-function printable(r) { return Boolean(r.signal_word && (r.h_codes || r.pictograms)); }
+function printable(r) { return (r.status||'active')==='active' && Boolean(r.signal_word && (r.h_codes || r.pictograms)); }
 function renderPortalDocumentLists() {
   for (const [searchId, listId] of [['portalSearch', 'portalRecordList'], ['uploadExistingSearch', 'uploadExistingList']]) {
     const query = document.getElementById(searchId).value.trim().toLowerCase();
-    const rows = portalRecords.filter(r => [r.product_name, r.work_type, r.supplier, r.pdf_name]
+    const rows = portalRecords.filter(r => [r.product_name, r.work_type, r.supplier, r.pdf_name, r.cas_no]
       .some(value => (value || '').toLowerCase().includes(query)));
-  document.getElementById(listId).innerHTML = rows.length ? `<div class="portal-document-table-scroll"><table class="portal-document-table"><thead><tr><th>제품명 · 원본 파일</th><th>공종</th><th>안전정보</th><th>원본 확인 · 인쇄</th></tr></thead><tbody>${rows.map(r=>`<tr class="document-row"><td><h3>${escapeHtml(r.product_name)}</h3><p>${escapeHtml(r.pdf_name || '첨부파일 없음')}</p><span class="portal-mobile-document-meta">${escapeHtml(r.work_type || '공종 미지정')} · ${printable(r)?'안전정보 등록':'분석 대기'}</span></td><td>${escapeHtml(r.work_type || '미지정')}</td><td><span class="status ${printable(r)?'ready':''}">${printable(r)?'등록 완료':'분석 대기'}</span></td><td>${r.pdf_path?`<a class="btn btn-secondary" href="${import.meta.env.VITE_SUPABASE_URL}/functions/v1/msds-view?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(r.product_name)} 원본 PDF 열기">원본 PDF 열기 ↗</a>`:'<span class="muted">원본 없음</span>'}</td></tr>`).join('')}</tbody></table></div><p class="portal-pdf-help">원본 PDF가 새 창에서 열립니다. PDF 화면의 인쇄 버튼으로 출력하세요.</p>` : `<div class="portal-empty">${query?'검색 결과가 없습니다.':'아직 등록된 MSDS가 없습니다. 위에서 파일을 추가해주세요.'}</div>`;
+  document.getElementById(listId).innerHTML = rows.length ? `<p class="portal-register-scroll-note">표를 좌우로 밀면 공급업체·CAS·사용 상태·원본을 확인할 수 있습니다.</p><div class="portal-document-table-scroll" tabindex="0" role="region" aria-label="MSDS 대장"><table class="portal-document-table portal-register-table"><thead><tr><th>제품명</th><th>협력사</th><th>공종</th><th>공급업체</th><th>CAS</th><th>특별</th><th>상태</th><th>원본</th></tr></thead><tbody>${rows.map(r=>`<tr class="document-row"><td><button type="button" class="portal-msds-product" data-warning-id="${escapeHtml(r.id)}" aria-label="${escapeHtml(r.product_name)} 경고표지 보기">${escapeHtml(r.product_name)}</button><div class="portal-msds-version">v${escapeHtml(r.version||1)}${r.submission_no_valid==='N'?'<span class="portal-submission-alert"> · 제출번호 확인필요</span>':''}</div></td><td>${escapeHtml(r.contractor||contractorData?.name||'-')}</td><td>${escapeHtml(r.work_type||'-')}</td><td>${escapeHtml(r.supplier||'-')}</td><td>${escapeHtml(r.cas_no||'-')}</td><td><span class="portal-register-badge ${r.legal_special==='Y'?'is-special':''}">${r.legal_special==='Y'?'특별':'일반'}</span></td><td>${msdsStatusSwitch(r,'togglePortalMsdsStatus',!portalUsageAllowed)}</td><td>${r.pdf_path?`<a class="portal-register-pdf" href="${import.meta.env.VITE_SUPABASE_URL}/functions/v1/msds-view?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(r.product_name)} 원본 PDF 열기"><svg width="16" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 13h8M8 17h6"/></svg><span>PDF 보기</span></a>`:'<span class="muted">-</span>'}</td></tr>`).join('')}</tbody></table></div><p class="portal-pdf-help">제품명을 누르면 경고표지를 확인할 수 있습니다. 원본 PDF는 새 창에서 열어 인쇄하세요.${portalUsageAllowed?'':'<br>사용 상태 변경은 현장 관리자에게 요청해주세요.'}</p>` : `<div class="portal-empty">${query?'검색 결과가 없습니다.':'아직 등록된 MSDS가 없습니다. 위에서 파일을 추가해주세요.'}</div>`;
     if (listId === 'uploadExistingList') {
       document.getElementById('uploadExistingCount').textContent = query
         ? `검색 ${rows.length}건 / 전체 ${portalRecords.length}건` : `${portalRecords.length}건`;
     }
   }
 }
+const pendingPortalStatuses=new Set();
+window.togglePortalMsdsStatus=async function(id){
+ const record=portalRecords.find(row=>row.id===id), company=contractorData?.id, token=currentUploadToken;
+ if(!portalUsageAllowed || !record || !company || pendingPortalStatuses.has(id))return;
+ const active=(record.status||'active')!=='active';pendingPortalStatuses.add(id);
+ document.querySelectorAll('.msds-usage-switch').forEach(button=>{if(button.dataset.recordId===id)button.disabled=true;});
+ try{
+  const {data,error}=await supabase.rpc('set_contractor_msds_usage',{p_token:token,p_contractor_id:company,p_record_id:id,p_active:active});if(error)throw error;
+  if(contractorData?.id!==company || currentUploadToken!==token)return;
+  record.status=data.status;renderPortalRecords();toast(active?'사용중으로 변경했습니다':'미사용중으로 변경했습니다');
+ }catch(error){if(contractorData?.id===company && currentUploadToken===token)toast('사용 상태 변경 실패: '+error.message,'error');}
+ finally{pendingPortalStatuses.delete(id);document.querySelectorAll('.msds-usage-switch').forEach(button=>{if(button.dataset.recordId===id)button.disabled=button.hasAttribute('data-readonly');});}
+};
+for(const id of ['portalRecordList','uploadExistingList'])document.getElementById(id).addEventListener('click',event=>{
+ const button=event.target.closest('[data-warning-id]');if(!button)return;
+ window.switchPortalPanel('warnings');const checkbox=[...document.querySelectorAll('#warningRecordList input')].find(input=>input.value===button.dataset.warningId);
+ if(checkbox && !checkbox.disabled){checkbox.checked=true;updatePortalWarningPreview();}else toast('사용중이고 안전정보가 등록된 자료만 경고표지를 인쇄할 수 있습니다.','error');
+});
 function renderPortalRecords() {
   renderPortalDocumentLists();
   document.getElementById('recordCount').textContent = portalRecords.length;

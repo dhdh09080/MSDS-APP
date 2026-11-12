@@ -10,7 +10,7 @@ OUT = Path(os.environ.get('PORTAL_ARTIFACT_DIR', 'work/portal-preview'))
 WS = '10000000-0000-4000-8000-000000000001'
 CON = '20000000-0000-4000-8000-000000000002'
 RID = '30000000-0000-4000-8000-000000000003'
-context = dict(workspace=dict(id=WS, name='서울 신축현장'), contractor=dict(id=CON, name='안전건설'),
+context = dict(can_edit_msds_usage=True,workspace=dict(id=WS, name='서울 신축현장'), contractor=dict(id=CON, name='안전건설'),
     public_link=None, work_types=[dict(id='a', name="도장 '공종'")], license=None,
     records=[dict(id=RID, product_name='테스트 도료', work_type='도장', supplier='공급사', pdf_name='도료.pdf',
         pdf_path=f'{WS}/{RID}.pdf', signal_word='위험', h_codes='H225,H319', p_codes='P210,P280',
@@ -25,8 +25,9 @@ async def main():
         page = await browser.new_page(viewport=dict(width=1440,height=1000))
         errors=[]
         page.on('pageerror', lambda e: errors.append(str(e)))
-        uploads=[]
+        uploads=[];status_fail=False
         async def api(route):
+            nonlocal status_fail
             req=route.request; url=req.url
             if 'get_contractor_portal' in url:
                 data=json.loads(req.post_data)
@@ -37,6 +38,13 @@ async def main():
                     if not data.get('p_contractor_id'): res={**res,'contractor':None,'contractors':[context['contractor']]}
                     return await route.fulfill(json=res)
                 return await route.fulfill(json=context)
+            if 'set_contractor_msds_usage' in url:
+                args=json.loads(req.post_data)
+                assert args['p_contractor_id']==CON and args['p_record_id']==RID
+                if status_fail:
+                    status_fail=False;return await route.fulfill(status=400,json={'message':'fixture status failure'})
+                state='active' if args['p_active'] else 'ended';context['records'][0]['status']=state
+                return await route.fulfill(json={'id':RID,'status':state})
             if 'get_public_reupload_requests' in url: return await route.fulfill(json=[])
             if 'register_contractor_license' in url:
                 uploads.append(json.loads(req.post_data)); return await route.fulfill(status=204,body='')
@@ -49,11 +57,27 @@ async def main():
         await page.locator('#uploadPanel').wait_for(state='visible')
         assert await page.locator('#uploadExistingList .document-row').count()==2
         assert await page.locator('#uploadExistingCount').inner_text()=='2건'
-        assert await page.locator('#uploadExistingList td h3').first.inner_text()=='테스트 도료'
+        assert await page.locator('#uploadExistingList th').all_text_contents()==['제품명','협력사','공종','공급업체','CAS','특별','상태','원본']
+        usage=page.locator(f'#uploadExistingList [role=switch][data-record-id="{RID}"]')
+        assert await usage.get_attribute('aria-checked')=='true'
+        await usage.click();await page.wait_for_function('document.querySelector("#uploadExistingList [role=switch]").getAttribute("aria-checked")==="false"')
+        assert await page.locator('#uploadExistingList .document-row').count()==2
+        await page.reload();await page.locator('#uploadExistingList .document-row').first.wait_for()
+        assert await usage.get_attribute('aria-checked')=='false'
+        await usage.click();await page.wait_for_function('document.querySelector("#uploadExistingList [role=switch]").getAttribute("aria-checked")==="true"')
+        status_fail=True;await usage.click();await page.locator('#toastWrap').get_by_text('fixture status failure',exact=False).wait_for()
+        assert await usage.get_attribute('aria-checked')=='true'
+        context['can_edit_msds_usage']=False
+        await page.evaluate('refreshPortalRecords()')
+        assert await usage.is_disabled()
+        context['can_edit_msds_usage']=True
+        await page.evaluate('refreshPortalRecords()')
+
+        assert await page.locator('#uploadExistingList .portal-msds-product').first.inner_text()=='테스트 도료'
         assert await page.locator('#uploadExistingList td:last-child a').get_attribute('href')==f'https://zobflntvegpunktphauf.supabase.co/functions/v1/msds-view?id={RID}'
         await page.locator('#uploadExistingSearch').fill('대기.pdf')
         assert await page.locator('#uploadExistingList .document-row').count()==1
-        assert await page.locator('#uploadExistingList td h3').inner_text()=='<미분석 제품>'
+        assert await page.locator('#uploadExistingList .portal-msds-product').inner_text()=='<미분석 제품>'
         assert await page.locator('#uploadExistingCount').inner_text()=='검색 1건 / 전체 2건'
         await page.locator('#uploadExistingSearch').fill('없는제품')
         assert await page.locator('#uploadExistingList .document-row').count()==0
@@ -62,6 +86,7 @@ async def main():
         assert await page.locator('#uploadViewHost').evaluate('e=>e.getBoundingClientRect().bottom <= document.querySelector(".upload-existing-records").getBoundingClientRect().top')
         assert await page.locator('#uploadZone').count()==1
         assert await page.locator('#uploadPanel details').count()==0
+        await page.wait_for_function('document.querySelectorAll("#toastWrap .toast").length===0')
         await page.screenshot(path=str(OUT/'upload-existing-desktop.png'),full_page=True)
         await page.set_viewport_size(dict(width=390,height=844))
         assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth')
