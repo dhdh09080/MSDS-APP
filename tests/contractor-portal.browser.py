@@ -119,7 +119,7 @@ async def main():
         assert uploads[-1]['p_contractor_id']==CON
         await page.locator('#recordsTab').click()
         await page.locator('.worktype-btn').first.click()
-        file_input=page.locator('#stepView2 input[type=file]')
+        file_input=page.locator('#fileInput')
         await file_input.set_input_files(dict(name='새로운_MSDS.pdf',mimeType='application/pdf',buffer=b'%PDF-1.4 fixture'))
         await page.locator('#uploadBtn:not([disabled])').click()
         await page.wait_for_selector('#stepView3',state='visible')

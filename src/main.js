@@ -1,3 +1,4 @@
+import { installMobileExperience } from './lib/mobile-experience.js';
 import { loadCaptureLibrary } from './lib/optional-tools.js';
 import {createPartnerPanel} from './lib/pmx-partner-panel.js';
 import { installMenuFavorites } from './lib/menu-favorites.js';
@@ -105,6 +106,10 @@ let businessLicenses = [];
 const MSDS_PAGE_SIZE = 30;
 let msdsPage = 1;
 let workspaceLoadVersion = 0;
+let workspaceReadPending = 0;
+let workspaceReadSlow = false;
+let workspaceRetryBusy = false;
+const failedWorkspaceReads = new Map();
 
 let msdsFileQueue = [],
   healthFileQueue = [];
@@ -935,6 +940,10 @@ function resetWorkspaceScopedState() {
   hazardMap.reset();
   msdsPage = 1;
   workspaceLoadVersion++;
+  workspaceReadPending = 0;
+  workspaceReadSlow = false;
+  workspaceRetryBusy = false;
+  failedWorkspaceReads.clear();
   document.getElementById('workspaceLoadStatus').hidden = true;
   createdTeamInvite = null;
   const inviteUrl = document.getElementById('teamInviteUrl');
@@ -1138,6 +1147,57 @@ window.createWorkspace = async function () {
   toast(name + ' 현장이 추가됐습니다', 'success');
 };
 
+function renderWorkspaceReadStatus() {
+  const status = document.getElementById('workspaceLoadStatus');
+  status.replaceChildren();
+  status.hidden = !workspaceReadPending && !failedWorkspaceReads.size;
+  const text = document.createElement('span');
+  text.textContent = failedWorkspaceReads.size
+    ? `일부 자료를 불러오지 못했습니다: ${[...failedWorkspaceReads.keys()].join(', ')}`
+    : workspaceReadSlow ? '자료 연결이 지연되고 있습니다. 다른 메뉴는 이용할 수 있습니다.' : '현장 자료를 불러오는 중입니다.';
+  status.append(text);
+  if (failedWorkspaceReads.size) {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'btn btn-outline';
+    button.id = 'workspaceRetryButton'; button.textContent = workspaceRetryBusy ? '다시 불러오는 중…' : '실패한 자료 다시 불러오기';
+    button.disabled = workspaceRetryBusy; button.onclick = () => window.retryWorkspaceData(); status.append(button);
+  }
+}
+
+async function readWorkspacePart(name, loader, version) {
+  workspaceReadPending++;
+  renderWorkspaceReadStatus();
+  try {
+    const result = await loader();
+    if (result?.error) throw result.error;
+    if (version === workspaceLoadVersion) failedWorkspaceReads.delete(name);
+  } catch (error) {
+    if (version === workspaceLoadVersion) failedWorkspaceReads.set(name, loader);
+  } finally {
+    if (version === workspaceLoadVersion) {
+      workspaceReadPending--;
+      renderWorkspaceReadStatus();
+    }
+  }
+}
+
+window.retryWorkspaceData = async function () {
+  if (!currentWS || workspaceRetryBusy || !failedWorkspaceReads.size) return;
+  const version = workspaceLoadVersion;
+  const savedPage = msdsPage;
+  const positions = [...document.querySelectorAll('#mainContent, #page-msds .msds-layout, #page-msds .msds-content')].map(node => [node, node.scrollTop]);
+  const filters = ['searchInput','filterWorkType','filterStatus','filterSpecial'].map(id => [document.getElementById(id), document.getElementById(id).value]);
+  workspaceRetryBusy = true;
+  renderWorkspaceReadStatus();
+  await Promise.allSettled([...failedWorkspaceReads].map(([name, loader]) => readWorkspacePart(name, loader, version)));
+  if (version !== workspaceLoadVersion) return;
+  workspaceRetryBusy = false;
+  filters.forEach(([input, value]) => input.value = value);
+  renderMsdsTable(savedPage);
+  positions.forEach(([node, top]) => node.scrollTop = top);
+  renderWorkspaceReadStatus();
+};
+
 window.enterWorkspace = async function (wsId) {
   const nextWorkspace = workspaces.find((w) => w.id === wsId);
   if (!nextWorkspace) return;
@@ -1182,46 +1242,38 @@ window.enterWorkspace = async function (wsId) {
   showPage('home');
   document.getElementById('loadingScreen').style.display = 'none';
   const loadVersion = ++workspaceLoadVersion;
-  const status = document.getElementById('workspaceLoadStatus');
-  status.hidden = false;
-  status.textContent = '현장 자료를 불러오는 중입니다. 메뉴를 이용할 수 있습니다.';
   const slowLoadTimer = setTimeout(() => {
     if (loadVersion === workspaceLoadVersion && currentWS?.id === wsId) {
-      status.textContent = '자료 연결이 지연되고 있습니다. 잠시 후에도 목록이 표시되지 않으면 새로고침해주세요.';
+      workspaceReadSlow = true;
+      renderWorkspaceReadStatus();
     }
   }, 10000);
-  const results = [];
   try {
-    results.push(...await Promise.allSettled([
-      loadContractors(),
-      loadWorkTypes(),
-    ]));
+    await Promise.allSettled([
+      readWorkspacePart('협력사', loadContractors, loadVersion),
+      readWorkspacePart('공종', loadWorkTypes, loadVersion),
+    ]);
     if (loadVersion !== workspaceLoadVersion || currentWS?.id !== wsId) return;
-    results.push(...await Promise.allSettled([
-      loadMembers(),
-      loadTokens(),
-      loadSiteDirectoryLink(),
-      loadMsdsRecords(),
-      loadPlacementSnapshots(),
-      loadBusinessLicenses(),
-      loadMeasureRounds(),
-      loadMeasureResults(),
-      loadNotifications(),
-      loadHealthRecords(),
-    ]));
+    await Promise.allSettled([
+      readWorkspacePart('팀원', loadMembers, loadVersion),
+      readWorkspacePart('공유 링크', loadTokens, loadVersion),
+      readWorkspacePart('협력사 목록 링크', loadSiteDirectoryLink, loadVersion),
+      readWorkspacePart('MSDS', loadMsdsRecords, loadVersion),
+      readWorkspacePart('배치전 목록', loadPlacementSnapshots, loadVersion),
+      readWorkspacePart('사업자등록증', loadBusinessLicenses, loadVersion),
+      readWorkspacePart('측정 일정', loadMeasureRounds, loadVersion),
+      readWorkspacePart('측정 결과', loadMeasureResults, loadVersion),
+      readWorkspacePart('알림', loadNotifications, loadVersion),
+      readWorkspacePart('건강진단', loadHealthRecords, loadVersion),
+    ]);
     if (loadVersion !== workspaceLoadVersion || currentWS?.id !== wsId) return;
     subscribeNotifications();
     renderHomeDashboard();
     loadDashWeather();
-    // Preserve any menu the user opened while data was loading.
     loadPhotoFolders().then(loadPhotos).catch(() => {});
   } finally {
     clearTimeout(slowLoadTimer);
-    if (loadVersion === workspaceLoadVersion && currentWS?.id === wsId) {
-      const failed = results.some(result => result.status === 'rejected');
-      status.hidden = !failed;
-      if (failed) status.textContent = '일부 자료를 불러오지 못했습니다. 연결을 확인하고 새로고침해주세요.';
-    }
+    if (loadVersion === workspaceLoadVersion && currentWS?.id === wsId) renderWorkspaceReadStatus();
   }
 };
 
@@ -1767,9 +1819,12 @@ window.showPage = function (id) {
   }
   if (id === 'msds') { renderContractorSidebar(); renderMsdsTable(); }
   if (id === 'requests') renderMsdsRequests();
-  if (id === 'contractors')
+  if (id === 'contractors') {
     switchContractorTab(linksRequested ? 'companies' : contractorTab);
+    if (linksRequested) mobileExperience.revealContractorTools();
+  }
   if (id === 'warning') {
+    mobileExperience.openWarning();
     renderWarnPickList();
     updateWarningPreview();
   }
@@ -2811,11 +2866,12 @@ window.addFeedbackComment = async function () {
 // Contractors & Work Types
 // ═══════════════════════════════════════════════
 async function loadContractors() {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('contractors')
     .select('*')
     .eq('workspace_id', currentWS.id)
     .order('created_at');
+  if (error) return { error };
   contractors = data || [];
   renderContractorTags();
   populateContractorSelects();
@@ -2823,11 +2879,12 @@ async function loadContractors() {
 }
 
 async function loadWorkTypes() {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('work_types')
     .select('*')
     .eq('workspace_id', currentWS.id)
     .order('created_at');
+  if (error) return { error };
   workTypes = data || [];
 }
 
@@ -3341,6 +3398,7 @@ async function loadMembers() {
     if (currentWS?.id !== workspaceId) return;
     document.getElementById('memberList').textContent = '팀원 정보를 불러오지 못했습니다. ' + error.message;
     document.getElementById('createTeamInviteBtn').hidden = true;
+    return { error };
   }
 }
 
@@ -3539,11 +3597,12 @@ window.removeMember = async function (memberId) {
 // Upload Tokens
 // ═══════════════════════════════════════════════
 async function loadTokens() {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('upload_tokens')
     .select('*, contractor:contractor_id(name)')
     .eq('workspace_id', currentWS.id)
     .order('created_at');
+  if (error) return { error };
   tokens = data || [];
 }
 
@@ -3589,7 +3648,7 @@ async function loadMsdsRecords() {
   if (error) throw error;
   msdsRecords = data || [];
   updateStats();
-  renderMsdsTable();
+  renderMsdsTable(msdsPage);
   renderHomeDashboard();
   renderWarnPickList();
   renderContractorTags();
@@ -3680,6 +3739,7 @@ window.renderMsdsTable = function (pageNumber = 1) {
   document.getElementById('msdsPageStatus').textContent = `${msdsPage} / ${pages} 페이지 · ${start + 1}–${Math.min(start + MSDS_PAGE_SIZE, filtered.length)} / ${filtered.length}건`;
   document.getElementById('msdsPrevPage').disabled = msdsPage === 1;
   document.getElementById('msdsNextPage').disabled = msdsPage === pages;
+  mobileExperience.refreshFilters();
   const tbody = document.getElementById('msdsTableBody');
   const summary = document.getElementById('msdsResultSummary');
   if (summary) summary.innerHTML = `<strong>${escapeHtml(window.selectedContractor || '전체 협력사')}</strong><span>조회 ${filtered.length}건</span>${window.selectedContractor ? '<button type="button" class="msds-reset" onclick="selectContractorSidebar(&quot;&quot;)">전체 보기</button>' : ''}`;
@@ -3704,11 +3764,11 @@ window.renderMsdsTable = function (pageNumber = 1) {
         (r.receipt_status || 'received') === 'received'
           ? `<button type="button" class="badge badge-ok status-toggle" onclick="openReceipt('${r.id}')">✓ 수령</button>`
           : `<button type="button" class="badge badge-danger status-toggle" onclick="openReceipt('${r.id}')">! 미수령</button>`;
-      const file = r.has_pdf
-        ? `<button type="button" class="pdf-link" aria-label="${escapeHtml(r.product_name)} 원본 PDF 보기" onclick="viewFile('${r.id}')">📄</button>`
+      const file = (r.has_pdf || r.pdf_path)
+        ? `<button type="button" class="pdf-link" aria-label="${escapeHtml(r.product_name)} 원본 PDF 보기" onclick="viewFile('${r.id}')">📄 <span class="msds-pdf-label">PDF 보기</span></button>`
         : '-';
       return `<tr>
-      <td><input type="checkbox" class="row-check" value="${r.id}" onchange="updateCheckAll()"></td>
+      <td><label><input type="checkbox" class="row-check" value="${r.id}" aria-label="${escapeHtml(r.product_name || '제품')} 선택" onchange="updateCheckAll()"></label></td>
       <td><button type="button" class="msds-product-link" data-msds-id="${r.id}" onclick="openMsdsWarning('${r.id}', this)" aria-label="${escapeHtml(r.product_name)} 경고표지 보기">${escapeHtml(r.product_name)}</button><div class="td-sub">v${escapeHtml(r.version || 1)}${r.submission_no_valid === 'N' ? ' · <span style="color:var(--danger);font-weight:700;">⚠ 제출번호 확인필요</span>' : ''}${r.reupload_requested ? ' · <span style="color:var(--warn);font-weight:700;">🔁 재업로드 요청중</span>' : ''}</div></td>
       <td>${escapeHtml(r.contractor)}</td>
       <td>${escapeHtml(r.work_type || '-')}</td>
@@ -3719,13 +3779,13 @@ window.renderMsdsTable = function (pageNumber = 1) {
 
       <td>${file}</td>
       <td>
-        <div class="msds-row-actions">
+        <details class="msds-row-more" ${matchMedia('(min-width: 769px)').matches ? 'open' : ''}><summary>관리</summary><div class="msds-row-actions">
           <button type="button" class="btn btn-secondary btn-sm" onclick="showMsdsDetail('${r.id}')">상세보기</button>
           <button type="button" class="btn btn-secondary btn-sm" onclick="startMsdsEdit('${r.id}')">수정</button>
           <button type="button" class="btn btn-secondary btn-sm" onclick="reanalyzeMsds('${r.id}')">AI 재분석</button>
           <button type="button" class="btn ${r.reupload_requested ? 'btn-warn' : 'btn-secondary'} btn-sm" onclick="${r.reupload_requested ? `cancelReupload('${r.id}')` : `requestReupload('${r.id}')`}">${r.reupload_requested ? '요청 취소' : '재업로드 요청'}</button>
           <button type="button" class="btn btn-danger btn-sm" onclick="deleteMsdsRecord('${r.id}')">삭제</button>
-        </div>
+        </div></details>
       </td>
     </tr>`;
     })
@@ -5171,6 +5231,7 @@ function visibleWarnRecords() {
 
 function updateWarnWorkbench() {
   const count = warnSelected.size;
+  mobileExperience.refreshWarning();
   const cfg = WARN_SIZES[warnLabelSize];
   const sheets = Math.ceil(count * warnCopies / cfg.perPage);
   const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
@@ -5208,7 +5269,7 @@ function renderWarnPickList() {
     const selected = warnSelected.has(r.id);
     const previewing = warnPreviewSingle === r.id;
     return `<div class="warn-pick-item ${selected ? 'selected' : ''} ${previewing ? 'previewing' : ''}">
-      <input type="checkbox" class="warn-check" value="${r.id}" onchange="onWarnCheck('${r.id}',this.checked)" ${selected ? 'checked' : ''} aria-label="${escapeHtml(r.product_name)} 인쇄 선택">
+      <label class="warn-touch-selection"><input type="checkbox" class="warn-check" value="${r.id}" onchange="onWarnCheck('${r.id}',this.checked)" ${selected ? 'checked' : ''} aria-label="${escapeHtml(r.product_name)} 인쇄 선택"></label>
       <button type="button" class="warn-pick-preview" onclick="warnPreviewOne('${r.id}')" aria-label="${escapeHtml(r.product_name)} 미리보기" ${previewing ? 'aria-current="true"' : ''}>
         <span class="wb-row-top"><span class="wp-name">${escapeHtml(r.product_name)}</span>${previewing ? '<span class="wb-viewing-badge">미리보기</span>' : selected ? '<span class="wb-selected-dot" aria-label="선택됨">✓</span>' : ''}</span>
         <span class="wp-sub">${escapeHtml(r.contractor)}${r.supplier ? ' · '+escapeHtml(r.supplier) : ''}</span>
@@ -6589,11 +6650,7 @@ async function loadMeasureResults() {
     .select('*')
     .eq('workspace_id', currentWS.id)
     .order('created_at', { ascending: false });
-  if (error) {
-    console.error(error);
-    measureResults = [];
-    return;
-  }
+  if (error) return { error };
   measureResults = data || [];
   renderMeasureList();
 }
@@ -7153,11 +7210,12 @@ function findNameColumn(data) {
 let healthRecordsList = [];
 
 async function loadHealthRecords() {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('health_records')
     .select('*')
     .eq('workspace_id', currentWS.id)
     .order('created_at', { ascending: false });
+  if (error) return { error };
   healthRecordsList = data || [];
   renderHealthRecordsList();
 }
@@ -7738,10 +7796,7 @@ async function loadPlacementSnapshots() {
     .select('*')
     .eq('workspace_id', currentWS.id)
     .order('created_at', { ascending: false });
-  if (error) {
-    console.error(error);
-    return;
-  }
+  if (error) return { error };
   placementSnapshots = data || [];
   renderPlacementSnapshotList();
 }
@@ -7820,11 +7875,7 @@ async function loadBusinessLicenses() {
     .from('business_licenses')
     .select('*, contractor:contractor_id(name)')
     .eq('workspace_id', currentWS.id);
-  if (error) {
-    console.error(error);
-    businessLicenses = [];
-    return;
-  }
+  if (error) return { error };
   businessLicenses = data || [];
   renderBusinessLicenseStatus();
   renderLicenseAlert();
@@ -8763,11 +8814,7 @@ async function loadMeasureRounds() {
     .select('*')
     .eq('workspace_id', currentWS.id)
     .eq('year', year);
-  if (error) {
-    console.error(error);
-    measureRounds = [];
-    return;
-  }
+  if (error) return { error };
   measureRounds = data || [];
   renderMeasureRoundsChecklist();
 }
@@ -9601,12 +9648,13 @@ let notifs = [];
 let notifChannel = null;
 
 async function loadNotifications() {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('notifications')
     .select('*')
     .eq('workspace_id', currentWS.id)
     .order('created_at', { ascending: false })
     .limit(50);
+  if (error) return { error };
   notifs = data || [];
 }
 
@@ -10818,6 +10866,7 @@ function mountGsWorkspace() {
     if (el.getAttribute('onclick')?.includes("'calendar'")) el.remove();
   });
   switchContractorTab('companies');
+  mobileExperience.mountContractors();
 }
 
 function gsIcon(index) {
@@ -11389,6 +11438,7 @@ function renderGsWeek(fc) {
       : 'Open-Meteo · 현장 저장 좌표 기준 · 이번 주 월–일';
 }
 
+const mobileExperience = installMobileExperience({getWarningCount: () => warnSelected.size, refreshWarningPreview: () => updateWarningPreview(), message: text => toast(text, 'error')});
 init();
 
 window.toggleContractorActive = async function(id, active) {

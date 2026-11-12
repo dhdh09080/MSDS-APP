@@ -47,7 +47,7 @@ async def main():
   await page.reload();await page.locator('#uploadPanel').wait_for(state='visible')
   assert await page.locator('.trade-drop-zone').count()==2
   left=await page.locator('.upload-existing-records').bounding_box();right=await page.locator('#uploadViewHost').bounding_box()
-  assert left['x']+left['width']<=right['x']
+  assert left['y']+left['height']<=right['y']
   await drop(0,'도장자료.pdf');await drop(1,'전기자료.pdf');await drop(1,'retry.pdf')
   await page.wait_for_function('!document.querySelector("#uploadBtn").disabled')
   assert await page.locator('.file-item').count()==3
@@ -89,5 +89,5 @@ async def main():
   await page.locator('#stepView3').wait_for(state='visible')
   assert saved[-1]['pdf_name']=='allfail.pdf' and saved[-1]['work_type']=='도장'
   assert not errors,errors
-  await browser.close();print('PASS: left/right layout, persisted trade additions, failure message, no-trade fallback, drops per trade, reassignment, invalid type, busy guard, partial retry, refreshed list, mobile and reset')
+  await browser.close();print('PASS: stacked desktop layout, persisted trade additions, failure message, no-trade fallback, drops per trade, reassignment, invalid type, busy guard, partial retry, refreshed list, mobile and reset')
 asyncio.run(main())
