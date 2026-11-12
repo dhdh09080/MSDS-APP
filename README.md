@@ -695,3 +695,11 @@ HTTP 상태, 비 JSON 응답, PMX 결과코드, 응답 형식, 시간 초과를 
 검색 결과가 없으면 전체 업체 보기로 초기화할 수 있습니다.
 검증: `BASE_URL=http://localhost:3007 python tests/contractor-directory.browser.py`, `npm run build`.
 합성 자료로 360/390/768px 폭, 첫 화면의 주요 버튼 노출, 검색 초기화, 상세 링크와 등록·수정을 확인합니다.
+
+### 협력사 목록을 항상 펼쳐진 표로 표시
+
+협력사 목록은 검색 중심 상단 구성을 유지하면서 4열 표(업체/진입, MSDS·경고표지,
+사업자등록증, 담당자 연락처)로 변경했습니다. 업체별·전체 현황의 토글은 제거하고 자료 상태와
+바로가기·연락처를 처음부터 표시합니다. 휴대폰은 업체명 열을 고정하고 표를 좌우로 스크롤합니다.
+기존 업체 등록·수정·검색·문서 링크 기능은 유지합니다.
+검증: `BASE_URL=http://localhost:3007 python tests/contractor-directory.browser.py`, `npm run build`.

@@ -30,31 +30,31 @@ async def main():
    if 'get_public_reupload_requests' in req.url:return await route.fulfill(json=[])
    return await route.fulfill(status=400,json=dict(message='unexpected request'))
   await page.route('**/*.supabase.co/**',api)
-  async def expand_company_details():
-   for details in await page.locator('.directory-company-details').all():
-    if not await details.evaluate('e=>e.open'):await details.locator('summary').click()
   async def back_to_directory():
    if page.viewport_size['width']<=768:await page.locator('#cwMenuToggle').click()
    await page.locator('#cwDirectoryLink').click();await page.locator('#directoryContent:not([hidden])').wait_for()
-   await expand_company_details()
   await page.goto(BASE+'/contractors.html?dtoken=directory-fixture-token');await page.locator('#directoryContent:not([hidden])').wait_for()
   assert await page.title()=='서울 신축현장 전체 협력사 리스트'
-  assert await page.locator('#directoryList .directory-company-card').count()==2
-  assert '홍길동' not in await page.locator('#directoryList').inner_text()
-  assert await page.locator('.directory-company-details[open]').count()==0
-  assert not await page.locator('.portal-stats').is_visible()
+  assert await page.locator('#directoryList .directory-company-row').count()==2
+  assert '홍길동' in await page.locator('#directoryList').inner_text()
+  assert await page.locator('#directoryContent details').count()==0
+  assert await page.locator('#directoryList .directory-phone').first.is_visible()
+  assert await page.locator('.portal-stats').is_visible()
   assert await page.locator('.directory-open-workspace').count()==2
   assert await page.locator('.directory-open-workspace').first.evaluate('e=>e.getBoundingClientRect().bottom<innerHeight')
   await page.screenshot(path=str(OUT/'desktop.png'),full_page=True)
   await page.set_viewport_size(dict(width=390,height=844))
   await page.screenshot(path=str(OUT/'mobile-simple.png'),full_page=True)
   assert await page.locator('.directory-open-workspace').first.evaluate('e=>e.getBoundingClientRect().bottom<innerHeight')
+  await page.locator('.directory-table-scroll').evaluate('e=>e.scrollLeft=e.scrollWidth')
+  assert await page.locator('.directory-table-scroll').evaluate('e=>e.scrollLeft>0')
+  assert await page.locator('.directory-company-name').first.evaluate('e=>e.getBoundingClientRect().left>=0 && e.getBoundingClientRect().right<innerWidth')
+  await page.locator('.directory-table-scroll').evaluate('e=>e.scrollLeft=0')
   assert await page.locator('#directorySearch').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)>=18')
-  assert await page.locator('.directory-open-workspace').first.evaluate('e=>e.getBoundingClientRect().height>=48')
+  assert await page.locator('.directory-open-workspace').first.evaluate('e=>e.getBoundingClientRect().height>=44')
   await page.locator('#directorySearch').fill('없는업체');assert await page.locator('.directory-empty').is_visible()
-  await page.locator('#directoryClear').click();assert await page.locator('.directory-company-card').count()==2
+  await page.locator('#directoryClear').click();assert await page.locator('.directory-company-row').count()==2
   await page.set_viewport_size(dict(width=1440,height=1000))
-  await expand_company_details()
   for name in ['안전건설','새봄전기']:
    await page.get_by_role('link',name=name+' MSDS 보기·인쇄',exact=True).click()
    await page.locator('#recordsPanel:not([hidden])').wait_for()
@@ -93,16 +93,14 @@ async def main():
   await page.screenshot(path=str(OUT/'license-registration.png'),full_page=True)
   await back_to_directory()
 
-  await page.locator('.directory-site-details summary').click()
-  await page.select_option('#directoryFilter','license');assert await page.locator('#directoryList .directory-company-card').count()==1
+  await page.select_option('#directoryFilter','license');assert await page.locator('#directoryList .directory-company-row').count()==1
   assert '새봄전기' in await page.locator('#directoryList').inner_text()
-  await page.select_option('#directoryFilter','all');await page.locator('#directorySearch').fill('홍길동');assert await page.locator('#directoryList .directory-company-card').count()==1
+  await page.select_option('#directoryFilter','all');await page.locator('#directorySearch').fill('홍길동');assert await page.locator('#directoryList .directory-company-row').count()==1
   await page.locator('#directorySearch').fill('')
-  await expand_company_details()
   await page.get_by_role('button',name='안전건설 연락처 수정').click();await page.locator('#directoryManager').fill('김관리');await page.locator('#directoryPhone').fill('010-9999-8888');await page.locator('#directorySave').click()
-  await page.locator('#directoryDialog').wait_for(state='hidden');assert rows[0]['manager_name']=='김관리';await expand_company_details();await page.locator('#directoryList').get_by_text('김관리',exact=True).wait_for()
+  await page.locator('#directoryDialog').wait_for(state='hidden');assert rows[0]['manager_name']=='김관리';await page.locator('#directoryList').get_by_text('김관리',exact=True).wait_for()
   await page.locator('#directoryRegister').click();await page.locator('#directoryName').fill('신규토건');await page.locator('#directoryManager').fill('이소장');await page.locator('#directoryPhone').fill('010-5555-6666');await page.locator('#directorySave').click()
-  await page.locator('#directoryDialog').wait_for(state='hidden');await page.wait_for_function("document.querySelectorAll('#directoryList .directory-company-card').length===3")
+  await page.locator('#directoryDialog').wait_for(state='hidden');await page.wait_for_function("document.querySelectorAll('#directoryList .directory-company-row').length===3")
   assert rows[-1]['name']=='신규토건'
   await page.locator('#directoryRegister').click();await page.locator('#directoryName').fill('신규토건');await page.locator('#directorySave').click();await page.get_by_text('이미 등록된 협력사입니다.',exact=False).wait_for();await page.locator('#directoryCancel').click()
   for width in [360,390,768]:

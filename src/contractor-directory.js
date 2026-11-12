@@ -43,8 +43,9 @@ function render() {
   el('directoryClear').hidden=!q && filter==='all';
   el('directoryList').innerHTML = list.length ? list.map(c => {
     const base=`/upload.html?dtoken=${encodeURIComponent(token)}&contractor_id=${encodeURIComponent(c.id)}`;
-    return `<li class="directory-company-card"><div class="directory-company-main"><h3>${escape(c.name)}</h3><a class="btn btn-primary directory-open-workspace" href="${base}" aria-label="${escape(c.name)} 업체 페이지 열기">업체 페이지 열기 <span aria-hidden="true">→</span></a></div><details class="directory-company-details"><summary aria-label="${escape(c.name)} 서류·연락처 보기">서류·연락처 보기</summary><div class="directory-detail-content"><section><h4>MSDS</h4><p>${c.msds_count>0?`등록된 자료 ${Number(c.msds_count)}건`:'아직 등록된 자료가 없습니다'}</p><div class="directory-detail-actions"><a href="${base}&panel=records" aria-label="${escape(c.name)} MSDS 보기·인쇄">MSDS 보기·인쇄</a><a class="directory-add-msds" href="${base}&panel=upload" aria-label="${escape(c.name)} MSDS 추가">MSDS 추가</a><a href="${base}&panel=warnings" aria-label="${escape(c.name)} 경고표지 인쇄">경고표지 인쇄</a></div></section><section><h4>사업자등록증</h4><p>${c.license_submitted?'제출 완료':'미제출'}</p>${!c.license_submitted?`<a class="directory-register-license" href="${base}&panel=license" aria-label="${escape(c.name)} 사업자등록증 등록하기">사업자등록증 등록하기</a>`:''}</section><section><h4>담당자 연락처</h4><p>${escape(c.manager_name || '담당자 미등록')}</p>${c.manager_phone?`<a href="tel:${escape(c.manager_phone.replace(/[^+0-9]/g,''))}">${escape(c.manager_phone)}</a>`:'<p>전화번호 미등록</p>'}<button type="button" class="btn btn-secondary" data-edit="${escape(c.id)}" aria-label="${escape(c.name)} 연락처 수정">연락처 수정</button></section></div></details></li>`;
-  }).join('') : '<li class="directory-empty"><strong>찾는 업체가 없습니다</strong><p>업체명 일부만 입력해보세요. 제출 현황 필터를 사용했다면 전체 업체 보기를 눌러주세요.</p></li>';
+    return `<tr class="directory-company-row"><th scope="row"><strong class="directory-company-name">${escape(c.name)}</strong><a class="btn btn-primary directory-open-workspace" href="${base}" aria-label="${escape(c.name)} 업체 페이지 열기">업체 페이지 열기 ↗</a></th><td><p class="directory-document-status ${c.msds_count>0?'is-submitted':''}">${c.msds_count>0?`등록 ${Number(c.msds_count)}건`:'미등록'}</p><div class="directory-detail-actions"><a href="${base}&panel=records" aria-label="${escape(c.name)} MSDS 보기·인쇄">MSDS 보기·인쇄</a><a class="directory-add-msds" href="${base}&panel=upload" aria-label="${escape(c.name)} MSDS 추가">MSDS 추가</a><a href="${base}&panel=warnings" aria-label="${escape(c.name)} 경고표지 인쇄">경고표지 인쇄</a></div></td><td><p class="directory-document-status ${c.license_submitted?'is-submitted':''}">${c.license_submitted?'제출 완료':'미제출'}</p>${!c.license_submitted?`<a class="directory-register-license" href="${base}&panel=license" aria-label="${escape(c.name)} 사업자등록증 등록하기">등록하기</a>`:''}</td><td><p class="directory-contact-name">${escape(c.manager_name || '담당자 미등록')}</p>${c.manager_phone?`<a class="directory-phone" href="tel:${escape(c.manager_phone.replace(/[^+0-9]/g,''))}">${escape(c.manager_phone)}</a>`:'<p>전화번호 미등록</p>'}<button type="button" class="btn btn-secondary" data-edit="${escape(c.id)}" aria-label="${escape(c.name)} 연락처 수정">연락처 수정</button></td></tr>`;
+  }).join('') : '<tr><td colspan="4" class="directory-empty"><strong>찾는 업체가 없습니다</strong><p>업체명 일부만 입력해보세요. 제출 현황 필터를 사용했다면 전체 업체 보기를 눌러주세요.</p></td></tr>';
+
 
 }
 function openForm(id='') {
@@ -71,7 +72,7 @@ el('directoryForm').addEventListener('submit',async e=>{
     if(error)throw error;
     el('directoryDialog').close();
     el('directorySearch').value=''; el('directoryFilter').value='all'; await refresh();
-    const btn=[...document.querySelectorAll('[data-edit]')].find(btn=>btn.dataset.edit===id); btn?.closest('.directory-company-card')?.querySelector('.directory-open-workspace')?.focus();
+    const btn=[...document.querySelectorAll('[data-edit]')].find(btn=>btn.dataset.edit===id); btn?.closest('.directory-company-row')?.querySelector('.directory-open-workspace')?.focus();
   } catch(error){el('directoryFormError').textContent=errorText(error);}
   finally{el('directorySave').disabled=false;}
 });
