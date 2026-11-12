@@ -12,6 +12,7 @@ async def main():
   page=await ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   await page.goto('http://localhost:3000/?preview=pmx')
   card=page.locator('#pmxDashboard');await card.locator('#pmxSyncBtn').wait_for()
+  assert await card.locator('#pmxSyncBtn').inner_text()=='업데이트하기'
   assert await card.get_by_role('button').count()==1, await card.get_by_role('button').all_text_contents()
   assert not await card.locator('#pmxSetupBtn').is_visible()
   assert not await card.locator('#pmxFileBtn').is_visible()
@@ -26,12 +27,22 @@ async def main():
   await page.keyboard.press('Escape')
   assert not await card.locator('#pmxFileBtn').is_visible()
   assert await more.evaluate('(e)=>document.activeElement===e')
-  # First use shows setup without opening another tab. Repeat use opens PMX directly.
+  # Every update opens a compact guide, with the close button outside its scroll region.
   count=len(ctx.pages);await card.locator('#pmxSyncBtn').click()
   await page.locator('#pmxSyncGuide').wait_for()
   assert len(ctx.pages)==count
   guide=page.locator('#pmxSyncGuide')
-  assert await guide.get_by_role('heading',name='즐겨찾기 추가하기',exact=True).count()==1
+  assert await guide.get_by_role('heading',name='공정률 업데이트',exact=True).count()==1
+  box=await guide.bounding_box();assert box['width']<=480 and box['height']<=600,box
+  close=guide.locator('#pmxGuideClose');close_before=await close.bounding_box()
+  await guide.locator('.pmx-guide-content').evaluate('(e)=>e.scrollTop=e.scrollHeight')
+  assert await guide.locator('.pmx-guide-content').evaluate('(e)=>e.scrollTop>0')
+  assert await close.bounding_box()==close_before
+  assert await close.evaluate('(e)=>{const r=e.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===e}')
+  await close.click()
+  assert not await guide.is_visible()
+  await card.locator('#pmxSyncBtn').click()
+  assert await guide.locator('.pmx-guide-content').evaluate('(e)=>e.scrollTop')==0
   assert await guide.locator('.pmx-guide-steps > li').count()==4
   assert await guide.locator('#pmxBookmark').get_attribute('draggable')=='true'
   assert 'Ctrl' in await guide.inner_text() and '확인하고 현장에 반영' in await guide.inner_text()
@@ -44,11 +55,13 @@ async def main():
    await page.locator('#pmxGuideOpen').click()
   pmx=await pop.value;await pmx.wait_for_load_state();assert await pmx.evaluate('opener===null')
   await pmx.close()
+  await card.locator('#pmxSyncBtn').click()
+  assert await guide.is_visible() and len(ctx.pages)==count
   async with page.expect_popup() as again:
-   await card.locator('#pmxSyncBtn').click()
+   await guide.locator('#pmxGuideOpen').click()
   second=await again.value;await second.close()
   assert not await page.locator('#pmxSyncGuide').is_visible()
-  assert await card.locator('#pmxSyncBtn').inner_text()=='정보 가져오기'
+  assert await card.locator('#pmxSyncBtn').inner_text()=='업데이트하기'
   await page.set_viewport_size({'width':390,'height':1000})
   await card.scroll_into_view_if_needed()
   assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
@@ -56,6 +69,12 @@ async def main():
   await more.click();await card.locator('#pmxSetupBtn').click()
   await page.locator('#pmxSyncGuide').wait_for()
   assert await guide.evaluate('(e)=>e.scrollWidth<=e.clientWidth')
+  box=await guide.bounding_box();assert box['width']<=390-24 and box['height']<=600,box
+  close_before=await close.bounding_box()
+  await guide.locator('.pmx-guide-content').evaluate('(e)=>e.scrollTop=e.scrollHeight')
+  assert await close.bounding_box()==close_before
+  await close.click()
+  await card.locator('#pmxSyncBtn').click()
   await guide.screenshot(path=str(OUT/'pmx-bookmark-guide-mobile.png'),animations='disabled')
   await guide.get_by_text('휴대폰에서 보거나, 정보가 안 들어올 때',exact=True).click()
   assert await guide.get_by_text('위 등록 방법은 PC Chrome / Edge 기준입니다.',exact=False).is_visible()
@@ -69,6 +88,6 @@ async def main():
   assert await card.get_by_role('button').count()==0
   assert '담당자가 현장 정보를 반영하면' in await card.inner_text()
   assert not errors,errors
-  print('Compact UI: desktop height, one primary action, hidden controls, keyboard menu, first/repeat sync, mobile and employee state passed')
+  print('Compact UI: update label, compact guide, fixed clickable close after desktop/mobile scroll, repeat opening, menu, import and employee state passed')
   await b.close()
 asyncio.run(main())

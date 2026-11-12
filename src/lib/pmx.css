@@ -32,14 +32,17 @@
 .pmx-guide-steps{padding-left:20px;font-size:12px;line-height:1.8;margin:16px 0}.pmx-guide-steps li{margin-bottom:10px}.pmx-picker h2{font-size:18px;margin:0 0 16px}.pmx-picker>p{font-size:12px;line-height:1.7}.pmx-review-data{max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);margin:14px 0}.pmx-review-data article{padding:12px 14px;border-bottom:1px solid var(--border);font-size:12px}.pmx-review-data article:last-child{border-bottom:0}.pmx-review-data p{font-size:11px;line-height:1.7;color:var(--text2);margin:8px 0 0}#pmxBookmark{cursor:grab}#pmxBookmarkCode{width:100%;height:64px;font:10px/1.5 monospace;margin-top:10px;resize:vertical}#pmxSyncGuide input[type=file]{width:100%;font-size:11px;margin:8px 0}.pmx-picker .form-note{margin:12px 0;line-height:1.7}
 /* Compact dashboard: one primary action; setup and import stay in the overflow menu. */
 #pmxDashboard.pmx-compact{position:relative;padding:22px 24px}
-.pmx-bookmark-guide{width:min(640px,calc(100% - 24px))}
-.pmx-guide-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.pmx-guide-header h2{margin:5px 0 0}
+.pmx-bookmark-guide{width:min(480px,calc(100% - 24px));height:min(600px,calc(100dvh - 48px));max-height:calc(100dvh - 48px);padding:0;overflow:hidden}
+.pmx-bookmark-guide[open]{display:flex;flex-direction:column}
+.pmx-guide-header{display:flex;flex:none;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+.pmx-guide-header h2{margin:4px 0 0;font-size:17px}
 .pmx-guide-header button{flex-shrink:0}
+.pmx-guide-content{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 20px 20px;scrollbar-gutter:stable;font-size:12px;line-height:1.7}
+.pmx-guide-content:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
 .pmx-guide-eyebrow{font-size:11px;color:var(--text3)}
-.pmx-guide-intro{color:var(--text2);margin-bottom:22px}
+.pmx-guide-intro{color:var(--text2);margin:16px 0}
 .pmx-bookmark-guide .pmx-guide-steps{list-style:none;counter-reset:pmx-step;padding:0}
-.pmx-bookmark-guide .pmx-guide-steps>li{counter-increment:pmx-step;position:relative;padding:0 0 20px 38px;margin:0 0 20px;border-bottom:1px solid var(--border)}
+.pmx-bookmark-guide .pmx-guide-steps>li{counter-increment:pmx-step;position:relative;padding:0 0 16px 34px;margin:0 0 16px;border-bottom:1px solid var(--border)}
 .pmx-bookmark-guide .pmx-guide-steps>li::before{content:counter(pmx-step);position:absolute;left:0;top:0;width:26px;height:26px;display:grid;place-items:center;border-radius:50%;background:var(--surface2);color:var(--text);font-weight:700}
 .pmx-guide-steps h3{font-size:14px;line-height:26px;margin:0 0 6px;color:var(--text)}
 .pmx-guide-steps p{margin:6px 0 12px;color:var(--text2);line-height:1.8}
@@ -53,7 +56,7 @@
 .pmx-bookmark-guide .pmx-help summary{cursor:pointer;color:var(--text);padding:8px 0;font-weight:600}
 .pmx-bookmark-guide .pmx-help ol{padding-left:20px}
 .pmx-bookmark-guide .pmx-help li{margin:8px 0}
-@media(max-width:480px){.pmx-bookmark-guide{padding:18px}.pmx-bookmark-guide .pmx-guide-steps>li{padding-left:34px}.pmx-guide-header h2{font-size:17px}}
+@media(max-width:480px){.pmx-guide-header{padding:14px 16px}.pmx-guide-content{padding:0 16px 16px}}
 .pmx-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
 .pmx-card-header h2{margin:0;font-size:14px;line-height:1.5;font-weight:650;letter-spacing:-.3px}
 .pmx-card-dates{display:flex;gap:7px;flex-wrap:wrap;margin:5px 0 0;font-size:11px;line-height:1.6;color:var(--text3)}
