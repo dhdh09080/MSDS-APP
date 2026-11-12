@@ -89,7 +89,15 @@ async def main():
   await page.locator('#workspaceLoadStatus').filter(has_text='일부 자료').wait_for()
   assert await page.locator('#homeTitle').is_visible()
   assert await page.locator('#mtab-msds').is_visible()
+  await page.locator('#mtab-msds').click()
+  await page.locator('#searchInput').fill('제품 388')
+  fail_msds=False
+  await page.locator('#workspaceRetryButton').click()
+  await page.locator('#workspaceLoadStatus').wait_for(state='hidden')
+  assert await page.locator('#searchInput').input_value()=='제품 388'
+  assert await page.locator('#msdsTableBody .row-check').count()==1
+  assert await page.locator('#page-msds').evaluate("e=>e.classList.contains('active')")
   assert not errors,errors
-  print('A failing MSDS request leaves a visible home with an error message; no uncaught JavaScript errors')
+  print('A failing MSDS request leaves a visible home; in-page retry preserves active menu and search; no uncaught JavaScript errors')
   await b.close()
 asyncio.run(main())

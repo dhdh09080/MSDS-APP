@@ -1,3 +1,4 @@
+import { installPortalMobileExperience } from './lib/mobile-experience.js';
 import { installFileDropzones } from './lib/file-dropzone.js';
 import { collectDroppedFiles } from './lib/upload-files.js';
 import { createContractorWorkspace } from './contractor-workspace.js';
@@ -25,6 +26,7 @@ let publicLinkData = null,
 let currentUploadToken = '';
 
 let portalRecords = [];
+let portalMobile;
 const workspace = createContractorWorkspace({supabase,getContext:()=>({workspace:wsData,contractor:contractorData,token:currentUploadToken}),navigate:panel=>window.switchPortalPanel(panel),toast:(...args)=>toast(...args)});
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function portalRequest(contractorId = null) {
@@ -78,6 +80,7 @@ async function proceedToUploadView(data) {
     document.getElementById('licenseTab').hidden = !allowLicense;
     renderWorkTypes(); renderLicenseCard(); renderPortalRecords();
     workspace.mount({allowMsds,allowLicense});
+    portalMobile ||= installPortalMobileExperience();
     const requestedPanel = new URLSearchParams(location.search).get('panel');
     const canOpenRequestedPanel = (requestedPanel === 'license' && allowLicense)
       || (['records', 'upload', 'warnings', 'hazard'].includes(requestedPanel) && allowMsds)
@@ -92,6 +95,7 @@ window.switchPortalPanel = function (panel) {
   if (publicLinkData && ((['records','upload','warnings','hazard'].includes(panel) && !publicLinkData.allow_msds) || (panel === 'license' && !publicLinkData.allow_license))) panel = 'dashboard';
   document.querySelectorAll('[data-portal-panel]').forEach(el => el.hidden = el.dataset.portalPanel !== panel);
   workspace.activate(panel);
+  if (panel === 'records') portalMobile?.openExisting();
   if (panel === 'warnings') renderPortalRecords();
 };
 async function refreshPortalRecords() {
@@ -215,7 +219,7 @@ function renderWorkTypes() {
     const count = fileQueue.filter(item => item.workType === name && item.status !== 'done').length;
     return `<button type="button" class="worktype-btn trade-drop-zone ${selectedWorkType === name ? 'selected' : ''}" data-trade-index="${index}"
       onclick="pickTradeFiles(${index})" ondragover="onTradeDragOver(event)" ondragleave="this.classList.remove('drag')" ondrop="onTradeDrop(event,${index})" ${uploadInProgress ? 'disabled' : ''}>
-      <strong>${escapeHtml(name)}</strong><span>파일 드래그 또는 클릭</span><small>${count ? `대기 ${count}개` : 'PDF · JPG · PNG'}</small></button>`;
+      <strong>${escapeHtml(name)}</strong><span>눌러 파일 선택 · 드래그 가능</span><small>${count ? `대기 ${count}개` : 'PDF · JPG · PNG'}</small></button>`;
   }).join('');
   document.getElementById('step1Next').disabled = false;
   document.getElementById('selectedWorktypeLabel').textContent = selectedWorkType;

@@ -10,6 +10,7 @@ export function openModal(id) {
   if (!backdrop) return;
   if (document.activeElement instanceof HTMLElement) modalReturnFocus.set(id, document.activeElement);
   backdrop.classList.add('open');
+  document.dispatchEvent(new Event('app-modal-change'));
   requestAnimationFrame(() => {
     const firstControl = backdrop.querySelector('[autofocus], .modal-close, button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
     if (firstControl instanceof HTMLElement) firstControl.focus();
@@ -20,6 +21,7 @@ export function closeModal(id) {
   const backdrop = document.getElementById(id);
   if (!backdrop) return;
   backdrop.classList.remove('open');
+  document.dispatchEvent(new Event('app-modal-change'));
   const returnTarget = modalReturnFocus.get(id);
   modalReturnFocus.delete(id);
   if (returnTarget instanceof HTMLElement && returnTarget.isConnected) returnTarget.focus();
