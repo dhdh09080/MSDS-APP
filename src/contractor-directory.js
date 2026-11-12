@@ -39,8 +39,13 @@ function render() {
   el('directoryTotal').textContent = `${contractors.length}개사`;
   el('directoryLicenseTotal').textContent = `${contractors.filter(c=>c.license_submitted).length}개사`;
   el('directoryMsdsTotal').textContent = `${contractors.filter(c=>c.msds_count>0).length}개사`;
-  el('directoryResultCount').textContent = `전체 ${contractors.length}개사 중 ${list.length}개사`;
-  el('directoryList').innerHTML = list.length ? list.map(c => `<tr><td data-label="협력사명"><a class="directory-company" href="/upload.html?dtoken=${encodeURIComponent(token)}&contractor_id=${encodeURIComponent(c.id)}">${escape(c.name)} <span aria-hidden="true">↗</span></a><div class="directory-company-actions"><a class="btn btn-primary directory-open-workspace" href="/upload.html?dtoken=${encodeURIComponent(token)}&contractor_id=${encodeURIComponent(c.id)}" aria-label="${escape(c.name)} 업체 페이지 열기">업체 페이지 열기 →</a><div class="directory-print-links"><a href="/upload.html?dtoken=${encodeURIComponent(token)}&contractor_id=${encodeURIComponent(c.id)}&panel=records" aria-label="${escape(c.name)} MSDS 보기·인쇄">MSDS 보기·인쇄</a><a href="/upload.html?dtoken=${encodeURIComponent(token)}&contractor_id=${encodeURIComponent(c.id)}&panel=warnings" aria-label="${escape(c.name)} 경고표지 인쇄">경고표지 인쇄</a></div></div></td><td data-label="사업자등록증"><div class="directory-document-actions"><span class="directory-badge ${c.license_submitted?'done':''}">${c.license_submitted?'제출 완료':'미제출'}</span>${!c.license_submitted ? `<a class="btn btn-secondary directory-register-license" href="/upload.html?dtoken=${encodeURIComponent(token)}&contractor_id=${encodeURIComponent(c.id)}&panel=license" aria-label="${escape(c.name)} 사업자등록증 등록하기">등록하기</a>` : ''}</div></td><td data-label="MSDS"><div class="directory-document-actions"><span class="directory-badge ${c.msds_count>0?'done':''}">${c.msds_count>0?`제출 완료 · ${c.msds_count}건`:'미제출'}</span><a class="btn btn-secondary directory-add-msds" href="/upload.html?dtoken=${encodeURIComponent(token)}&contractor_id=${encodeURIComponent(c.id)}&panel=upload" aria-label="${escape(c.name)} MSDS 추가" title="MSDS 추가">+</a></div></td><td data-label="관리자명">${escape(c.manager_name || '미등록')}</td><td data-label="전화번호">${c.manager_phone ? `<a href="tel:${escape(c.manager_phone.replace(/[^+0-9]/g,''))}">${escape(c.manager_phone)}</a>`:'미등록'}</td><td data-label="관리"><button class="btn btn-secondary" data-edit="${escape(c.id)}" aria-label="${escape(c.name)} 연락처 수정">수정</button></td></tr>`).join('') : '<tr><td colspan="6" class="portal-empty">조건에 맞는 협력사가 없습니다. 협력사 등록하기로 추가할 수 있습니다.</td></tr>';
+  el('directoryResultCount').textContent = q || filter!=='all' ? `검색된 업체 ${list.length}곳` : `전체 업체 ${contractors.length}곳`;
+  el('directoryClear').hidden=!q && filter==='all';
+  el('directoryList').innerHTML = list.length ? list.map(c => {
+    const base=`/upload.html?dtoken=${encodeURIComponent(token)}&contractor_id=${encodeURIComponent(c.id)}`;
+    return `<li class="directory-company-card"><div class="directory-company-main"><h3>${escape(c.name)}</h3><a class="btn btn-primary directory-open-workspace" href="${base}" aria-label="${escape(c.name)} 업체 페이지 열기">업체 페이지 열기 <span aria-hidden="true">→</span></a></div><details class="directory-company-details"><summary aria-label="${escape(c.name)} 서류·연락처 보기">서류·연락처 보기</summary><div class="directory-detail-content"><section><h4>MSDS</h4><p>${c.msds_count>0?`등록된 자료 ${Number(c.msds_count)}건`:'아직 등록된 자료가 없습니다'}</p><div class="directory-detail-actions"><a href="${base}&panel=records" aria-label="${escape(c.name)} MSDS 보기·인쇄">MSDS 보기·인쇄</a><a class="directory-add-msds" href="${base}&panel=upload" aria-label="${escape(c.name)} MSDS 추가">MSDS 추가</a><a href="${base}&panel=warnings" aria-label="${escape(c.name)} 경고표지 인쇄">경고표지 인쇄</a></div></section><section><h4>사업자등록증</h4><p>${c.license_submitted?'제출 완료':'미제출'}</p>${!c.license_submitted?`<a class="directory-register-license" href="${base}&panel=license" aria-label="${escape(c.name)} 사업자등록증 등록하기">사업자등록증 등록하기</a>`:''}</section><section><h4>담당자 연락처</h4><p>${escape(c.manager_name || '담당자 미등록')}</p>${c.manager_phone?`<a href="tel:${escape(c.manager_phone.replace(/[^+0-9]/g,''))}">${escape(c.manager_phone)}</a>`:'<p>전화번호 미등록</p>'}<button type="button" class="btn btn-secondary" data-edit="${escape(c.id)}" aria-label="${escape(c.name)} 연락처 수정">연락처 수정</button></section></div></details></li>`;
+  }).join('') : '<li class="directory-empty"><strong>찾는 업체가 없습니다</strong><p>업체명 일부만 입력해보세요. 제출 현황 필터를 사용했다면 전체 업체 보기를 눌러주세요.</p></li>';
+
 }
 function openForm(id='') {
   const c=contractors.find(c=>c.id===id);
@@ -50,7 +55,7 @@ function openForm(id='') {
   el('directoryFormError').textContent=''; el('directoryDialog').showModal();
   (c?el('directoryManager'):el('directoryName')).focus();
 }
-el('directoryFindCompany').addEventListener('click',()=>{el('directorySearch').scrollIntoView({behavior:'smooth',block:'center'});el('directorySearch').focus({preventScroll:true});});
+el('directoryClear').addEventListener('click',()=>{el('directorySearch').value='';el('directoryFilter').value='all';render();el('directorySearch').focus();});
 el('directoryRegister').addEventListener('click',()=>openForm());
 el('directoryCancel').addEventListener('click',()=>el('directoryDialog').close());
 el('directoryList').addEventListener('click',e=>{ const btn=e.target.closest('[data-edit]'); if(btn) openForm(btn.dataset.edit); });
@@ -66,7 +71,7 @@ el('directoryForm').addEventListener('submit',async e=>{
     if(error)throw error;
     el('directoryDialog').close();
     el('directorySearch').value=''; el('directoryFilter').value='all'; await refresh();
-    const btn=[...document.querySelectorAll('[data-edit]')].find(btn=>btn.dataset.edit===id); btn?.focus();
+    const btn=[...document.querySelectorAll('[data-edit]')].find(btn=>btn.dataset.edit===id); btn?.closest('.directory-company-card')?.querySelector('.directory-open-workspace')?.focus();
   } catch(error){el('directoryFormError').textContent=errorText(error);}
   finally{el('directorySave').disabled=false;}
 });

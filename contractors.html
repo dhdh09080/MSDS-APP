@@ -1,17 +1,16 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#27272b"><title>현장 전체 협력사 리스트</title></head>
 <body class="directory-page">
-<header class="header"><div class="header-logo"><span class="portal-brand">GS</span> 보건 현장관리 시스템 <span class="portal-label">현장 공유 목록</span></div><h1 class="header-ws" id="directoryTitle">현장 전체 협력사 리스트</h1><p class="header-desc">서류 제출 현황과 협력사 연락처를 한곳에서 확인하세요.</p></header>
+<header class="header"><div class="header-logo"><span class="portal-brand">GS</span> 보건 현장관리 시스템 <span class="portal-label">현장 공유 목록</span></div><h1 class="header-ws" id="directoryTitle">현장 전체 협력사 리스트</h1><p class="header-desc">우리 업체를 찾고, 업체 페이지를 열어주세요.</p></header>
 <main class="content">
 <div id="directoryLoading" class="portal-empty" role="status">협력사 목록을 불러오는 중입니다…</div>
 <div id="directoryError" class="directory-error" role="alert" hidden></div>
 <section id="directoryContent" hidden>
-<div class="portal-overview"><div><span class="eyebrow">SITE PARTNERS</span><h2>우리 업체 페이지에서 MSDS·경고표지를 인쇄하세요</h2><p>아래에서 우리 업체를 찾고 <b>업체 페이지 열기</b>를 누르세요. MSDS 확인·업로드와 경고표지 인쇄를 할 수 있습니다.</p></div><button id="directoryRegister" class="btn btn-secondary">목록에 없는 업체 등록하기</button></div>
-<section class="directory-guide" aria-labelledby="directoryGuideTitle"><div><h3 id="directoryGuideTitle">처음 오셨나요? 이렇게 이용하세요</h3><ol><li><b>1. 우리 업체 검색</b><span>아래 검색창에 회사명을 입력하세요.</span></li><li><b>2. 업체 페이지 열기</b><span>회사명 아래의 진입 버튼을 누르세요.</span></li><li><b>3. 자료 확인·인쇄</b><span>MSDS 원본 또는 경고표지를 선택해 인쇄하세요.</span></li></ol></div><button type="button" class="btn btn-primary" id="directoryFindCompany">우리 업체 찾기 ↓</button></section>
-<div class="portal-stats"><div><span>전체 협력사</span><strong id="directoryTotal">0</strong></div><div><span>등록증 제출</span><strong id="directoryLicenseTotal">0</strong></div><div><span>MSDS 제출</span><strong id="directoryMsdsTotal">0</strong></div></div>
-<div class="portal-toolbar directory-toolbar"><input id="directorySearch" type="search" placeholder="협력사명, 관리자명, 전화번호 검색" aria-label="협력사 검색"><select id="directoryFilter" aria-label="제출 현황 필터"><option value="all">전체 협력사</option><option value="license">등록증 미제출</option><option value="msds">MSDS 미제출</option></select><button class="btn btn-secondary" id="directoryRefresh">새로고침</button></div>
-<p id="directoryResultCount" class="directory-count" role="status"></p>
-<div class="directory-table-wrap"><table class="directory-table"><thead><tr><th>협력사명</th><th>사업자등록증</th><th>MSDS</th><th>관리자명</th><th>전화번호</th><th>관리</th></tr></thead><tbody id="directoryList"></tbody></table></div>
+<section class="directory-search-box" aria-labelledby="directorySearchTitle"><h2 id="directorySearchTitle">우리 업체 찾기</h2><label for="directorySearch">업체명을 입력해주세요</label><input id="directorySearch" type="search" placeholder="예: 안전건설" autocomplete="off"><p class="directory-search-help">업체 페이지에서 MSDS 등록·인쇄와 경고표지 인쇄를 할 수 있습니다.</p></section>
+<div class="directory-list-heading"><p id="directoryResultCount" class="directory-count" role="status"></p><button type="button" class="btn btn-secondary" id="directoryClear" hidden>전체 업체 보기</button></div>
+<ul id="directoryList" class="directory-company-list" aria-label="협력사 목록"></ul>
+<div class="directory-register-help"><p>우리 업체가 목록에 없나요?</p><button id="directoryRegister" class="btn btn-secondary">업체 등록하기</button></div>
+<details class="directory-site-details"><summary>현장 전체 제출 현황 보기</summary><div class="portal-stats"><div><span>전체 협력사</span><strong id="directoryTotal">0</strong></div><div><span>등록증 제출</span><strong id="directoryLicenseTotal">0</strong></div><div><span>MSDS 제출</span><strong id="directoryMsdsTotal">0</strong></div></div><div class="directory-toolbar"><label for="directoryFilter">제출 현황으로 찾기</label><select id="directoryFilter"><option value="all">전체 협력사</option><option value="license">등록증 미제출</option><option value="msds">MSDS 미제출</option></select><button class="btn btn-secondary" id="directoryRefresh">목록 새로고침</button></div></details>
 <p class="directory-note">등록·수정한 정보는 현장관리 시스템에 함께 반영됩니다. 이 링크를 가진 현장 참여자는 연락처를 조회·수정할 수 있습니다.</p>
 </section>
 </main>
