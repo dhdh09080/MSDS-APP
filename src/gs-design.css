@@ -74,3 +74,13 @@ body:has(#moreSheet.open) { overflow: hidden; }
 .site-directory-card{margin-bottom:20px}.site-directory-card .form-note{margin:10px 0}.site-directory-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}#siteDirectoryLinkState>a{display:inline-block;color:var(--text);font-size:13px;font-weight:600;margin-top:10px}.contractor-contact-line{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0;font-size:12px;color:var(--text2)}.contractor-contact-dialog{width:min(440px,calc(100vw - 32px));padding:24px;border:1px solid var(--border);border-radius:12px;max-height:90dvh;overflow:auto;color:var(--text)}.contractor-contact-dialog::backdrop{background:#16161e55;backdrop-filter:blur(3px)}.contractor-contact-dialog label{display:flex;flex-direction:column;gap:8px;margin:16px 0;font-size:12px}.contractor-contact-dialog input{min-height:44px}.contractor-contact-dialog #contactError{color:var(--danger);font-size:12px}.contractor-contact-dialog #contactSaveButton{margin-top:14px;width:100%;min-height:44px}#contactContractorName{font-size:13px;margin-top:16px}@media(max-width:640px){.site-directory-actions>.btn{min-height:44px;flex:1}.contractor-contact-line{gap:8px}.contractor-contact-line>.btn{min-height:40px}}
 
 .contractor-add-panel .contractor-add-grid{grid-template-columns:repeat(3,minmax(0,1fr)) auto}@media(max-width:800px){.contractor-add-panel .contractor-add-grid{grid-template-columns:minmax(0,1fr)}.contractor-add-panel .contractor-add-grid>.btn{min-height:44px}}
+
+.workspace-load-status { flex-shrink: 0; padding: 10px 18px; background: #f3f5fb; color: #424855; font-size: 12px; }
+/* Keep Android's scrolling layers opaque; earlier theme rules re-enabled blur. */
+@media (max-width: 768px) {
+  .page-header, .mobile-tabbar, .ws-topbar, .modal-backdrop {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .page-header, .mobile-tabbar, .ws-topbar { background: #fff; }
+}

@@ -253,6 +253,7 @@
 </aside>
 <!-- 메인 콘텐츠 -->
 <div class="main" id="mainContent">
+<div id="workspaceLoadStatus" class="workspace-load-status" role="status" hidden></div>
 <div class="page" id="page-binders"><div class="page-header"><div><div class="page-title">바인더 표지</div><div class="page-subtitle">문서 선택 · 지정 폭 자동 적용 · A4 인쇄</div></div></div><div class="content-scroll" id="binderWorkbench"></div></div>
 <div class="page" id="page-manager-signs"><div class="page-header"><div><div class="page-title">관리책임자 표지</div><div class="page-subtitle">협력사 선택 · 정·부 연락처 입력 · A3·A4 가로 인쇄</div></div></div><div class="content-scroll" id="managerSignWorkbench"></div></div>
 <!-- ═══ 홈 ═══ -->
@@ -455,7 +456,7 @@
 <thead>
 <tr>
 <th style="width: 36px">
-<input id="checkAll" onchange="toggleAll(this)" type="checkbox"/>
+<input id="checkAll" aria-label="현재 페이지 전체 선택" onchange="toggleAll(this)" type="checkbox"/>
 </th>
 <th>제품명</th>
 <th>협력사</th>
@@ -477,6 +478,11 @@
 </table>
 </div>
 </div>
+<nav id="msdsPagination" class="msds-pagination" aria-label="MSDS 목록 페이지" hidden>
+<button id="msdsPrevPage" type="button" class="btn btn-outline" onclick="changeMsdsPage(-1)">이전</button>
+<span id="msdsPageStatus" role="status"></span>
+<button id="msdsNextPage" type="button" class="btn btn-outline" onclick="changeMsdsPage(1)">다음</button>
+</nav>
 </div>
 </div>
 </div>

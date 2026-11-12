@@ -287,3 +287,6 @@
   #page-msds .msds-header-actions > .btn { flex: 1 1 140px; }
   #page-msds .msds-more-actions { flex: 1 1 100%; }
 }
+
+.msds-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 18px 0; }
+.msds-pagination span { font-size: 12px; color: var(--text2); text-align: center; }

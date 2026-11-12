@@ -102,6 +102,10 @@ let contractors = [],
 let tokens = [],
   members = [];
 let businessLicenses = [];
+const MSDS_PAGE_SIZE = 30;
+let msdsPage = 1;
+let workspaceLoadVersion = 0;
+
 let msdsFileQueue = [],
   healthFileQueue = [];
 let editingMsdsId = null,
@@ -929,6 +933,9 @@ function translateAuthError(m) {
 // ═══════════════════════════════════════════════
 function resetWorkspaceScopedState() {
   hazardMap.reset();
+  msdsPage = 1;
+  workspaceLoadVersion++;
+  document.getElementById('workspaceLoadStatus').hidden = true;
   createdTeamInvite = null;
   const inviteUrl = document.getElementById('teamInviteUrl');
   if (inviteUrl) inviteUrl.value = '';
@@ -1171,27 +1178,51 @@ window.enterWorkspace = async function (wsId) {
     .toUpperCase();
   document.getElementById('accountInfo').innerHTML =
     `이메일: ${escapeHtml(user.email)}<br>이름: ${escapeHtml(name)}<br>가입일: ${new Date(user.created_at).toLocaleDateString('ko-KR')}`;
-  await Promise.all([
-    loadContractors(),
-    loadWorkTypes(),
-    loadMembers(),
-    loadTokens(),
-    loadSiteDirectoryLink(),
-  ]);
-  await Promise.all([
-    loadMsdsRecords(),
-    loadPlacementSnapshots(),
-    loadBusinessLicenses(),
-    loadMeasureRounds(),
-    loadMeasureResults(),
-    loadNotifications(),
-    loadHealthRecords(),
-  ]);
-  subscribeNotifications();
-  renderHomeDashboard(); // 알림(재업로드 도착) 로드 후 대시보드 갱신
-  loadDashWeather();
+  // Render a usable home before waiting for unrelated menus and network responses.
   showPage('home');
-  loadPhotoFolders().then(loadPhotos); // 사진은 홈 화면 진입을 막지 않고 백그라운드로 로드
+  document.getElementById('loadingScreen').style.display = 'none';
+  const loadVersion = ++workspaceLoadVersion;
+  const status = document.getElementById('workspaceLoadStatus');
+  status.hidden = false;
+  status.textContent = '현장 자료를 불러오는 중입니다. 메뉴를 이용할 수 있습니다.';
+  const slowLoadTimer = setTimeout(() => {
+    if (loadVersion === workspaceLoadVersion && currentWS?.id === wsId) {
+      status.textContent = '자료 연결이 지연되고 있습니다. 잠시 후에도 목록이 표시되지 않으면 새로고침해주세요.';
+    }
+  }, 10000);
+  const results = [];
+  try {
+    results.push(...await Promise.allSettled([
+      loadContractors(),
+      loadWorkTypes(),
+    ]));
+    if (loadVersion !== workspaceLoadVersion || currentWS?.id !== wsId) return;
+    results.push(...await Promise.allSettled([
+      loadMembers(),
+      loadTokens(),
+      loadSiteDirectoryLink(),
+      loadMsdsRecords(),
+      loadPlacementSnapshots(),
+      loadBusinessLicenses(),
+      loadMeasureRounds(),
+      loadMeasureResults(),
+      loadNotifications(),
+      loadHealthRecords(),
+    ]));
+    if (loadVersion !== workspaceLoadVersion || currentWS?.id !== wsId) return;
+    subscribeNotifications();
+    renderHomeDashboard();
+    loadDashWeather();
+    // Preserve any menu the user opened while data was loading.
+    loadPhotoFolders().then(loadPhotos).catch(() => {});
+  } finally {
+    clearTimeout(slowLoadTimer);
+    if (loadVersion === workspaceLoadVersion && currentWS?.id === wsId) {
+      const failed = results.some(result => result.status === 'rejected');
+      status.hidden = !failed;
+      if (failed) status.textContent = '일부 자료를 불러오지 못했습니다. 연결을 확인하고 새로고침해주세요.';
+    }
+  }
 };
 
 window.enterAdminConsole = async function () {
@@ -1219,6 +1250,8 @@ window.enterAdminConsole = async function () {
 window.goWorkspaces = function () {
   hazardMap.reset();
   currentWS = null;
+  workspaceLoadVersion++;
+  document.getElementById('workspaceLoadStatus').hidden = true;
   adminStandalone = false;
   document.body.classList.remove('admin-standalone');
   document.getElementById('appScreen').style.display = 'none';
@@ -3545,11 +3578,15 @@ window.shareLink = function (url, name) {
 // MSDS Records
 // ═══════════════════════════════════════════════
 async function loadMsdsRecords() {
-  const { data } = await supabase
+  const workspaceId = currentWS?.id;
+  if (!workspaceId) return;
+  const { data, error } = await supabase
     .from('msds_records')
     .select('*')
-    .eq('workspace_id', currentWS.id)
+    .eq('workspace_id', workspaceId)
     .order('created_at', { ascending: false });
+  if (currentWS?.id !== workspaceId) return;
+  if (error) throw error;
   msdsRecords = data || [];
   updateStats();
   renderMsdsTable();
@@ -3624,14 +3661,25 @@ function getFilteredMsds() {
       return mq && mc && mw && ms && mr && msp;
     })
     .sort((a, b) => {
-      const conSort = a.contractor.localeCompare(b.contractor, 'ko');
+      const conSort = String(a.contractor ?? '').localeCompare(String(b.contractor ?? ''), 'ko');
       if (conSort !== 0) return conSort;
-      return a.product_name.localeCompare(b.product_name, 'ko');
+      return String(a.product_name ?? '').localeCompare(String(b.product_name ?? ''), 'ko');
     });
 }
 
-window.renderMsdsTable = function () {
+window.renderMsdsTable = function (pageNumber = 1) {
+  // Hidden tables need no DOM; showPage renders the latest state when opened.
+  if (!document.getElementById('page-msds').classList.contains('active')) return;
   const filtered = getFilteredMsds();
+  const pages = Math.max(1, Math.ceil(filtered.length / MSDS_PAGE_SIZE));
+  msdsPage = Math.max(1, Math.min(pages, Number(pageNumber) || 1));
+  const start = (msdsPage - 1) * MSDS_PAGE_SIZE;
+  const pageRecords = filtered.slice(start, start + MSDS_PAGE_SIZE);
+  const pager = document.getElementById('msdsPagination');
+  pager.hidden = filtered.length <= MSDS_PAGE_SIZE;
+  document.getElementById('msdsPageStatus').textContent = `${msdsPage} / ${pages} 페이지 · ${start + 1}–${Math.min(start + MSDS_PAGE_SIZE, filtered.length)} / ${filtered.length}건`;
+  document.getElementById('msdsPrevPage').disabled = msdsPage === 1;
+  document.getElementById('msdsNextPage').disabled = msdsPage === pages;
   const tbody = document.getElementById('msdsTableBody');
   const summary = document.getElementById('msdsResultSummary');
   if (summary) summary.innerHTML = `<strong>${escapeHtml(window.selectedContractor || '전체 협력사')}</strong><span>조회 ${filtered.length}건</span>${window.selectedContractor ? '<button type="button" class="msds-reset" onclick="selectContractorSidebar(&quot;&quot;)">전체 보기</button>' : ''}`;
@@ -3642,7 +3690,7 @@ window.renderMsdsTable = function () {
       '<tr class="empty-row"><td colspan="10">등록된 MSDS가 없습니다</td></tr>';
     return;
   }
-  tbody.innerHTML = filtered
+  tbody.innerHTML = pageRecords
     .map((r) => {
       const sp =
         r.legal_special === 'Y'
@@ -3682,6 +3730,13 @@ window.renderMsdsTable = function () {
     </tr>`;
     })
     .join('');
+};
+
+window.changeMsdsPage = function (direction) {
+  renderMsdsTable(msdsPage + direction);
+  document.querySelector('#page-msds .msds-layout').scrollTop = 0;
+  document.querySelector('#page-msds .msds-content').scrollTop = 0;
+  document.getElementById('mainContent').scrollTop = 0;
 };
 
 window.toggleAll = function (cb) {
@@ -5141,6 +5196,7 @@ function updateWarnWorkbench() {
 }
 
 function renderWarnPickList() {
+  if (!document.getElementById('page-warning').classList.contains('active')) return;
   const el = document.getElementById('warnPickList');
   if (!el) return;
   populateWarnContractorFilter();
@@ -5459,9 +5515,9 @@ window.exportMsdsExcel = async function () {
   const XLSX = await loadSpreadsheet();
   if (!XLSX) return;
   const filtered = getFilteredMsds().sort((a, b) => {
-    const conSort = a.contractor.localeCompare(b.contractor, 'ko');
+    const conSort = String(a.contractor ?? '').localeCompare(String(b.contractor ?? ''), 'ko');
     if (conSort !== 0) return conSort;
-    return a.product_name.localeCompare(b.product_name, 'ko');
+    return String(a.product_name ?? '').localeCompare(String(b.product_name ?? ''), 'ko');
   });
   if (filtered.length === 0) {
     toast('내보낼 데이터가 없습니다', 'error');
@@ -5529,9 +5585,9 @@ window.exportMsdsExcel = async function () {
 // ═══════════════════════════════════════════════
 window.printMsdsList = function () {
   const filtered = getFilteredMsds().sort((a, b) => {
-    const conSort = a.contractor.localeCompare(b.contractor, 'ko');
+    const conSort = String(a.contractor ?? '').localeCompare(String(b.contractor ?? ''), 'ko');
     if (conSort !== 0) return conSort;
-    return a.product_name.localeCompare(b.product_name, 'ko'); // 같은 협력사면 제품명순
+    return String(a.product_name ?? '').localeCompare(String(b.product_name ?? ''), 'ko'); // 같은 협력사면 제품명순
   });
   if (filtered.length === 0) {
     toast('인쇄할 데이터가 없습니다', 'error');
@@ -5930,8 +5986,8 @@ window.printMsdsFullDocs = async function () {
     '1';
 
   const sorted = [...targets].sort((a, b) => {
-    const c = a.contractor.localeCompare(b.contractor, 'ko');
-    return c !== 0 ? c : a.product_name.localeCompare(b.product_name, 'ko');
+    const c = String(a.contractor ?? '').localeCompare(String(b.contractor ?? ''), 'ko');
+    return c !== 0 ? c : String(a.product_name ?? '').localeCompare(String(b.product_name ?? ''), 'ko');
   });
   const groups = [];
   sorted.forEach((r) => {
@@ -7415,7 +7471,7 @@ window.runPlacementFilter = function () {
   // 협력사별, 가나다순 정렬
   placementFiltered.sort((a, b) => {
     if (a.contractor !== b.contractor)
-      return a.contractor.localeCompare(b.contractor, 'ko');
+      return String(a.contractor ?? '').localeCompare(String(b.contractor ?? ''), 'ko');
     return a.name.localeCompare(b.name, 'ko');
   });
 
