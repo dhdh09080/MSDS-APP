@@ -28,6 +28,7 @@ let currentUploadToken = '';
 
 let portalRecords = [];
 let portalUsageAllowed=false;
+const selectedWarningIds=new Set();
 let portalMobile;
 const workspace = createContractorWorkspace({supabase,getContext:()=>({workspace:wsData,contractor:contractorData,token:currentUploadToken}),navigate:panel=>window.switchPortalPanel(panel),toast:(...args)=>toast(...args)});
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -114,7 +115,7 @@ function renderPortalDocumentLists() {
     const query = document.getElementById(searchId).value.trim().toLowerCase();
     const rows = portalRecords.filter(r => [r.product_name, r.work_type, r.supplier, r.pdf_name, r.cas_no]
       .some(value => (value || '').toLowerCase().includes(query)));
-  document.getElementById(listId).innerHTML = rows.length ? `<p class="portal-register-scroll-note">표를 좌우로 밀면 공급업체·CAS·사용 상태·원본을 확인할 수 있습니다.</p><div class="portal-document-table-scroll" tabindex="0" role="region" aria-label="MSDS 대장"><table class="portal-document-table portal-register-table"><thead><tr><th>제품명</th><th>협력사</th><th>공종</th><th>공급업체</th><th>CAS</th><th>특별</th><th>상태</th><th>원본</th></tr></thead><tbody>${rows.map(r=>`<tr class="document-row"><td><button type="button" class="portal-msds-product" data-warning-id="${escapeHtml(r.id)}" aria-label="${escapeHtml(r.product_name)} 경고표지 보기">${escapeHtml(r.product_name)}</button><div class="portal-msds-version">v${escapeHtml(r.version||1)}${r.submission_no_valid==='N'?'<span class="portal-submission-alert"> · 제출번호 확인필요</span>':''}</div></td><td>${escapeHtml(r.contractor||contractorData?.name||'-')}</td><td>${escapeHtml(r.work_type||'-')}</td><td>${escapeHtml(r.supplier||'-')}</td><td>${escapeHtml(r.cas_no||'-')}</td><td><span class="portal-register-badge ${r.legal_special==='Y'?'is-special':''}">${r.legal_special==='Y'?'특별':'일반'}</span></td><td>${msdsStatusSwitch(r,'togglePortalMsdsStatus',!portalUsageAllowed)}</td><td>${r.pdf_path?`<a class="portal-register-pdf" href="${import.meta.env.VITE_SUPABASE_URL}/functions/v1/msds-view?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(r.product_name)} 원본 PDF 열기"><svg width="16" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 13h8M8 17h6"/></svg><span>PDF 보기</span></a>`:'<span class="muted">-</span>'}</td></tr>`).join('')}</tbody></table></div><p class="portal-pdf-help">제품명을 누르면 경고표지를 확인할 수 있습니다. 원본 PDF는 새 창에서 열어 인쇄하세요.${portalUsageAllowed?'':'<br>사용 상태 변경은 현장 관리자에게 요청해주세요.'}</p>` : `<div class="portal-empty">${query?'검색 결과가 없습니다.':'아직 등록된 MSDS가 없습니다. 위에서 파일을 추가해주세요.'}</div>`;
+  document.getElementById(listId).innerHTML = rows.length ? `<p class="portal-register-scroll-note">표를 좌우로 밀면 공급업체·CAS·사용 상태·원본을 확인할 수 있습니다.</p><div class="portal-document-table-scroll" tabindex="0" role="region" aria-label="MSDS 대장"><table class="portal-document-table portal-register-table"><thead><tr><th>제품명</th><th>협력사</th><th>공종</th><th>공급업체</th><th>CAS</th><th>특별</th><th>상태</th><th>원본</th></tr></thead><tbody>${rows.map(r=>`<tr class="document-row"><td><button type="button" class="portal-msds-product" data-warning-id="${escapeHtml(r.id)}" aria-label="${escapeHtml(r.product_name)} 경고표지 보기">${escapeHtml(r.product_name)}</button><div class="portal-msds-version">v${escapeHtml(r.version||1)}${r.submission_no_valid==='N'?'<span class="portal-submission-alert"> · 제출번호 확인필요</span>':''}</div><button type="button" class="portal-warning-direct" data-warning-print-id="${escapeHtml(r.id)}" aria-label="${escapeHtml(r.product_name)} 경고표지 인쇄" title="${printable(r)?'A4 1매 인쇄':(r.status||'active')!=='active'?'사용중인 물질만 인쇄할 수 있습니다':'안전정보 등록 후 인쇄할 수 있습니다'}" ${printable(r)?'':'disabled'}>경고표지 인쇄</button></td><td>${escapeHtml(r.contractor||contractorData?.name||'-')}</td><td>${escapeHtml(r.work_type||'-')}</td><td>${escapeHtml(r.supplier||'-')}</td><td>${escapeHtml(r.cas_no||'-')}</td><td><span class="portal-register-badge ${r.legal_special==='Y'?'is-special':''}">${r.legal_special==='Y'?'특별':'일반'}</span></td><td>${msdsStatusSwitch(r,'togglePortalMsdsStatus',!portalUsageAllowed)}</td><td>${r.pdf_path?`<a class="portal-register-pdf" href="${import.meta.env.VITE_SUPABASE_URL}/functions/v1/msds-view?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(r.product_name)} 원본 PDF 열기"><svg width="16" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 13h8M8 17h6"/></svg><span>PDF 보기</span></a>`:'<span class="muted">-</span>'}</td></tr>`).join('')}</tbody></table></div><p class="portal-pdf-help">제품명을 누르면 경고표지를 확인할 수 있습니다. 원본 PDF는 새 창에서 열어 인쇄하세요.${portalUsageAllowed?'':'<br>사용 상태 변경은 현장 관리자에게 요청해주세요.'}</p>` : `<div class="portal-empty">${query?'검색 결과가 없습니다.':'아직 등록된 MSDS가 없습니다. 위에서 파일을 추가해주세요.'}</div>`;
     if (listId === 'uploadExistingList') {
       document.getElementById('uploadExistingCount').textContent = query
         ? `검색 ${rows.length}건 / 전체 ${portalRecords.length}건` : `${portalRecords.length}건`;
@@ -135,9 +136,19 @@ window.togglePortalMsdsStatus=async function(id){
  finally{pendingPortalStatuses.delete(id);document.querySelectorAll('.msds-usage-switch').forEach(button=>{if(button.dataset.recordId===id)button.disabled=button.hasAttribute('data-readonly');});}
 };
 for(const id of ['portalRecordList','uploadExistingList'])document.getElementById(id).addEventListener('click',event=>{
+ const printButton=event.target.closest('[data-warning-print-id]');
+ if(printButton){
+  const record=portalRecords.find(row=>row.id===printButton.dataset.warningPrintId);
+  if(!record || !printable(record))return;
+  const renderer=createWarningRenderer({size:'a4'});
+  openPortalWarningPrint(renderer,renderer.warnSheets([renderer.buildWarnLabel(record,wsData.name)]));return;
+ }
  const button=event.target.closest('[data-warning-id]');if(!button)return;
- window.switchPortalPanel('warnings');const checkbox=[...document.querySelectorAll('#warningRecordList input')].find(input=>input.value===button.dataset.warningId);
- if(checkbox && !checkbox.disabled){checkbox.checked=true;updatePortalWarningPreview();}else toast('사용중이고 안전정보가 등록된 자료만 경고표지를 인쇄할 수 있습니다.','error');
+ selectedWarningIds.clear();const record=portalRecords.find(row=>row.id===button.dataset.warningId);
+ if(record && printable(record))selectedWarningIds.add(record.id);
+ document.getElementById('portalWarningSearch').value='';window.switchPortalPanel('warnings');
+ if(!record || !printable(record))toast('사용중이고 안전정보가 등록된 자료만 경고표지를 인쇄할 수 있습니다.','error');
+
 });
 function renderPortalRecords() {
   renderPortalDocumentLists();
@@ -145,18 +156,34 @@ function renderPortalRecords() {
   document.getElementById('licenseSummary').textContent = licenseData ? '등록 완료' : '미등록';
   document.getElementById('warningCount').textContent = portalRecords.filter(printable).length;
 
-  document.getElementById('warningRecordList').innerHTML = portalRecords.length ? portalRecords.map(r => `<label class="warning-row"><input type="checkbox" value="${r.id}" ${printable(r) ? '' : 'disabled'}><span><strong>${escapeHtml(r.product_name)}</strong><small>${printable(r) ? escapeHtml(r.work_type || '공종 미지정') : '관리자 안전정보 분석 후 인쇄할 수 있습니다'}</small></span></label>`).join('') : `<div class="portal-empty">등록된 MSDS가 없습니다. 자료 등록 후 관리자가 안전정보를 확인하면 경고표지를 인쇄할 수 있습니다.<br><button type="button" class="btn btn-secondary" onclick="switchPortalPanel('upload')">MSDS 자료 등록하기</button></div>`;
-  document.getElementById('printPortalWarnings').disabled = !portalRecords.some(printable);
-  updatePortalWarningPreview();
+  const validIds=new Set(portalRecords.filter(printable).map(record=>record.id));
+  for(const id of selectedWarningIds)if(!validIds.has(id))selectedWarningIds.delete(id);
+  renderPortalWarningList();updatePortalWarningPreview();
+}
+function warningSearchRows(){
+ const query=document.getElementById('portalWarningSearch').value.trim().toLowerCase();
+ return portalRecords.filter(record=>!query || [record.product_name,record.work_type,record.supplier,record.cas_no].some(value=>String(value||'').toLowerCase().includes(query)));
+}
+function renderPortalWarningList(){
+ const rows=warningSearchRows(),query=document.getElementById('portalWarningSearch').value.trim();
+ document.getElementById('portalWarningResultCount').textContent=query?`${rows.length} / ${portalRecords.length}종`:`${rows.length}종`;
+ document.getElementById('portalWarningSearchClear').hidden=!query;
+ document.getElementById('portalWarningsAllLabel').textContent=query?'검색 결과 전체 선택':'인쇄 가능 자료 전체 선택';
+ document.getElementById('warningRecordList').innerHTML=rows.length?rows.map(r=>`<label class="warning-row ${selectedWarningIds.has(r.id)?'is-selected':''}"><input type="checkbox" value="${escapeHtml(r.id)}" ${selectedWarningIds.has(r.id)?'checked':''} ${printable(r)?'':'disabled'}><span><strong>${escapeHtml(r.product_name)}</strong><small>${printable(r)?escapeHtml([r.work_type||'공종 미지정',r.supplier].filter(Boolean).join(' · ')):(r.status||'active')!=='active'?'미사용 자료':'안전정보 등록 후 인쇄 가능'}</small></span></label>`).join(''):`<div class="portal-empty">${query?'검색 결과가 없습니다. 제품명 일부나 CAS 번호로 다시 검색해주세요.':'등록된 MSDS가 없습니다. 자료를 등록하면 인쇄할 수 있습니다.'}${!query?'<br><button type="button" class="btn btn-secondary" data-go-upload>MSDS 자료 등록하기</button>':''}</div>`;
 }
 document.getElementById('portalSearch').addEventListener('input', renderPortalDocumentLists);
 document.getElementById('uploadExistingSearch').addEventListener('input', renderPortalDocumentLists);
-window.selectAllPortalWarnings = function (checked) { document.querySelectorAll('#warningRecordList input:not(:disabled)').forEach(el => el.checked = checked); updatePortalWarningPreview(); };
+document.getElementById('warningRecordList').addEventListener('click',event=>{if(event.target.closest('[data-go-upload]'))window.switchPortalPanel('upload');});
+document.getElementById('portalWarningSearch').addEventListener('input',()=>{renderPortalWarningList();updatePortalWarningPreview();});
+document.getElementById('portalWarningSearchClear').addEventListener('click',()=>{document.getElementById('portalWarningSearch').value='';renderPortalWarningList();updatePortalWarningPreview();document.getElementById('portalWarningSearch').focus();});
+document.getElementById('portalWarningSelectionClear').addEventListener('click',()=>{selectedWarningIds.clear();renderPortalWarningList();updatePortalWarningPreview();});
+window.selectAllPortalWarnings = function (checked) {for(const row of warningSearchRows().filter(printable)){if(checked)selectedWarningIds.add(row.id);else selectedWarningIds.delete(row.id);}renderPortalWarningList();updatePortalWarningPreview();};
+
 let portalPreviewPage = 0;
 let portalPreviewSheets = [];
 let portalPreviewRenderer = null;
 function portalWarningOutput(example = false) {
-  const selected = new Set([...document.querySelectorAll('#warningRecordList input:checked')].map(el => el.value));
+  const selected = selectedWarningIds;
   let records = portalRecords.filter(r => selected.has(r.id) && printable(r));
   const isExample = !records.length && example;
   if (isExample) records = portalRecords.filter(printable).slice(0, 1);
@@ -171,7 +198,7 @@ function updatePortalWarningPreview() {
   const output = portalWarningOutput(true);
   const selectedCount=output.isExample?0:output.records.length;
   const printButton=document.getElementById('printPortalWarnings');printButton.disabled=!selectedCount;printButton.textContent=selectedCount?`선택한 ${selectedCount}종 인쇄`:'물질 선택 후 인쇄';
-  const all=document.getElementById('portalWarningsAll'), total=portalRecords.filter(printable).length;all.checked=Boolean(total && selectedCount===total);all.indeterminate=selectedCount>0 && selectedCount<total;
+  const all=document.getElementById('portalWarningsAll'), visible=warningSearchRows().filter(printable),visibleSelected=visible.filter(record=>selectedWarningIds.has(record.id)).length;all.checked=Boolean(visible.length && visibleSelected===visible.length);all.indeterminate=visibleSelected>0 && visibleSelected<visible.length;all.disabled=!visible.length;document.getElementById('portalWarningSelectionClear').hidden=!selectedCount;
   document.getElementById('portalPrintSelection').textContent=selectedCount?`${selectedCount}종 · 물질당 ${output.copies}매 · A4 ${output.sheets.length}장`:'위 목록에서 인쇄할 물질을 선택해주세요';
   portalPreviewRenderer = output.renderer;
   portalPreviewSheets = output.sheets;
@@ -216,7 +243,7 @@ window.changePortalPreviewPage = function (delta) {
   portalPreviewPage = Math.min(portalPreviewSheets.length - 1, Math.max(0, portalPreviewPage + delta));
   renderPortalWarningPreviewPage();
 };
-document.getElementById('warningRecordList').addEventListener('change', updatePortalWarningPreview);
+document.getElementById('warningRecordList').addEventListener('change',event=>{const input=event.target.closest('input[type=checkbox]');if(!input || input.disabled)return;if(input.checked)selectedWarningIds.add(input.value);else selectedWarningIds.delete(input.value);input.closest('.warning-row').classList.toggle('is-selected',input.checked);updatePortalWarningPreview();});
 document.getElementById('portalPrintSize').addEventListener('change', updatePortalWarningPreview);
 document.getElementById('portalPrintCopies').addEventListener('input', updatePortalWarningPreview);
 document.getElementById('portalPreviewZoom').addEventListener('change', resizePortalWarningPreview);
@@ -224,8 +251,12 @@ new ResizeObserver(resizePortalWarningPreview).observe(document.getElementById('
 window.printPortalWarnings = function () {
   const { renderer, sheets, records } = portalWarningOutput();
   if (!records.length) return toast('인쇄할 물질을 선택해주세요.', 'error');
-  openPrintWindow(`<!doctype html><html lang="ko"><head><meta charset="UTF-8"><title>경고표지</title><style>@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;font-family:'Malgun Gothic',sans-serif}${renderer.warnLabelCss()}</style></head><body>${sheets.join('')}${renderer.warningAutoFitPrintScript()}</body></html>`);
+  openPortalWarningPrint(renderer,sheets);
 };
+
+function openPortalWarningPrint(renderer,sheets){
+  openPrintWindow(`<!doctype html><html lang="ko"><head><meta charset="UTF-8"><title>경고표지</title><style>@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;font-family:'Malgun Gothic',sans-serif}${renderer.warnLabelCss()}</style></head><body>${sheets.join('')}${renderer.warningAutoFitPrintScript()}</body></html>`);
+}
 
 function showError(msg) {
   document.getElementById('portalView').hidden = true;

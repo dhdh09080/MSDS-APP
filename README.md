@@ -744,3 +744,12 @@ tests/mobile-portal.browser.py, tests/contractor-directory.browser.py (합성 �
 권한을 검증합니다. 토글 저장 성공 후에만 상태를 갱신하고 실패하면 기존 상태를 유지합니다.
 검증: npm test, npm run build, tests/contractor-portal.browser.py, tests/msds-status-switch.browser.py, tests/mobile-portal.browser.py.
 합성 자료로 상태 유지·복원·실패 처리, 조회 필드, 토큰 만료·업체·현장·자료 범위 검증을 확인합니다.
+
+### 협력사 경고표지 검색·바로 인쇄
+
+MSDS 대장의 ‘경고표지 인쇄’는 해당 물질의 A4 표지 1매 인쇄창을 바로 엽니다.
+일괄 인쇄 화면은 제품명·공종·공급업체·CAS로 검색하며 검색어를 바꿔도 선택을 유지합니다.
+전체 선택은 현재 검색 결과에 적용되고, 선택 해제 버튼은 모든 선택을 지웁니다.
+크기·매수는 미리보기 바로 위에 배치했습니다. 모바일은 물질 선택 → 설정 → 미리보기 → 인쇄 순서입니다.
+검증: npm test, npm run build, contractor-portal.browser.py, contractor-directory.browser.py,
+portal-warning-search.browser.py(50종 검색·선택 유지·전체 선택 범위·새로고침·360~1440px 화면).

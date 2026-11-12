@@ -102,17 +102,35 @@ async def main():
         assert await page.locator('#portalRecordList .document-row').count()==0
         await page.locator('#portalSearch').fill('')
         await page.screenshot(path=str(OUT/'desktop.png'),full_page=True)
+        await page.get_by_role('button',name='테스트 도료 경고표지 인쇄',exact=True).click()
+        await page.locator('#__printFrame').evaluate('(f)=>f.contentWindow.print=()=>{}')
+        assert await page.frame_locator('#__printFrame').locator('.wlabel--a4').count()==1
+        assert await page.frame_locator('#__printFrame').locator('.wl-name-box').inner_text()=='테스트 도료'
+        assert await page.locator('#recordsPanel').is_visible()
+        await page.locator('#__printFrame').evaluate('(f)=>f.remove()')
+        assert await page.get_by_role('button',name='<미분석 제품> 경고표지 인쇄',exact=True).is_disabled()
         await page.locator('#warningsTab').click()
         preview=page.frame_locator('#portalWarningPreview')
         await preview.locator('.wlabel').wait_for()
         assert '예시' in await page.locator('#portalPreviewSummary').inner_text()
         assert await page.locator('#printPortalWarnings').is_disabled()
-        assert await page.locator('#warningRecordList').evaluate('e=>e.getBoundingClientRect().top < document.querySelector("#portalPrintSize").getBoundingClientRect().top')
+        assert await page.locator('.print-settings').evaluate('e=>e.getBoundingClientRect().bottom <= document.querySelector(".portal-preview").getBoundingClientRect().top')
         assert await preview.locator('.wl-name-box').inner_text()=='테스트 도료'
         assert await preview.locator('.wl-qr svg').count()==1
         assert await page.locator('#warningRecordList input:disabled').count()==1
         await page.locator('.select-all input').check()
         assert await page.locator('#printPortalWarnings').inner_text()=='선택한 1종 인쇄'
+        await page.locator('#portalWarningSearch').fill('공급사')
+        assert await page.locator('#warningRecordList input').count()==1
+        assert await page.locator('#warningRecordList input').is_checked()
+        await page.locator('#portalWarningSearch').fill('없는 물질')
+        assert await page.locator('#warningRecordList input').count()==0
+        assert await page.locator('#printPortalWarnings').inner_text()=='선택한 1종 인쇄'
+        await page.locator('#portalWarningSearchClear').click()
+        assert await page.locator('#warningRecordList input:checked').count()==1
+        await page.locator('#portalWarningSelectionClear').click()
+        assert await page.locator('#printPortalWarnings').is_disabled()
+        await page.locator('.select-all input').check()
         for size in ['a4','a5','a6','mini']:
             await page.select_option('#portalPrintSize',size)
             await preview.locator('.wlabel--'+size).wait_for()
@@ -136,6 +154,7 @@ async def main():
             await page.set_viewport_size(dict(width=width,height=1000))
             await page.wait_for_timeout(100)
             assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
+            assert await page.locator('.print-settings').evaluate('e=>e.getBoundingClientRect().bottom <= document.querySelector(".portal-preview").getBoundingClientRect().top')
             if width==390:
                 await page.locator('#portalWarningPreview').scroll_into_view_if_needed()
                 await page.screenshot(path=str(OUT/'warning-preview-mobile.png'),full_page=True)
