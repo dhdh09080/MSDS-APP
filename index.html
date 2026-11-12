@@ -1610,15 +1610,15 @@
 <div class="stat-value warn" id="conStatMissingMsds">0</div>
 </button>
 </div>
-<div class="card" style="margin-bottom: 16px">
+<div class="card con-list-card" style="margin-bottom: 16px">
 <div class="card-title" style="
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
                   ">
 <span>
-<span class="card-title-icon">👷</span>
-                    협력사 찾기 및 관리
+
+                    협력사 목록
                     <span id="conMgrCount" style="
                         color: var(--text3);
                         font-weight: 400;
@@ -1628,14 +1628,17 @@
 </div>
 <div class="contractor-toolbar">
 <div class="contractor-search-main">
-<input class="form-input" id="conMgrSearch" oninput="renderContractorTags()" onkeydown="if(event.key==='Enter'){event.preventDefault();addContractorFromSearch()}" placeholder="협력사 검색 · 없으면 Enter로 등록" type="search"/>
+<input class="form-input" id="conMgrSearch" oninput="renderContractorTags()" aria-label="협력사·담당자·전화번호 검색" placeholder="업체명, 담당자, 전화번호 검색" type="search"/>
 <button class="btn btn-primary" id="contractorAddToggleBtn" onclick="toggleNewContractorForm()">
                       + 협력사 등록
                     </button>
 </div>
-<select class="form-input" id="conMgrFilter" onchange="setContractorFilter(this.value)">
-<option value="all">전체 상태</option>
-<option value="missing-msds">MSDS 미수령</option>
+<select class="form-input" id="conMgrFilter" aria-label="협력사 상태 필터" onchange="setContractorFilter(this.value)">
+<option value="all">전체 협력사</option>
+<option value="active">사용 중</option>
+<option value="inactive">미사용</option>
+<option value="missing-msds">MSDS 미등록</option>
+<option value="missing-license">등록증 미제출</option>
 </select>
 </div>
 <div class="contractor-add-panel" hidden="" id="newContractorCard">

@@ -42,12 +42,12 @@ async def main():
   page=await context.new_page();page.on('pageerror',lambda e:errors.append(str(e)))
   await page.goto(BASE+'/?preview=contractors');await page.locator('#conMgrList .contractor-row').first.wait_for()
   await page.locator('#nav-contractors').click()
-  assert await page.locator('#gsContractorTabs [role=tab]').all_text_contents()==['협력사 관리','사업자등록증']
-  assert await page.locator('#page-upload-link,#gs-con-links,#gs-tab-links').count()==0
+  assert await page.locator('#gsContractorTabs [role=tab]').all_text_contents()==['협력사 관리','사업자등록증','공유 링크']
+  assert await page.locator('#page-upload-link').count()==0
   assert await page.locator('#conMgrList').get_by_text('링크 관리',exact=True).count()==0
   assert await page.locator('#conMgrList [onclick^="uploadLicense"]').count()==0
   assert await page.locator('#conStatLicense').count()==0
-  assert await page.locator('#conMgrFilter option[value="missing-license"]').count()==0
+  assert await page.locator('#conMgrFilter option[value="missing-license"]').count()==1
   assert await page.locator('#conMgrList .contractor-row').count()==4
   await page.screenshot(path=str(OUT/'companies-desktop.png'),full_page=True)
   await page.locator('#conStatMsds').click();assert await page.locator('#conMgrList .contractor-row').count()==3
@@ -57,7 +57,7 @@ async def main():
   assert await page.locator('#businessLicenseFilter').input_value()=='missing'
   assert await page.locator('.license-missing-item').count()==3
   assert await page.locator('#businessLicenseList .snapshot-item').count()==0
-  await page.keyboard.press('ArrowRight');assert await page.locator('#gs-tab-companies').get_attribute('aria-selected')=='true'
+  await page.keyboard.press('ArrowRight');assert await page.locator('#gs-tab-links').get_attribute('aria-selected')=='true'
   await page.keyboard.press('ArrowLeft');assert await page.locator('#gs-tab-licenses').get_attribute('aria-selected')=='true'
   await page.screenshot(path=str(OUT/'licenses-missing-desktop.png'),full_page=True)
   await page.locator('#businessLicenseSearch').fill('한빛');assert await page.locator('.license-missing-item').count()==1
@@ -84,7 +84,7 @@ async def main():
   assert await page.locator('#businessLicenseFilter').input_value()=='missing'
   assert await page.locator('#gs-tab-licenses').get_attribute('aria-selected')=='true'
   await page.evaluate("window.showPage('upload-link')")
-  assert await page.locator('#gs-tab-companies').get_attribute('aria-selected')=='true'
+  assert await page.locator('#gs-tab-links').get_attribute('aria-selected')=='true'
   await page.locator('[onclick="generateSiteDirectoryLink()"]').click()
   await page.locator('#siteDirectoryLinkState a').wait_for()
   assert '사용 중' in await page.locator('#siteDirectoryBadge').inner_text()
@@ -116,5 +116,5 @@ async def main():
    assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
    if width==390:await page.screenshot(path=str(OUT/'licenses-missing-mobile.png'),full_page=True)
   assert not errors,errors
-  await browser.close();print('PASS: two tabs and keyboard wrap; retired links route; companies have no license/link actions; dedicated missing/submitted/search flow; failed upload remains missing; successful upload removes correct company; ZIP company filenames; shared directory entry; 390/768 layouts; no JS errors; synthetic data only')
+  await browser.close();print('PASS: three tabs and keyboard wrap; retired links route; table license links and separate sharing tab; dedicated missing/submitted/search flow; failed upload remains missing; successful upload removes correct company; ZIP company filenames; shared directory entry; 390/768 layouts; no JS errors; synthetic data only')
 asyncio.run(main())

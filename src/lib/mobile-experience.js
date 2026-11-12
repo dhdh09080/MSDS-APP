@@ -123,21 +123,12 @@ export function installMobileExperience({getWarningCount, refreshWarningPreview,
   layout.apply(); refreshWarning();
   return {
     mountContractors() {
-      if (document.getElementById('mobileContractorTools')) return;
-      const host = document.getElementById('gs-con-companies');
-      if (!host) return;
-      const tools = disclosure('mobileContractorTools', '링크 공유·업체 가져오기', host);
-      layout.move(document.getElementById('siteDirectoryCard'), tools);
-      layout.move(host.querySelector('.pmx-actions'), tools);
+      if (document.getElementById('mobileDirectoryShortcut')) return;
       const share = document.createElement('button');
       share.id = 'mobileDirectoryShortcut'; share.type = 'button';
       share.className = 'btn btn-outline mobile-only'; share.textContent = '협력사 공유 링크';
-      share.onclick = () => {
-        tools.open = true;
-        tools.scrollIntoView({block:'start', behavior:'smooth'});
-      };
+      share.onclick = () => window.focusSiteContractorDirectory();
       document.querySelector('#page-contractors .page-header').append(share);
-      layout.apply();
     },
     refreshFilters() {
       const count = ['filterWorkType','filterStatus','filterSpecial'].filter(id => document.getElementById(id).value).length + (window.selectedContractor ? 1 : 0);

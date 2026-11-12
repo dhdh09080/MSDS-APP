@@ -1,3 +1,4 @@
+import { contractorTableHtml, installContractorEditor } from './lib/contractor-manager.js';
 import {msdsStatusSwitch} from './lib/msds-status-switch.js';
 import { installMobileExperience } from './lib/mobile-experience.js';
 import { loadCaptureLibrary } from './lib/optional-tools.js';
@@ -145,6 +146,19 @@ let announcementsLoadedAt = 0,
   announcementsWorkspaceId = null;
 
 const partnerPanel = createPartnerPanel({client:supabase,getWorkspace:()=>currentWS,getUser:()=>user,canManage:()=>canManageTeam(),toast,onUpdate:async()=>{await Promise.all([loadContractors(),loadWorkTypes(),loadMsdsRecords()]);renderContractorTags();}});
+const contractorEditor = installContractorEditor({
+  client: supabase, getWorkspace: () => currentWS, getContractors: () => contractors,
+  getWorkTypes: () => workTypes, toast,
+  onRenamed: (oldName, newName) => { if (window.selectedContractor === oldName) window.selectedContractor = newName; },
+  onChange: async () => { await Promise.all([loadContractors(),loadWorkTypes(),loadMsdsRecords(),loadBusinessLicenses()]); populateContractorSelects(); renderContractorTags(); },
+});
+window.openContractorLicense = function(id) {
+  const company = contractors.find(c => c.id === id); if (!company) return;
+  switchContractorTab('licenses');
+  document.getElementById('businessLicenseSearch').value = company.name;
+  document.getElementById('businessLicenseFilter').value = 'all';
+  renderBusinessLicenseStatus();
+};
 window.openPmxPartners = () => partnerPanel.open();
 const pmxPanel = createPmxPanel({onPartnersSnapshot:data=>partnerPanel.review(data),client:supabase,getWorkspace:()=>currentWS,getUser:()=>user,canManage:()=>canManageTeam(),toast,onUpdate:(data)=>{
   Object.assign(currentWS,data);
@@ -1821,7 +1835,7 @@ window.showPage = function (id) {
   if (id === 'msds') { renderContractorSidebar(); renderMsdsTable(); }
   if (id === 'requests') renderMsdsRequests();
   if (id === 'contractors') {
-    switchContractorTab(linksRequested ? 'companies' : contractorTab);
+    switchContractorTab(linksRequested ? 'links' : contractorTab);
     if (linksRequested) mobileExperience.revealContractorTools();
   }
   if (id === 'warning') {
@@ -3057,9 +3071,9 @@ window.renderContractorTags = function () {
     msdsRecords.some((r) => r.contractor === c.name && msdsReceived(r));
   const missingMsds = contractors.filter((c) => !hasReceivedMsds(c));
   const list = contractors.filter((c) => {
-    const matchesQuery = !q || c.name.toLowerCase().includes(q);
+    const matchesQuery = !q || [c.name,c.manager_name,c.manager_phone].some(value => String(value || '').toLowerCase().includes(q));
     const matchesFilter =
-      contractorFilter === 'missing-msds' ? !hasReceivedMsds(c) : true;
+      contractorFilter === 'missing-msds' ? !hasReceivedMsds(c) : contractorFilter === 'missing-license' ? !businessLicenses.some(l => l.contractor_id === c.id) : contractorFilter === 'active' ? c.is_active !== false : contractorFilter === 'inactive' ? c.is_active === false : true;
     return matchesQuery && matchesFilter;
   });
   const cnt = document.getElementById('conMgrCount');
@@ -3068,47 +3082,19 @@ window.renderContractorTags = function () {
   const msdsEl = document.getElementById('conStatMissingMsds');
   if (totalEl) totalEl.textContent = contractors.length;
   if (msdsEl) msdsEl.textContent = missingMsds.length;
+  contractorEditor.closeMenu();
   if (!list.length) {
     el.innerHTML = `<div class="contractor-empty">
       <div>${q ? '검색 조건에 맞는 협력사가 없습니다' : contractorFilter === 'all' ? '등록된 협력사가 없습니다' : '해당 상태의 협력사가 없습니다'}</div>
-      ${q && contractorFilter === 'all' ? `<button class="btn btn-primary btn-sm" onclick="prefillNewContractor()">+ “${escapeHtml(document.getElementById('conMgrSearch')?.value.trim())}” 신규 등록</button>` : ''}
+      ${q && contractorFilter === 'all' ? `<button class="btn btn-primary btn-sm" onclick="focusNewContractor()">+ 협력사 등록</button>` : ''}
     </div>`;
     return;
   }
-  el.innerHTML = list
-    .map((c) => {
-      const wts = getWorkTypesForContractor(c.id);
-      const msdsCnt = msdsRecords.filter((r) => r.contractor === c.name).length;
-      const wtChips =
-        wts
-          .map(
-            (w) =>
-              `<span class="tag contractor-work-tag">${escapeHtml(w.name)}<button class="tag-remove" onclick="conMgrDelWt('${w.id}')" aria-label="${escapeHtml(w.name)} 공종 삭제">✕</button></span>`,
-          )
-          .join('') +
-        `<button class="btn btn-outline btn-sm contractor-add-work" onclick="conMgrAddWt('${c.id}')">+ 공종</button>`;
-      return `<div class="contractor-row">
-      <div class="contractor-main">
-        <div class="contractor-name">
-          ${escapeHtml(c.name)} ${c.pmx_company_name ? '<span class="tag">PMX</span>' : '<span class="tag">직접 등록</span>'}
-          <button class="btn btn-secondary btn-sm" onclick="renameContractor('${c.id}')">이름 수정</button>
-        </div>
-        <div class="contractor-contact-line"><span>관리자 ${escapeHtml(c.manager_name || '미등록')}</span><span>${escapeHtml(c.manager_phone || '전화번호 미등록')}</span><button class="btn btn-secondary btn-sm" onclick="editContractorContact('${c.id}')">연락처 수정</button></div><div class="contractor-work-types">${wtChips}</div>
-      </div>
-      <div class="contractor-statuses">
-        <button class="contractor-badge neutral" onclick="openContractorMsds('${c.id}')">🧪 MSDS ${msdsCnt}건</button>
-        <label class="contractor-active"><input type="checkbox" role="switch" aria-label="${escapeHtml(c.name)} 사용 여부" ${c.is_active !== false ? 'checked' : ''} onchange="toggleContractorActive('${c.id}',this.checked)">${c.is_active !== false ? '사용' : '미사용'}</label>
-        <button class="btn btn-secondary btn-sm" onclick="openContractorTransfer('${c.id}')">문서 이관</button>
-        <button class="btn btn-danger btn-sm" onclick="removeContractor('${c.id}')">삭제</button>
-      </div>
-    </div>`;
-    })
-    .join('');
+  el.innerHTML = contractorTableHtml(list, { workTypes, msdsRecords, businessLicenses });
 };
 
 window.setContractorFilter = function (filter) {
-  if (filter === 'missing-license') { openContractorPage(filter); return; }
-  contractorFilter = filter === 'missing-msds' ? filter : 'all';
+  contractorFilter = ['missing-msds','missing-license','active','inactive'].includes(filter) ? filter : 'all';
   const select = document.getElementById('conMgrFilter');
   if (select && select.value !== contractorFilter)
     select.value = contractorFilter;
@@ -3116,7 +3102,7 @@ window.setContractorFilter = function (filter) {
     .querySelectorAll('.contractor-stat-card')
     .forEach((el) => el.classList.remove('active'));
   const activeId =
-    contractorFilter === 'missing-msds' ? 'conStatMsds' : 'conStatAll';
+    contractorFilter === 'missing-msds' ? 'conStatMsds' : contractorFilter === 'all' ? 'conStatAll' : '';
   document.getElementById(activeId)?.classList.add('active');
   renderContractorTags();
 };
@@ -3173,7 +3159,7 @@ window.openContractorMsds = function (id) {
 
 window.focusSiteContractorDirectory = function () {
   showPage('contractors');
-  switchContractorTab('companies');
+  switchContractorTab('links');
   document.getElementById('siteDirectoryCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
@@ -10817,14 +10803,14 @@ function mountGsWorkspace() {
   tabs.id = 'gsContractorTabs';
   tabs.className = 'gs-tabs';
   tabs.setAttribute('role', 'tablist');
-  tabs.innerHTML = ['companies', 'licenses']
+  tabs.innerHTML = ['companies', 'licenses', 'links']
     .map(
       (id, i) =>
-        `<button role="tab" id="gs-tab-${id}" aria-controls="gs-con-${id}" onclick="switchContractorTab('${id}')">${['협력사 관리', '사업자등록증'][i]}</button>`,
+        `<button role="tab" id="gs-tab-${id}" aria-controls="gs-con-${id}" onclick="switchContractorTab('${id}')">${['협력사 관리', '사업자등록증', '공유 링크'][i]}</button>`,
     )
     .join('');
   content.prepend(tabs);
-  ['companies', 'licenses'].forEach((id) => {
+  ['companies', 'licenses', 'links'].forEach((id) => {
     const pane = document.createElement('div');
     pane.id = 'gs-con-' + id;
     pane.setAttribute('role', 'tabpanel');
@@ -10834,9 +10820,7 @@ function mountGsWorkspace() {
   originals.forEach((el) =>
     document
       .getElementById(
-        el.id === 'businessLicenseCard'
-          ? 'gs-con-licenses'
-          : 'gs-con-companies',
+        el.id === 'businessLicenseCard' ? 'gs-con-licenses' : el.id === 'siteDirectoryCard' ? 'gs-con-links' : 'gs-con-companies',
       )
       .appendChild(el),
   );
@@ -10885,10 +10869,10 @@ function gsIcon(index) {
 }
 
 window.switchContractorTab = function (tab) {
-  contractorTab = ['companies', 'licenses'].includes(tab)
+  contractorTab = ['companies', 'licenses', 'links'].includes(tab)
     ? tab
     : 'companies';
-  ['companies', 'licenses'].forEach((id) => {
+  ['companies', 'licenses', 'links'].forEach((id) => {
     const pane = document.getElementById('gs-con-' + id),
       button = document.getElementById('gs-tab-' + id);
     if (pane) pane.hidden = id !== contractorTab;
@@ -10899,7 +10883,7 @@ window.switchContractorTab = function (tab) {
       button.onkeydown = (e) => {
         if (['ArrowLeft', 'ArrowRight'].includes(e.key)) {
           e.preventDefault();
-          const ids = ['companies', 'licenses'];
+          const ids = ['companies', 'licenses', 'links'];
           switchContractorTab(
             ids[(ids.indexOf(id) + (e.key === 'ArrowRight' ? 1 : ids.length - 1)) % ids.length],
           );
@@ -11441,11 +11425,21 @@ function renderGsWeek(fc) {
 const mobileExperience = installMobileExperience({getWarningCount: () => warnSelected.size, refreshWarningPreview: () => updateWarningPreview(), message: text => toast(text, 'error')});
 init();
 
+const pendingContractorStates = new Set();
 window.toggleContractorActive = async function(id, active) {
- const {error}=await supabase.rpc('set_contractor_active',{p_workspace:currentWS.id,p_contractor:id,p_active:active});
- if(error){toast('사용 여부 저장 실패: '+error.message,'error');renderContractorTags();return;}
- const c=contractors.find(c=>c.id===id);if(c)c.is_active=active;
- renderContractorTags();populateContractorSelects();
+ if(pendingContractorStates.has(id))return;
+ const workspace=currentWS.id;
+ pendingContractorStates.add(id);
+ const control=document.querySelector(`#conMgrList [role=switch][onchange*="${CSS.escape(id)}"]`);
+ if(control)control.disabled=true;
+ try {
+  const {error}=await supabase.rpc('set_contractor_active',{p_workspace:workspace,p_contractor:id,p_active:active});
+  if(error)throw error;
+  if(currentWS?.id!==workspace)return;
+  const c=contractors.find(c=>c.id===id);if(c)c.is_active=active;
+  populateContractorSelects();
+ } catch(error) {if(currentWS?.id===workspace)toast('사용 여부 저장 실패: '+error.message,'error');}
+ finally {pendingContractorStates.delete(id);if(currentWS?.id===workspace)renderContractorTags();}
 };
 window.openContractorTransfer = function(id) {
  document.getElementById('contractorTransferDialog')?.remove();

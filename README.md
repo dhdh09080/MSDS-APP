@@ -753,3 +753,16 @@ MSDS 대장의 ‘경고표지 인쇄’는 해당 물질의 A4 표지 1매 인�
 크기·매수는 미리보기 바로 위에 배치했습니다. 모바일은 물질 선택 → 설정 → 미리보기 → 인쇄 순서입니다.
 검증: npm test, npm run build, contractor-portal.browser.py, contractor-directory.browser.py,
 portal-warning-search.browser.py(50종 검색·선택 유지·전체 선택 범위·새로고침·360~1440px 화면).
+
+### 관리자 협력사 목록 개편
+
+협력사·담당자/전화·공종·MSDS·사업자등록증·사용 여부·관리 열을 표로 제공합니다.
+이름/연락처 및 공종 편집은 오른쪽 정보 수정 창으로 통합했고, 문서 이관/삭제는 추가 작업 메뉴로 옮겼습니다.
+공종 추가/삭제는 즉시 반영되며 저장 실패 시 입력을 유지합니다. 업체명 변경 시 MSDS 대장의 이름도
+갱신하며 대장 갱신 실패 시 업체명 복원을 시도하고 실패 내용을 표시합니다.
+기존 연락처 RPC와 현장 범위/RLS를 유지하며 DB 스키마 변경은 없습니다.
+검색은 업체명/담당자/전화번호, 필터는 사용 중/미사용/MSDS 미수령/등록증 미제출을 지원합니다.
+공유 링크는 별도 탭에서 관리하고 모바일은 업체명 열을 고정해 표를 가로 스크롤합니다.
+검증: npm test, npm run build, contractor-manager.browser.py(저장/실패/이름 연계/공종/스위치/
+검색/필터/이관·삭제 진입/업체 자료 이동/360~1440px), contractor-admin.browser.py,
+mobile-experience.browser.py. 브라우저 쓰기 검증은 합성 API 데이터만 사용합니다.
