@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {publishPartnerSnapshot,makePartnerBookmarklet,validatePartnerSnapshot} from '../src/lib/pmx-partners.js';
 import {parsePmxSnapshot} from '../src/lib/pmx-snapshot.js';
-for(const code of ['070120','000002'])test(`partner bookmark scopes POST to ${code} and strips unrelated fields`,async()=>{
+for(const [code,origin] of [['070120','https://gshealthk.vercel.app'],['000002','https://gs-msds.vercel.app']])test(`partner bookmark scopes POST to ${code} and strips unrelated fields`,async()=>{
  const requests=[],navigations=[];
  const context=vm.createContext({location:{origin:'https://pmx.gsenc.com',replace:url=>navigations.push(url)},window:{opener:null,name:'old'},fetch:async(url,options)=>{requests.push({url,options});return {ok:true,json:async()=>({resultCode:'0000',result:true,accessToken:'secret',data:{contents:[{companyNm:'테스트 업체',contractNm:'도장',ccwSeq:123,memoToday:'private',uptUserNm:'private'},{companyNm:'테스트 업체',contractNm:'방수'},{companyNm:'별도 업체',contractNm:'-'}]}})};},URLSearchParams,TextEncoder,AbortController,Date,URL,Blob,setTimeout,clearTimeout,alert:msg=>{throw new Error(msg);}});
- await vm.runInContext(`(${publishPartnerSnapshot.toString()})('https://gshealthk.vercel.app','${code}','2026-11-10')`,context);
+ await vm.runInContext(makePartnerBookmarklet(origin,code,'2026-11-10').slice('javascript:'.length).replace(/^void /,''),context);
+ assert.equal(new URL(navigations[0]).origin,origin);
  assert.equal(requests[0].options.headers['X-Requested-With'],'XMLHttpRequest');
  assert.equal(requests.length,1);assert.equal(requests[0].url,'/pgs/work_daily/getWorkDailyPartnerMainUseList.ax');assert.equal(requests[0].options.method,'POST');
  const body=new URLSearchParams(requests[0].options.body);assert.equal(body.get('pagePjCd'),code);assert.equal(body.get('sdate'),'2026-11-10');assert.equal(body.get('activeTf'),'1');

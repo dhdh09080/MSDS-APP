@@ -45,3 +45,11 @@ test('generated favorite is a javascript URL with a fixed allowlisted target',()
  const code=makePmxBookmarklet('http://localhost:3000');assert.ok(code.startsWith('javascript:void '));
  assert.equal(/postMessage|addEventListener|document\.cookie|eval\(/.test(code),false);
 });
+test('both production sites can generate a favorite that returns to the same site',async()=>{
+ for(const origin of ['https://gshealthk.vercel.app','https://gs-msds.vercel.app']) {
+  const e=environment();
+  await vm.runInContext(makePmxBookmarklet(origin).slice('javascript:'.length).replace(/^void /,''),e.context);
+  assert.equal(e.requests.length,1);
+  assert.equal(new URL(e.navigations[0]).origin,origin);
+ }
+});

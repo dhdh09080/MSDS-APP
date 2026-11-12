@@ -30,6 +30,16 @@ async def main():
   count=len(ctx.pages);await card.locator('#pmxSyncBtn').click()
   await page.locator('#pmxSyncGuide').wait_for()
   assert len(ctx.pages)==count
+  guide=page.locator('#pmxSyncGuide')
+  assert await guide.get_by_role('heading',name='즐겨찾기 추가하기',exact=True).count()==1
+  assert await guide.locator('.pmx-guide-steps > li').count()==4
+  assert await guide.locator('#pmxBookmark').get_attribute('draggable')=='true'
+  assert 'Ctrl' in await guide.inner_text() and '확인하고 현장에 반영' in await guide.inner_text()
+  await guide.screenshot(path=str(OUT/'pmx-bookmark-guide-desktop.png'),animations='disabled')
+  await guide.get_by_text('끌어다 놓기가 안 되나요? 직접 등록하기',exact=True).click()
+  assert (await guide.locator('#pmxBookmarkCode').input_value()).startswith('javascript:void ')
+  assert '우클릭' in await guide.inner_text()
+  await guide.get_by_text('끌어다 놓기가 안 되나요? 직접 등록하기',exact=True).click()
   async with page.expect_popup() as pop:
    await page.locator('#pmxGuideOpen').click()
   pmx=await pop.value;await pmx.wait_for_load_state();assert await pmx.evaluate('opener===null')
@@ -38,12 +48,18 @@ async def main():
    await card.locator('#pmxSyncBtn').click()
   second=await again.value;await second.close()
   assert not await page.locator('#pmxSyncGuide').is_visible()
+  assert await card.locator('#pmxSyncBtn').inner_text()=='정보 가져오기'
   await page.set_viewport_size({'width':390,'height':1000})
   await card.scroll_into_view_if_needed()
   assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
   await card.screenshot(path=str(OUT/'pmx-compact-mobile.png'),animations='disabled')
   await more.click();await card.locator('#pmxSetupBtn').click()
-  await page.locator('#pmxSyncGuide').wait_for();await page.locator('#pmxGuideClose').click()
+  await page.locator('#pmxSyncGuide').wait_for()
+  assert await guide.evaluate('(e)=>e.scrollWidth<=e.clientWidth')
+  await guide.screenshot(path=str(OUT/'pmx-bookmark-guide-mobile.png'),animations='disabled')
+  await guide.get_by_text('휴대폰에서 보거나, 정보가 안 들어올 때',exact=True).click()
+  assert await guide.get_by_text('위 등록 방법은 PC Chrome / Edge 기준입니다.',exact=False).is_visible()
+  await page.locator('#pmxGuideClose').click()
   await page.set_viewport_size({'width':1440,'height':1440})
   await page.evaluate("document.querySelectorAll('#appScreen *').forEach(e=>{if(e.scrollTop)e.scrollTop=0});window.scrollTo(0,0)")
   await page.screenshot(path=str(OUT/'pmx-compact-full.png'),animations='disabled')
