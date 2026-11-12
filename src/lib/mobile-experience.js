@@ -151,24 +151,11 @@ export function installMobileExperience({getWarningCount, refreshWarningPreview,
 
 export function installPortalMobileExperience() {
   installViewport();
-  const layout = responsiveLayout();
   const panel = document.getElementById('uploadPanel');
-  const host = panel.querySelector('.portal-upload-workspace');
-  const existing = disclosure('portalExistingDetails','등록된 MSDS 확인·검색', host);
-  layout.move(panel.querySelector('.upload-existing-records'), existing);
-  const legal = disclosure('portalLegalDetails','게시·비치 의무와 과태료 안내', panel);
-  layout.move(panel.querySelector('.portal-compliance'), legal);
   const cameraInput = document.createElement('input'); cameraInput.type = 'file'; cameraInput.accept = 'image/*'; cameraInput.setAttribute('capture','environment'); cameraInput.hidden = true; cameraInput.id = 'portalCameraInput';
   cameraInput.onchange = event => window.onFileSelect(event);
   const camera = document.createElement('button'); camera.type = 'button'; camera.className = 'btn btn-outline mobile-only mobile-camera-button'; camera.textContent = '사진 촬영해서 추가'; camera.dataset.uploadInput = cameraInput.id; camera.onclick = event => { event.preventDefault(); cameraInput.value = ''; cameraInput.click(); };
   document.getElementById('uploadZone').after(cameraInput,camera);
   const actions = document.getElementById('uploadBtn').parentElement; actions.classList.add('portal-mobile-upload-actions');
-  const observer = new MutationObserver(() => {
-    const count = document.getElementById('uploadExistingCount').textContent;
-    existing.querySelector('summary').textContent = `등록된 MSDS 확인·검색 ${count}`;
-  });
-  observer.observe(document.getElementById('uploadExistingCount'), {childList:true,characterData:true,subtree:true});
-  existing.querySelector('summary').textContent = `등록된 MSDS 확인·검색 ${document.getElementById('uploadExistingCount').textContent}`;
-  layout.apply();
-  return { openExisting() { existing.open = true; } };
+  return { openExisting() {} };
 }

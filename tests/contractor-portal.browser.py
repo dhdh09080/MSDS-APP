@@ -49,16 +49,19 @@ async def main():
         await page.locator('#uploadPanel').wait_for(state='visible')
         assert await page.locator('#uploadExistingList .document-row').count()==2
         assert await page.locator('#uploadExistingCount').inner_text()=='2건'
-        assert await page.locator('#uploadExistingList .document-info h3').first.inner_text()=='테스트 도료'
-        assert await page.locator('#uploadExistingList .document-actions a').get_attribute('href')==f'https://zobflntvegpunktphauf.supabase.co/functions/v1/msds-view?id={RID}'
+        assert await page.locator('#uploadExistingList td h3').first.inner_text()=='테스트 도료'
+        assert await page.locator('#uploadExistingList td:last-child a').get_attribute('href')==f'https://zobflntvegpunktphauf.supabase.co/functions/v1/msds-view?id={RID}'
         await page.locator('#uploadExistingSearch').fill('대기.pdf')
         assert await page.locator('#uploadExistingList .document-row').count()==1
-        assert await page.locator('#uploadExistingList .document-info h3').inner_text()=='<미분석 제품>'
+        assert await page.locator('#uploadExistingList td h3').inner_text()=='<미분석 제품>'
         assert await page.locator('#uploadExistingCount').inner_text()=='검색 1건 / 전체 2건'
         await page.locator('#uploadExistingSearch').fill('없는제품')
         assert await page.locator('#uploadExistingList .document-row').count()==0
         assert '검색 결과가 없습니다' in await page.locator('#uploadExistingList').inner_text()
         await page.locator('#uploadExistingSearch').fill('')
+        assert await page.locator('#uploadViewHost').evaluate('e=>e.getBoundingClientRect().bottom <= document.querySelector(".upload-existing-records").getBoundingClientRect().top')
+        assert await page.locator('#uploadZone').count()==1
+        assert await page.locator('#uploadPanel details').count()==0
         await page.screenshot(path=str(OUT/'upload-existing-desktop.png'),full_page=True)
         await page.set_viewport_size(dict(width=390,height=844))
         assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth')
@@ -69,7 +72,7 @@ async def main():
         assert await page.title()=='서울 신축현장 안전건설 관리페이지'
         assert not await page.locator('#loadingView').is_visible()
         assert await page.locator('#portalRecordList .document-row').count()==2
-        assert await page.locator('#portalRecordList .document-actions a').get_attribute('href')==f'https://zobflntvegpunktphauf.supabase.co/functions/v1/msds-view?id={RID}'
+        assert await page.locator('#portalRecordList td:last-child a').get_attribute('href')==f'https://zobflntvegpunktphauf.supabase.co/functions/v1/msds-view?id={RID}'
         await page.locator('#portalSearch').fill('존재하지않는자료')
         assert await page.locator('#portalRecordList .document-row').count()==0
         await page.locator('#portalSearch').fill('')
@@ -78,10 +81,13 @@ async def main():
         preview=page.frame_locator('#portalWarningPreview')
         await preview.locator('.wlabel').wait_for()
         assert '예시' in await page.locator('#portalPreviewSummary').inner_text()
+        assert await page.locator('#printPortalWarnings').is_disabled()
+        assert await page.locator('#warningRecordList').evaluate('e=>e.getBoundingClientRect().top < document.querySelector("#portalPrintSize").getBoundingClientRect().top')
         assert await preview.locator('.wl-name-box').inner_text()=='테스트 도료'
         assert await preview.locator('.wl-qr svg').count()==1
         assert await page.locator('#warningRecordList input:disabled').count()==1
         await page.locator('.select-all input').check()
+        assert await page.locator('#printPortalWarnings').inner_text()=='선택한 1종 인쇄'
         for size in ['a4','a5','a6','mini']:
             await page.select_option('#portalPrintSize',size)
             await preview.locator('.wlabel--'+size).wait_for()
@@ -118,7 +124,7 @@ async def main():
         await page.wait_for_selector('#licenseAlreadyDone',state='visible')
         assert uploads[-1]['p_contractor_id']==CON
         await page.locator('#recordsTab').click()
-        await page.locator('.worktype-btn').first.click()
+        await page.locator('#portalWorkTypeSelect').select_option(label="도장 '공종'")
         file_input=page.locator('#fileInput')
         await file_input.set_input_files(dict(name='새로운_MSDS.pdf',mimeType='application/pdf',buffer=b'%PDF-1.4 fixture'))
         await page.locator('#uploadBtn:not([disabled])').click()

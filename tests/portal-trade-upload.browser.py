@@ -33,26 +33,27 @@ async def main():
    return await route.fulfill(status=400,json=dict(message='Unexpected request'))
   await page.route('**/*.supabase.co/**',api)
   async def drop(index,name,mime='application/pdf'):
-   await page.locator(f'[data-trade-index="{index}"]').evaluate('''(zone,args)=>{const dt=new DataTransfer();dt.items.add(new File(['fixture'],args.name,{type:args.mime}));zone.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:dt}));}''',dict(name=name,mime=mime))
+   if not await page.locator('#portalWorkTypeSelect').is_disabled():await page.locator('#portalWorkTypeSelect').select_option(label=trades[index]['name'] if trades else '미지정')
+   await page.locator('#uploadZone').evaluate('''(zone,args)=>{const dt=new DataTransfer();dt.items.add(new File(['fixture'],args.name,{type:args.mime}));zone.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:dt}));}''',dict(name=name,mime=mime))
   await page.goto(BASE+'/upload.html?token=trade-fixture-token&panel=upload')
   await page.locator('#uploadPanel').wait_for(state='visible')
-  assert await page.locator('.trade-drop-zone').count()==1
-  assert '미지정' in await page.locator('.trade-drop-zone').inner_text()
+  assert await page.locator('#portalWorkTypeSelect option').count()==1
+  assert '미지정' in await page.locator('#portalWorkTypeSelect').inner_text()
   for name in ['도장','전기']:
    await page.locator('#portalWorkTypeName').fill(name);await page.locator('#portalWorkTypeAdd').click()
    await page.wait_for_function('(n)=>document.querySelector("#selectedWorktypeLabel").textContent===n',arg=name)
   await page.locator('#portalWorkTypeName').fill('실패');await page.locator('#portalWorkTypeAdd').click()
   await page.locator('#portalWorkTypeError').get_by_text('공종 추가 실패:',exact=False).wait_for()
-  assert await page.locator('.trade-drop-zone').count()==2
+  assert await page.locator('#portalWorkTypeSelect option').count()==3
   await page.reload();await page.locator('#uploadPanel').wait_for(state='visible')
-  assert await page.locator('.trade-drop-zone').count()==2
+  assert await page.locator('#portalWorkTypeSelect option').count()==3
   left=await page.locator('.upload-existing-records').bounding_box();right=await page.locator('#uploadViewHost').bounding_box()
-  assert left['y']+left['height']<=right['y']
+  assert right['y']+right['height']<=left['y']
   await drop(0,'도장자료.pdf');await drop(1,'전기자료.pdf');await drop(1,'retry.pdf')
   await page.wait_for_function('!document.querySelector("#uploadBtn").disabled')
   assert await page.locator('.file-item').count()==3
-  await page.locator('.file-item').first.drag_to(page.locator('[data-trade-index="1"]'))
-  assert '전기' in await page.locator('.file-item .fi-trade').first.inner_text()
+  await page.locator('.file-item').first.locator('select').select_option('전기')
+  assert await page.locator('.file-item select').first.input_value()=='전기'
   await drop(0,'추가도료.pdf')
   await drop(0,'제외.txt','text/plain')
   assert await page.locator('.file-item').count()==4
@@ -74,7 +75,7 @@ async def main():
   assert await page.locator('#retryFailedBtn').is_visible()
   await page.locator('#retryFailedBtn').click()
   assert await page.locator('.file-item').count()==1
-  assert '전기' in await page.locator('.file-item .fi-trade').inner_text()
+  assert await page.locator('.file-item select').input_value()=='전기'
   await page.locator('#uploadBtn').click();await page.locator('#stepView3').wait_for(state='visible')
   assert len(saved)==4 and saved[-1]['pdf_name']=='retry.pdf' and saved[-1]['work_type']=='전기'
   assert all(r['contractor']=='안전건설' for r in saved)
@@ -89,5 +90,5 @@ async def main():
   await page.locator('#stepView3').wait_for(state='visible')
   assert saved[-1]['pdf_name']=='allfail.pdf' and saved[-1]['work_type']=='도장'
   assert not errors,errors
-  await browser.close();print('PASS: stacked desktop layout, persisted trade additions, failure message, no-trade fallback, drops per trade, reassignment, invalid type, busy guard, partial retry, refreshed list, mobile and reset')
+  await browser.close();print('PASS: upload-first desktop layout, persisted trade additions, failure message, no-trade fallback, single dropzone with trade selection, reassignment, invalid type, busy guard, partial retry, refreshed list, mobile and reset')
 asyncio.run(main())
