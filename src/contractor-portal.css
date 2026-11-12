@@ -82,3 +82,5 @@
 #warningsPanel .print-settings>#printPortalWarnings{min-height:44px;margin-left:auto;border-radius:5px;font-size:14px;padding:10px 16px}
 #warningsPanel .print-settings>#portalPrintSelection{flex-basis:100%;font-size:13px;color:#727b88;line-height:1.5}
 @media(max-width:768px){#warningsPanel .print-settings>#printPortalWarnings{flex-basis:100%;width:100%;margin-left:0;min-height:48px;font-size:16px}#warningsPanel .print-settings>#portalPrintSelection{font-size:14px}}
+
+#warningsPanel .portal-preview-pages{margin:0 0 12px}
