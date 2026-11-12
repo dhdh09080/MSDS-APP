@@ -74,17 +74,23 @@ async def main():
   await page.locator('.cw-print-actions [data-workspace-nav=warnings]').click()
   assert await page.locator('#warningsPanel').is_visible()
   await back_to_directory()
-  assert await page.locator('.directory-register-license').count()==1
+  await page.get_by_role('link',name='안전건설 사업자등록증 업로드',exact=True).click()
+  await page.locator('#licensePanel:not([hidden])').wait_for()
+  assert await page.locator('#licenseTab').get_attribute('aria-current')=='page'
+  assert '안전건설' in await page.title()
+  await back_to_directory()
+  assert await page.locator('.directory-register-license').count()==2
   assert await page.locator('.directory-add-msds').count()==2
   for name in ['안전건설','새봄전기']:
-   await page.get_by_role('link',name=name+' MSDS 추가',exact=True).click()
+   await page.get_by_role('link',name=name+' MSDS 업로드',exact=True).click()
    await page.locator('#portalView:not([hidden])').wait_for()
    assert await page.locator('#uploadPanel').is_visible()
+   assert await page.locator('#recordsTab').get_attribute('aria-current')=='page'
    assert not await page.locator('#licensePanel').is_visible()
    assert name in await page.title()
    assert 'panel=upload' in page.url
    await back_to_directory()
-  await page.get_by_role('link',name='새봄전기 사업자등록증 등록하기',exact=True).click()
+  await page.get_by_role('link',name='새봄전기 사업자등록증 업로드',exact=True).click()
   await page.locator('#portalView:not([hidden])').wait_for()
   assert await page.locator('#licensePanel').is_visible()
   assert await page.locator('#licenseTab').get_attribute('aria-current')=='page'

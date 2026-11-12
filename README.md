@@ -703,3 +703,13 @@ HTTP 상태, 비 JSON 응답, PMX 결과코드, 응답 형식, 시간 초과를 
 바로가기·연락처를 처음부터 표시합니다. 휴대폰은 업체명 열을 고정하고 표를 좌우로 스크롤합니다.
 기존 업체 등록·수정·검색·문서 링크 기능은 유지합니다.
 검증: `BASE_URL=http://localhost:3007 python tests/contractor-directory.browser.py`, `npm run build`.
+
+### 공유 목록의 업체별 메뉴 진입과 디자인 정리
+
+표와 항상 보이는 서류 상태·연락처를 유지합니다. MSDS 업로드는 해당 업체의
+`upload.html?...&panel=upload`(MSDS 대장 및 업로드 메뉴), 사업자등록증 업로드는
+`panel=license`로 이동합니다. 등록증 제출 여부에 관계없이 업체별 메뉴 진입 버튼을 표시합니다.
+보기·인쇄와 경고표지도 해당 업체의 메뉴를 엽니다. 제출 상태는 배지로 구분하고, 업로드·열기
+동작은 일관된 버튼과 아이콘으로 표시합니다. 검색 영역과 표의 간격·정렬·색상을 정돈했습니다.
+검증: `BASE_URL=http://localhost:3007 python tests/contractor-directory.browser.py`는 업체 식별과
+MSDS·등록증 메뉴 선택, 제출 완료 업체의 등록증 메뉴 진입, 검색·수정·모바일 폭을 확인합니다.

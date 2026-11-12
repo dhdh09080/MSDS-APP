@@ -6,7 +6,7 @@
 <div id="directoryLoading" class="portal-empty" role="status">협력사 목록을 불러오는 중입니다…</div>
 <div id="directoryError" class="directory-error" role="alert" hidden></div>
 <section id="directoryContent" hidden>
-<section class="directory-search-box" aria-labelledby="directorySearchTitle"><h2 id="directorySearchTitle">우리 업체 찾기</h2><label for="directorySearch">업체명을 입력해주세요</label><input id="directorySearch" type="search" placeholder="예: 안전건설" autocomplete="off"><p class="directory-search-help">업체 페이지에서 MSDS 등록·인쇄와 경고표지 인쇄를 할 수 있습니다.</p></section>
+<section class="directory-search-box" aria-labelledby="directorySearchTitle"><div class="directory-search-heading"><h2 id="directorySearchTitle">우리 업체 찾기</h2><p class="directory-search-help">업체 페이지에서 서류를 등록하고 인쇄하세요.</p></div><div class="directory-search-control"><label for="directorySearch">업체명 검색</label><div class="directory-search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="directorySearch" type="search" placeholder="업체명을 입력해주세요" autocomplete="off"></div></div></section>
 <div class="directory-list-heading"><p id="directoryResultCount" class="directory-count" role="status"></p><button type="button" class="btn btn-secondary" id="directoryClear" hidden>전체 업체 보기</button></div>
 <p class="directory-scroll-hint">표를 좌우로 밀면 서류 현황과 연락처를 볼 수 있습니다.</p>
 <div class="directory-table-scroll" role="region" aria-label="협력사 서류 및 연락처 표" tabindex="0"><table class="directory-table"><thead><tr><th scope="col">협력사 / 업체 페이지</th><th scope="col">MSDS · 경고표지</th><th scope="col">사업자등록증</th><th scope="col">담당자 연락처</th></tr></thead><tbody id="directoryList"></tbody></table></div>
