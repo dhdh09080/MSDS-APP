@@ -8815,32 +8815,59 @@ window.toggleMeasureRound = async function (half, done) {
 // ═══════════════════════════════════════════════
 // 현장 전체 협력사 리스트
 // ═══════════════════════════════════════════════
-let siteDirectoryLink = null;
+let siteDirectoryLink = null, siteDirectoryBusy = false, siteDirectoryLoadSequence = 0;
 async function loadSiteDirectoryLink() {
-  const {data,error}=await supabase.from('contractor_directory_links').select('*').eq('workspace_id',currentWS.id).maybeSingle();
+  const workspace=currentWS?.id, sequence=++siteDirectoryLoadSequence;
+  if(!workspace)return;
+  const {data,error}=await supabase.from('contractor_directory_links').select('*').eq('workspace_id',workspace).maybeSingle();
+  if(currentWS?.id!==workspace || sequence!==siteDirectoryLoadSequence)return;
   siteDirectoryLink=error?null:data;
 }
-
-// Site directory uses the same contractors, business_licenses and msds_records.
-function renderSiteDirectoryLink() {
-  const host = document.getElementById('siteDirectoryLinkState'); if (!host) return;
-  const active = siteDirectoryLink?.token && new Date(siteDirectoryLink.expires_at) > new Date();
-  document.getElementById('siteDirectoryRevoke').hidden = !active;
-  if (!active) { host.innerHTML = '<p class="form-note">발급된 목록 링크가 없습니다. 연락처 조회·수정이 가능하므로 현장 참여자에게만 공유해주세요.</p>'; return; }
-  const url = `${location.origin}/contractors.html?dtoken=${encodeURIComponent(siteDirectoryLink.token)}`;
-  host.innerHTML = `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(currentWS?.name || '현장')} 전체 협력사 리스트 열기 ↗</a><div class="token-url">${escapeHtml(url)}</div><p class="form-note">만료일: ${new Date(siteDirectoryLink.expires_at).toLocaleDateString('ko-KR')}</p>`;
+function siteDirectoryUrl() {
+  return `${location.origin}/contractors.html?dtoken=${encodeURIComponent(siteDirectoryLink.token)}`;
 }
-window.generateSiteDirectoryLink = async function () {
-  const {data,error} = await supabase.rpc('manage_contractor_directory_link',{p_workspace:currentWS.id,p_revoke:false});
-  if(error) return toast('목록 링크 발급 실패: '+error.message,'error');
-  await loadSiteDirectoryLink(); renderSiteDirectoryLink();
-  copyLink(`${location.origin}/contractors.html?dtoken=${encodeURIComponent(data.token)}`);
+function renderSiteDirectoryLink() {
+  const host=document.getElementById('siteDirectoryLinkState');if(!host)return;
+  const exists=Boolean(siteDirectoryLink?.token), active=exists && new Date(siteDirectoryLink.expires_at)>new Date();
+  const badge=document.getElementById('siteDirectoryBadge');badge.textContent=active?'사용 중':exists?'기간 만료':'미발급';badge.classList.toggle('is-active',active);
+  document.getElementById('siteDirectoryGenerate').hidden=exists;
+  document.getElementById('siteDirectoryRegenerate').hidden=!exists;
+  document.getElementById('siteDirectoryRevoke').hidden=!exists;
+  if(active){
+    const url=siteDirectoryUrl();
+    host.innerHTML=`<div class="directory-share-link"><div class="directory-share-site">${escapeHtml(currentWS?.name || '현장')}</div><label for="siteDirectoryUrl">공유 주소</label><input id="siteDirectoryUrl" readonly value="${escapeHtml(url)}" onclick="this.select()" spellcheck="false"><div class="directory-share-primary"><a class="btn btn-primary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">협력사 페이지 열기 ↗</a><button type="button" class="btn btn-secondary" onclick="copySiteDirectoryLink()">링크 복사</button></div><p class="directory-share-expiry">만료일 <strong>${new Date(siteDirectoryLink.expires_at).toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'long',day:'numeric'})}</strong></p></div>`;
+  }else{
+    host.innerHTML=`<div class="directory-share-empty">${exists?'공유 링크의 유효기간이 지났습니다. 새 링크로 재생성해주세요.':'아직 공유 링크가 없습니다. 링크를 만들면 바로 열거나 복사할 수 있습니다.'}</div>`;
+  }
+  document.querySelectorAll('#siteDirectoryCard button').forEach(button=>button.disabled=siteDirectoryBusy);
+}
+window.copySiteDirectoryLink = function () {
+  if(!siteDirectoryLink?.token || new Date(siteDirectoryLink.expires_at)<=new Date())return;
+  copyLink(siteDirectoryUrl());
 };
-window.revokeSiteDirectoryLink = async function () {
-  if(!confirm('현장 전체 협력사 목록 링크를 해제할까요? 개별 협력사 링크는 계속 사용할 수 있습니다.')) return;
-  const {error}=await supabase.rpc('manage_contractor_directory_link',{p_workspace:currentWS.id,p_revoke:true});
-  if(error) return toast('목록 링크 해제 실패: '+error.message,'error');
-  await loadSiteDirectoryLink(); renderSiteDirectoryLink(); toast('목록 링크가 해제됐습니다','success');
+async function mutateSiteDirectoryLink(action) {
+  if(siteDirectoryBusy || !currentWS?.id)return;
+  const workspace=currentWS.id;
+  siteDirectoryBusy=true;renderSiteDirectoryLink();
+  try{
+    const rpc=action==='regenerate'?'regenerate_contractor_directory_link':'manage_contractor_directory_link';
+    const args=action==='regenerate'?{p_workspace:workspace}:{p_workspace:workspace,p_revoke:action==='delete'};
+    const {data,error}=await supabase.rpc(rpc,args);if(error)throw error;
+    if(currentWS?.id!==workspace)return;
+    ++siteDirectoryLoadSequence;
+    siteDirectoryLink=action==='delete'?null:data;
+    toast(action==='delete'?'공유 링크가 삭제됐습니다':action==='regenerate'?'새 링크가 발급됐습니다. 이전 링크는 사용할 수 없습니다.':'3년간 유효한 공유 링크를 만들었습니다','success');
+  }catch(error){if(currentWS?.id===workspace)toast('공유 링크 처리 실패: '+error.message,'error');}
+  finally{siteDirectoryBusy=false;renderSiteDirectoryLink();}
+}
+window.generateSiteDirectoryLink = () => mutateSiteDirectoryLink('create');
+window.regenerateSiteDirectoryLink = function () {
+  if(!confirm('새 링크를 발급할까요? 이전에 공유한 링크는 즉시 사용할 수 없게 됩니다.'))return;
+  return mutateSiteDirectoryLink('regenerate');
+};
+window.revokeSiteDirectoryLink = function () {
+  if(!confirm('공유 링크를 삭제할까요? 이 주소로는 접속할 수 없게 됩니다. 개별 협력사 링크는 유지됩니다.'))return;
+  return mutateSiteDirectoryLink('delete');
 };
 window.refreshContractorDirectoryData = async function () {
   await Promise.all([loadContractors(),loadMsdsRecords(),loadBusinessLicenses(),loadSiteDirectoryLink()]);

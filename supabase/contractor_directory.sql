@@ -59,7 +59,7 @@ begin
   select token,expires_at into v_token,v_expiry from public.contractor_directory_links where workspace_id=p_workspace;
   if v_token is not null and v_expiry > now() then return jsonb_build_object('token',v_token,'expires_at',v_expiry); end if;
   v_token := replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-','');
-  v_expiry := now()+interval '30 days';
+  v_expiry := now()+interval '3 years';
   insert into public.contractor_directory_links(workspace_id,token,expires_at,created_by)
     values(p_workspace,v_token,v_expiry,auth.uid())
     on conflict(workspace_id) do update set token=excluded.token,expires_at=excluded.expires_at,created_by=excluded.created_by,created_at=now();

@@ -8,12 +8,12 @@ OUT=Path(os.environ.get('ADMIN_ARTIFACT_DIR','work/contractor-admin'))
 companies=[dict(id='con-1',name='대한건설'),dict(id='con-2',name='한빛전기'),dict(id='con-3',name='성우도장'),dict(id='con-4',name='새길설비')]
 licenses=[dict(id='license-1',contractor_id='con-1',contractor=companies[0],file_name='대한건설.pdf',file_path='fixtures/license.pdf',uploaded_by='manager',uploaded_at='2026-10-27T00:00:00Z')]
 async def main():
- OUT.mkdir(parents=True,exist_ok=True);errors=[];writes=[];link=None;fail_next=True
+ OUT.mkdir(parents=True,exist_ok=True);errors=[];writes=[];link=None;fail_next=True;link_version=0
  async with async_playwright() as p:
   browser=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
   context=await browser.new_context(viewport=dict(width=1440,height=1080),locale='ko-KR',permissions=['clipboard-read','clipboard-write'])
   async def api(route):
-   nonlocal link,fail_next
+   nonlocal link,fail_next,link_version
    req=route.request;u=urlparse(req.url)
    if u.hostname in ['localhost','127.0.0.1']:return await route.continue_()
    if not u.hostname.endswith('.supabase.co'):return await route.abort()
@@ -21,8 +21,11 @@ async def main():
     if req.method=='GET':return await route.fulfill(content_type='application/pdf',body=b'%PDF-1.4 example')
     return await route.fulfill(json=dict(Key='example'))
    data=json.loads(req.post_data or '{}');name=u.path.rsplit('/',1)[-1]
-   if name=='manage_contractor_directory_link':
-    link=None if data.get('p_revoke') else dict(token='directory-example-token',expires_at='2099-12-31T00:00:00Z');return await route.fulfill(json=link or {})
+   if name in ['manage_contractor_directory_link','regenerate_contractor_directory_link']:
+    if data.get('p_revoke'):link=None
+    elif not link or name=='regenerate_contractor_directory_link':
+     link_version+=1;link=dict(token='directory-example-token-'+str(link_version),expires_at='2029-11-12T00:00:00Z')
+    return await route.fulfill(json=link or {})
    if name=='contractor_directory_links':return await route.fulfill(json=link)
    if name=='contractors':return await route.fulfill(json=companies)
    if name=='msds_records':return await route.fulfill(json=[dict(id='msds-1',contractor='성우도장',pdf_path='fixture.pdf')])
@@ -83,8 +86,25 @@ async def main():
   assert await page.locator('#gs-tab-companies').get_attribute('aria-selected')=='true'
   await page.locator('[onclick="generateSiteDirectoryLink()"]').click()
   await page.locator('#siteDirectoryLinkState a').wait_for()
+  assert '사용 중' in await page.locator('#siteDirectoryBadge').inner_text()
+  await page.locator('[onclick="copySiteDirectoryLink()"]').click()
+  assert 'directory-example-token-1' in await page.evaluate('navigator.clipboard.readText()')
+  page.on('dialog',lambda d:d.accept())
+  await page.locator('#siteDirectoryRegenerate').click()
+  await page.wait_for_function('document.querySelector("#siteDirectoryUrl")?.value.includes("token-2")')
+  await page.locator('#siteDirectoryRevoke').click()
+  await page.locator('#siteDirectoryGenerate:not([hidden])').wait_for()
+  assert await page.locator('#siteDirectoryUrl').count()==0
+  await page.locator('#siteDirectoryGenerate').click()
+  await page.wait_for_function('document.querySelector("#siteDirectoryUrl")?.value.includes("token-3")')
+  await page.set_viewport_size(dict(width=390,height=844))
+  assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+  await page.wait_for_function('document.querySelectorAll("#toastWrap .toast").length===0')
+  await page.screenshot(path=str(OUT/'directory-link-mobile.png'),full_page=True)
+  await page.set_viewport_size(dict(width=1440,height=1080))
   assert 'contractors.html?dtoken=directory-example-token' in await page.locator('#siteDirectoryLinkState a').get_attribute('href')
-  await page.locator('#nav-requests').click();await page.get_by_role('button',name='전체 협력사 리스트',exact=True).first.click()
+  if await page.locator('#nav-requests').is_visible():
+   await page.locator('#nav-requests').click();await page.get_by_role('button',name='전체 협력사 리스트',exact=True).first.click()
   assert await page.locator('#siteDirectoryCard').is_visible()
   for width in [390,768]:
    await page.set_viewport_size(dict(width=width,height=844));await page.locator('#gs-tab-licenses').click()
