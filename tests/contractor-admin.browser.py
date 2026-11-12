@@ -21,10 +21,11 @@ async def main():
     if req.method=='GET':return await route.fulfill(content_type='application/pdf',body=b'%PDF-1.4 example')
     return await route.fulfill(json=dict(Key='example'))
    data=json.loads(req.post_data or '{}');name=u.path.rsplit('/',1)[-1]
-   if name in ['manage_contractor_directory_link','regenerate_contractor_directory_link']:
+   if name in ['manage_contractor_directory_link','regenerate_contractor_directory_link','extend_contractor_directory_link']:
     if data.get('p_revoke'):link=None
     elif not link or name=='regenerate_contractor_directory_link':
      link_version+=1;link=dict(token='directory-example-token-'+str(link_version),expires_at='2029-11-12T00:00:00Z')
+    if name=='extend_contractor_directory_link':link={**link,'expires_at':'2030-11-12T00:00:00Z'}
     return await route.fulfill(json=link or {})
    if name=='contractor_directory_links':return await route.fulfill(json=link)
    if name=='contractors':return await route.fulfill(json=companies)
@@ -89,6 +90,10 @@ async def main():
   assert '사용 중' in await page.locator('#siteDirectoryBadge').inner_text()
   await page.locator('[onclick="copySiteDirectoryLink()"]').click()
   assert 'directory-example-token-1' in await page.evaluate('navigator.clipboard.readText()')
+  previous_url=await page.locator('#siteDirectoryUrl').input_value()
+  await page.locator('#siteDirectoryExtend').click()
+  await page.wait_for_function('document.querySelector(".directory-share-expiry").textContent.includes("2030")')
+  assert await page.locator('#siteDirectoryUrl').input_value()==previous_url
   page.on('dialog',lambda d:d.accept())
   await page.locator('#siteDirectoryRegenerate').click()
   await page.wait_for_function('document.querySelector("#siteDirectoryUrl")?.value.includes("token-2")')

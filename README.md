@@ -647,3 +647,10 @@ HTTP 상태, 비 JSON 응답, PMX 결과코드, 응답 형식, 시간 초과를 
 자동으로 되살리지 않습니다. 공유 카드는 390px 모바일 화면에서도 열기·복사 버튼을 크게 표시합니다.
 
 검증: `npm test`, `npm run build`, `BASE_URL=http://localhost:3007 python tests/contractor-admin.browser.py`.
+
+### 주소를 유지하는 유효기간 연장
+
+`supabase/contractor_directory_extend.sql`은 공유 주소를 바꾸지 않고 연장 시점부터 3년으로
+만료일을 늘리는 관리자 RPC를 추가합니다. 링크가 만료됐어도 같은 주소로 다시 사용할 수 있으며,
+삭제된 링크는 연장하지 않고 신규 발급이 필요합니다. 기존 더 긴 만료일은 줄이지 않습니다.
+협력사 관리의 **유효기간 연장 · 주소 유지** 버튼으로 실행하고 변경된 만료일을 즉시 표시합니다.
